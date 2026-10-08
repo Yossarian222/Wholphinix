@@ -282,7 +282,8 @@ class SecretPathMiddleware:
         if not hmac.compare_digest(first.encode(), self.secret.encode()):
             await _plain(send, 404, b"not found")
             return
-        new_path = "/" + rest
+        # Strip trailing slashes: /<secret>/mcp/ would otherwise get a 307 to /mcp, dropping the secret
+        new_path = "/" + rest.rstrip("/")
         scope = dict(scope, path=new_path, raw_path=new_path.encode())
         await self.app(scope, receive, send)
 
