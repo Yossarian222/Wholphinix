@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 import org.jellyfin.sdk.api.client.ApiClient
@@ -196,14 +197,14 @@ class NavDrawerService
             user: JellyfinUser,
             userDto: ServerUserConfig,
             discoverActive: Boolean,
-            absActive: Boolean,
+            absActive: Boolean? = null,
         ) {
             val builtins =
                 buildList {
                     add(NavDrawerItem.Favorites)
                     if (discoverActive) add(NavDrawerItem.Discover)
                     // Shown only once Audiobookshelf is configured in its settings
-                    if (absActive) add(NavDrawerItem.Audiobookshelf)
+                    if (absActive ?: audiobookshelfService.active.first()) add(NavDrawerItem.Audiobookshelf)
                 }
             val allLibraries = getAllUserLibraries(user.id, userDto.tvAccess)
             val libraries =
