@@ -1179,27 +1179,13 @@ class HomeSettingsService
                 }
 
                 is HomeRowConfig.CsfdTvTips -> {
-                    val title = ResStringProvider(R.string.csfd_tv_tips)
-                    val ids = csfdTvTipsService.getItemIds(limit.coerceAtMost(10))
                     val items =
-                        if (ids.isEmpty()) {
-                            listOf()
-                        } else {
-                            // The plugin returns best rated first; the server does not keep the order of `ids`
-                            val byId =
-                                GetItemsRequestHandler
-                                    .execute(
-                                        api,
-                                        GetItemsRequest(
-                                            userId = userDto.id,
-                                            ids = ids,
-                                            fields = HomeItemFields,
-                                        ),
-                                    ).toBaseItems(row.viewOptions.useSeries)
-                                    .associateBy { it.id }
-                            ids.mapNotNull { byId[it] }
-                        }
-                    Success(title, items, row.viewOptions, rowType = row)
+                        csfdTvTipsService.getRowItems(
+                            userId = userDto.id,
+                            useSeries = row.viewOptions.useSeries,
+                            limit = limit.coerceAtMost(10),
+                        )
+                    Success(ResStringProvider(R.string.csfd_tv_tips), items, row.viewOptions, rowType = row)
                 }
 
                 is HomeRowConfig.Suggestions -> {
