@@ -78,7 +78,10 @@ import org.jellyfin.sdk.model.api.request.GetRecordingsRequest
 import org.jellyfin.sdk.model.api.request.GetStudiosRequest
 import timber.log.Timber
 import java.io.File
+import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.format.TextStyle
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -1185,7 +1188,12 @@ class HomeSettingsService
                             useSeries = row.viewOptions.useSeries,
                             limit = limit.coerceAtMost(10),
                         )
-                    Success(ResStringProvider(R.string.csfd_tv_tips), items, row.viewOptions, rowType = row)
+                    val day =
+                        LocalDate
+                            .now()
+                            .dayOfWeek
+                            .getDisplayName(TextStyle.FULL_STANDALONE, Locale.getDefault())
+                    Success(ResArgStringProvider(R.string.csfd_tv_tips_day, day), items, row.viewOptions, rowType = row)
                 }
 
                 is HomeRowConfig.Suggestions -> {

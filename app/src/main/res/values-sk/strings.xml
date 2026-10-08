@@ -84,7 +84,7 @@
     <string name="profile_specific_settings">Nastavenia používateľského profilu</string>
     <string name="queue">Fronta</string>
     <string name="recap">Rekapitulácia</string>
-    <string name="recently_added_in">Nedávno pridané v %1$s</string>
+    <string name="recently_added_in">Najčerstvejšie pridané: %1$s</string>
     <string name="recently_added">Nedávno pridané</string>
     <string name="recently_recorded">Nedávno nahraté</string>
     <string name="recently_released">Nedávno vydané</string>
@@ -142,7 +142,13 @@
     <string name="suggestions">Návrhy</string>
     <string name="switch_servers">Zmeniť servery</string>
     <string name="switch_user">Zmeniť</string>
-    <string name="top_unwatched">Najlepšie hodnotené Nepozreté</string>
+    <string name="top_unwatched">Najlepšie hodnotené nepozreté</string>
+    <plurals name="episodes_count">
+        <item quantity="one">%1$d epizóda</item>
+        <item quantity="few">%1$d epizódy</item>
+        <item quantity="many">%1$d epizódy</item>
+        <item quantity="other">%1$d epizód</item>
+    </plurals>
     <plurals name="trailers">
         <item quantity="one">Trailer</item>
         <item quantity="few">Trailery</item>
@@ -168,6 +174,15 @@
     <string name="videos">Videá</string>
     <string name="watch_live">Sledovať naživo</string>
     <string name="csfd_tv_tips">TV tipy dňa</string>
+    <string name="csfd_tv_tips_day">TV tipy dňa – %1$s</string>
+    <string name="csfd_rankings">Rebríčky</string>
+    <string name="because_you_watched">Lebo si pozeral: %1$s</string>
+    <string name="prefer_dovi_over_hdr10_plus">Uprednostniť Dolby Vision pred HDR10+</string>
+    <string name="prefer_dovi_over_hdr10_plus_summary">Odstráni metadáta HDR10+ z videí s Dolby Vision pre TV, ktoré by ich inak prehrali ako HDR10+</string>
+    <string name="remove_from_playlist">Odstrániť z playlistu</string>
+    <string name="login_credentials_expired">Prihlásenie vypršalo, prihlás sa znova</string>
+    <string name="login_not_authorized">Momentálne nemáš prístup na server</string>
+    <string name="max_resolution">Max. rozlíšenie pred transkódovaním</string>
     <plurals name="years_old">
         <item quantity="one">vo veku %1$d roka</item>
         <item quantity="few">vo veku %1$d rokov</item>
@@ -501,7 +516,7 @@
     <string name="overwrite_server_settings">Prepísať nastavenia na serveri?</string>
     <string name="overwrite_local_settings">Prepísať lokálne nastavenia?</string>
     <string name="for_episodes">Pre epizódy</string>
-    <string name="suggestions_for">Návrhy pre %1$s</string>
+    <string name="suggestions_for">Návrhy: %1$s</string>
     <string name="increase_all_cards_size">Zväčšiť veľkosť všetkých kariet</string>
     <string name="decrease_all_cards_size">Zmenšiť veľkosť všetkých kariet</string>
     <string name="use_thumb_images">Použiť náhľadové obrázky</string>
@@ -533,8 +548,8 @@
     <string name="display_preset_episode_thumbnails">Náhľadové obrázky epizód</string>
     <string name="image_type_thumb">Náhľad</string>
     <string name="add_row">Pridať riadok</string>
-    <string name="genres_in">Žánre v %1$s</string>
-    <string name="recently_released_in">Nedávno vydané v %1$s</string>
+    <string name="genres_in">Žánre: %1$s</string>
+    <string name="recently_released_in">Nedávno vydané: %1$s</string>
     <string name="height">Výška</string>
     <string name="apply_all_rows">Použiť na všetky riadky</string>
     <string name="customize_home">Prispôsobiť domovskú stránku</string>
@@ -670,7 +685,7 @@
     <string name="view_more">Zobraziť viac</string>
     <string name="discover_tv">Objavujte seriály</string>
     <string name="discover_movies">Objavujte filmy</string>
-    <string name="studios_in">Štúdiá v %1$s</string>
+    <string name="studios_in">Štúdiá: %1$s</string>
     <string name="last_played">Naposledy prehrané</string>
     <string name="system_default">Predvolené nastavenie systému</string>
     <string name="ass_subtitle_mode_libass">Priame prehrávanie s libass</string>

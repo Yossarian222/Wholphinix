@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
@@ -26,6 +27,7 @@ import org.jellyfin.sdk.model.api.request.GetItemsRequest
 import org.jellyfin.sdk.model.serializer.toUUIDOrNull
 import timber.log.Timber
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.abs
@@ -42,10 +44,14 @@ data class CsfdTvTip(
     val isSeries: Boolean,
     val titles: List<String>,
     val poster: String?,
+    val photo: String? = null,
+    val overview: String? = null,
+    val genres: List<String> = listOf(),
+    val durationMinutes: Int? = null,
 )
 
 /**
- * Gets the ČSFD "TV tipy dňa" from the Jellyfin ČSFD plugin (`/Csfd/TvTips`).
+ * Talks to the Jellyfin ČSFD plugin: "TV tipy dňa" (`/Csfd/TvTips`) and the ČSFD best-of rankings (`/Csfd/Ranks`).
  *
  * The plugin returns the tips in the user's library (best rated first) followed by the best rated ones that are missing.
  */
@@ -57,6 +63,12 @@ class CsfdTvTipsService
         @param:AuthOkHttpClient private val okHttpClient: OkHttpClient,
         private val seerrService: SeerrService,
     ) {
+        // The plugin downloads 20 ranking pages from ČSFD on its first call of the week
+        private val slowClient by lazy { okHttpClient.newBuilder().readTimeout(3, TimeUnit.MINUTES).build() }
+
+        @Volatile
+        private var ranks: Map<Int, Int>? = null
+
         /**
          * Items for the home row: tips in the library (playable) followed by the best rated missing tips that were
          * found in Seerr, which open the Seerr page to request them
@@ -65,7 +77,7 @@ class CsfdTvTipsService
             userId: UUID,
             useSeries: Boolean,
             limit: Int,
-            missing: Int = 3,
+            missing: Int = 7,
         ): List<BaseItem> {
             val tips = getTips(limit, missing)
             val ids = tips.mapNotNull { it.itemId }
@@ -93,7 +105,7 @@ class CsfdTvTipsService
 
         private suspend fun findInSeerr(tip: CsfdTvTip): BaseItem? {
             val wantedType = if (tip.isSeries) "tv" else "movie"
-            for (query in (tip.titles.ifEmpty { listOf(tip.title) }).take(3)) {
+            for (query in (tip.titles.ifEmpty { listOf(tip.title) }).take(4)) {
                 val match =
                     try {
                         seerrService.search(query).firstOrNull { result ->
@@ -105,7 +117,11 @@ class CsfdTvTipsService
                         Timber.w(ex, "Seerr search failed for %s", query)
                         null
                     } ?: continue
-                val discover = seerrService.createDiscoverItem(match)
+                // Title and plot from ČSFD, also on the Seerr page
+                val discover =
+                    seerrService
+                        .createDiscoverItem(match)
+                        .copy(csfdTitle = tip.title, csfdOverview = tip.overview)
                 return BaseItem(
                     data =
                         BaseItemDto(
@@ -113,12 +129,15 @@ class CsfdTvTipsService
                             type = if (tip.isSeries) BaseItemKind.SERIES else BaseItemKind.MOVIE,
                             name = tip.title,
                             productionYear = tip.year,
-                            overview = discover.overview,
+                            overview = tip.overview ?: discover.overview,
+                            genres = tip.genres,
+                            runTimeTicks = tip.durationMinutes?.let { it * 60L * 10_000_000L },
                             // Shows the ČSFD rating badge like the library items
                             communityRating = tip.ratingPercent?.div(10f),
                             providerIds = mapOf("Csfd" to tip.csfdId.toString()),
                         ),
                     imageUrlOverride = discover.posterUrl ?: tip.poster,
+                    backdropUrlOverride = discover.backDropUrl ?: tip.photo,
                     destinationOverride = discover.destination,
                 )
             }
@@ -132,61 +151,80 @@ class CsfdTvTipsService
         suspend fun getTips(
             limit: Int,
             missing: Int,
-        ): List<CsfdTvTip> =
+        ): List<CsfdTvTip> = get("Csfd/TvTips?limit=$limit&missing=$missing", okHttpClient)?.let(::parseTips).orEmpty()
+
+        /**
+         * ČSFD id → position in the ČSFD best films/series rankings (top 1000 each); empty if the plugin is missing
+         */
+        suspend fun getRanks(): Map<Int, Int> =
+            ranks ?: (get("Csfd/Ranks", slowClient)?.let(::parseRanks) ?: mapOf()).also {
+                if (it.isNotEmpty()) ranks = it
+            }
+
+        private suspend fun get(
+            path: String,
+            client: OkHttpClient,
+        ): JsonElement? =
             withContext(Dispatchers.IO) {
-                val baseUrl = api.baseUrl?.trimEnd('/') ?: return@withContext emptyList()
+                val baseUrl = api.baseUrl?.trimEnd('/') ?: return@withContext null
                 try {
-                    val request = Request.Builder().url("$baseUrl/Csfd/TvTips?limit=$limit&missing=$missing").build()
-                    okHttpClient.newCall(request).execute().use { response ->
+                    client.newCall(Request.Builder().url("$baseUrl/$path").build()).execute().use { response ->
                         if (!response.isSuccessful) {
-                            // 404 = plugin without TV tips support
-                            Timber.w("ČSFD TV tips: HTTP %s", response.code)
-                            return@withContext emptyList()
+                            // 404 = plugin too old for this endpoint
+                            Timber.w("ČSFD plugin %s: HTTP %s", path, response.code)
+                            null
+                        } else {
+                            Json.parseToJsonElement(response.body.string())
                         }
-                        parseTips(response.body.string())
                     }
                 } catch (ex: Exception) {
-                    Timber.w(ex, "ČSFD TV tips failed")
-                    emptyList()
+                    Timber.w(ex, "ČSFD plugin %s failed", path)
+                    null
                 }
             }
 
         companion object {
-            fun parseTips(json: String): List<CsfdTvTip> =
-                (Json.parseToJsonElement(json) as? JsonArray)
+            fun parseTips(json: String): List<CsfdTvTip> = parseTips(Json.parseToJsonElement(json))
+
+            fun parseTips(json: JsonElement): List<CsfdTvTip> =
+                (json as? JsonArray)
                     .orEmpty()
                     .mapNotNull { element ->
                         val obj = element.jsonObject
-                        val csfdId = obj.field("CsfdId")?.jsonPrimitive?.intOrNull ?: return@mapNotNull null
+                        val csfdId = obj.int("CsfdId") ?: return@mapNotNull null
                         // GUIDs come without dashes
-                        val itemId =
-                            obj
-                                .field("ItemId")
-                                ?.jsonPrimitive
-                                ?.contentOrNull
-                                ?.toUUIDOrNull()
+                        val itemId = obj.string("ItemId")?.toUUIDOrNull()
                         val inLibrary = obj.field("InLibrary")?.jsonPrimitive?.booleanOrNull ?: (itemId != null)
                         CsfdTvTip(
                             csfdId = csfdId,
-                            title =
-                                obj
-                                    .field("Title")
-                                    ?.jsonPrimitive
-                                    ?.contentOrNull
-                                    .orEmpty(),
-                            year = obj.field("Year")?.jsonPrimitive?.intOrNull,
+                            title = obj.string("Title").orEmpty(),
+                            year = obj.int("Year"),
                             itemId = itemId.takeIf { inLibrary },
-                            ratingPercent = obj.field("RatingPercent")?.jsonPrimitive?.intOrNull,
-                            isSeries = obj.field("MediaType")?.jsonPrimitive?.contentOrNull == "tv",
-                            titles =
-                                runCatching {
-                                    obj.field("Titles")?.jsonArray?.mapNotNull { it.jsonPrimitive.contentOrNull }
-                                }.getOrNull().orEmpty(),
-                            poster = obj.field("Poster")?.jsonPrimitive?.contentOrNull,
+                            ratingPercent = obj.int("RatingPercent"),
+                            isSeries = obj.string("MediaType") == "tv",
+                            titles = obj.strings("Titles"),
+                            poster = obj.string("Poster"),
+                            photo = obj.string("Photo"),
+                            overview = obj.string("Overview"),
+                            genres = obj.strings("Genres"),
+                            durationMinutes = obj.int("DurationMinutes"),
                         )
                     }
 
+            fun parseRanks(json: JsonElement): Map<Int, Int> =
+                (json as? JsonObject)
+                    .orEmpty()
+                    .mapNotNull { (id, rank) -> id.toIntOrNull()?.let { it to (rank.jsonPrimitive.intOrNull ?: return@mapNotNull null) } }
+                    .toMap()
+
             /** The server may emit PascalCase or camelCase */
             private fun JsonObject.field(name: String) = this[name] ?: this[name.replaceFirstChar { it.lowercase() }]
+
+            private fun JsonObject.string(name: String) = field(name)?.jsonPrimitive?.contentOrNull
+
+            private fun JsonObject.int(name: String) = field(name)?.jsonPrimitive?.intOrNull
+
+            private fun JsonObject.strings(name: String) =
+                runCatching { field(name)?.jsonArray?.mapNotNull { it.jsonPrimitive.contentOrNull } }.getOrNull().orEmpty()
         }
     }

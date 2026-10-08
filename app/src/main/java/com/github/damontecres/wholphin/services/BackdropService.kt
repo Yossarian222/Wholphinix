@@ -57,7 +57,9 @@ class BackdropService
         suspend fun submit(item: BaseItem) =
             withContext(WholphinDispatchers.IO) {
                 val imageUrl =
-                    if (item.type == BaseItemKind.GENRE) {
+                    if (item.backdropUrlOverride != null) {
+                        item.backdropUrlOverride
+                    } else if (item.type == BaseItemKind.GENRE) {
                         item.imageUrlOverride
                     } else {
                         imageUrlService.getItemImageUrl(item, ImageType.BACKDROP)

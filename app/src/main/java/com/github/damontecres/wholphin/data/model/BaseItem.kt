@@ -48,6 +48,8 @@ data class BaseItem(
     val useSeriesForPrimary: Boolean = false,
     val imageUrlOverride: String? = null,
     val destinationOverride: Destination? = null,
+    /** Backdrop for items that are not on the server (eg ČSFD TV tips found in Seerr) */
+    val backdropUrlOverride: String? = null,
 ) : CardGridItem {
     val id get() = data.id
 

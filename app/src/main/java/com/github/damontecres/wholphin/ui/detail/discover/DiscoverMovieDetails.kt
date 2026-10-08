@@ -104,7 +104,13 @@ fun DiscoverMovieDetails(
         }
 
         is DataLoadingState.Success<MovieDetails> -> {
-            val movie = st.data
+            val movie =
+                st.data.let {
+                    it.copy(
+                        title = destination.item.csfdTitle ?: it.title,
+                        overview = destination.item.csfdOverview ?: it.overview,
+                    )
+                }
             DiscoverMovieDetailsContent(
                 preferences = preferences,
                 movie = movie,

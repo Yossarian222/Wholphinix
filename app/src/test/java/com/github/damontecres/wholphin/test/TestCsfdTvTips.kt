@@ -1,6 +1,7 @@
 package com.github.damontecres.wholphin.test
 
 import com.github.damontecres.wholphin.services.CsfdTvTipsService
+import kotlinx.serialization.json.Json
 import org.junit.Assert
 import org.junit.Test
 import java.util.UUID
@@ -29,5 +30,12 @@ class TestCsfdTvTips {
         Assert.assertFalse(tips[2].isSeries)
         Assert.assertEquals("https://x/p.jpg", tips[2].poster)
         Assert.assertEquals(2, tips[2].titles.size)
+    }
+
+    @Test
+    fun `Parse ranks`() {
+        val ranks = CsfdTvTipsService.parseRanks(Json.parseToJsonElement("""{"2294":1,"9499":20,"x":3}"""))
+
+        Assert.assertEquals(mapOf(2294 to 1, 9499 to 20), ranks)
     }
 }
