@@ -10,6 +10,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jellyfin.sdk.api.client.ApiClient
+import org.jellyfin.sdk.model.serializer.toUUIDOrNull
 import timber.log.Timber
 import java.util.UUID
 import javax.inject.Inject
@@ -54,11 +55,9 @@ class CsfdTvTipsService
                 (Json.parseToJsonElement(json) as? JsonArray)
                     .orEmpty()
                     .mapNotNull { tip ->
-                        // The server may emit PascalCase or camelCase
-                        runCatching {
-                            val obj = tip.jsonObject
-                            UUID.fromString((obj["ItemId"] ?: obj["itemId"])!!.jsonPrimitive.content)
-                        }.getOrNull()
+                        // The server may emit PascalCase or camelCase, and GUIDs without dashes
+                        val obj = tip.jsonObject
+                        (obj["ItemId"] ?: obj["itemId"])?.jsonPrimitive?.content?.toUUIDOrNull()
                     }
         }
     }
