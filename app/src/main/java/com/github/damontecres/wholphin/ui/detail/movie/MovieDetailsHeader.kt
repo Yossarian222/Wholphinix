@@ -114,7 +114,7 @@ fun MovieDetailsHeader(
                 )
             }
 
-            CreditsText(movie.data.people, Modifier.padding(start = HeaderUtils.startPadding))
+            CreditsText(movie.data.people, Modifier.padding(start = HeaderUtils.startPadding), clickableDirectors = true)
         }
     }
 }

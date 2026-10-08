@@ -708,7 +708,7 @@ fun SeriesDetailsHeader(
                         },
                 )
             }
-            CreditsText(dto.people, Modifier.padding(start = HeaderUtils.startPadding))
+            CreditsText(dto.people, Modifier.padding(start = HeaderUtils.startPadding), clickableDirectors = true)
         }
     }
 }
