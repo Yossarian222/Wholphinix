@@ -100,52 +100,52 @@ fun rememberQuickDetailsContentMap(textStyle: TextStyle = MaterialTheme.typograp
             }
         csfd +
             mapOf(
-            "star" to
-                InlineTextContent(
-                    Placeholder(
-                        textStyle.fontSize,
-                        textStyle.fontSize,
-                        PlaceholderVerticalAlign.TextCenter,
-                    ),
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Star,
-                        tint = FilledStarColor,
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                },
-            "rotten" to
-                InlineTextContent(
-                    Placeholder(
-                        textStyle.fontSize,
-                        textStyle.fontSize,
-                        PlaceholderVerticalAlign.TextCenter,
-                    ),
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_rotten_tomatoes_rotten),
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        tint = Color.Unspecified,
-                    )
-                },
-            "fresh" to
-                InlineTextContent(
-                    Placeholder(
-                        textStyle.fontSize,
-                        textStyle.fontSize,
-                        PlaceholderVerticalAlign.TextCenter,
-                    ),
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_rotten_tomatoes_fresh),
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        tint = Color.Unspecified,
-                    )
-                },
-        )
+                "star" to
+                    InlineTextContent(
+                        Placeholder(
+                            textStyle.fontSize,
+                            textStyle.fontSize,
+                            PlaceholderVerticalAlign.TextCenter,
+                        ),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Star,
+                            tint = FilledStarColor,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    },
+                "rotten" to
+                    InlineTextContent(
+                        Placeholder(
+                            textStyle.fontSize,
+                            textStyle.fontSize,
+                            PlaceholderVerticalAlign.TextCenter,
+                        ),
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_rotten_tomatoes_rotten),
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            tint = Color.Unspecified,
+                        )
+                    },
+                "fresh" to
+                    InlineTextContent(
+                        Placeholder(
+                            textStyle.fontSize,
+                            textStyle.fontSize,
+                            PlaceholderVerticalAlign.TextCenter,
+                        ),
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_rotten_tomatoes_fresh),
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            tint = Color.Unspecified,
+                        )
+                    },
+            )
     }
 
 @Composable
