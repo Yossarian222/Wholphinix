@@ -2,7 +2,10 @@ package com.github.damontecres.wholphin.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -11,19 +14,25 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.tv.material3.Button
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import com.github.damontecres.wholphin.R
 import com.github.damontecres.wholphin.data.ServerRepository
 import com.github.damontecres.wholphin.data.model.BaseItem
 import com.github.damontecres.wholphin.services.CsfdTvTipsService
@@ -48,11 +57,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.model.api.BaseItemKind
+import org.jellyfin.sdk.model.api.ItemFields
 import org.jellyfin.sdk.model.api.ItemSortBy
 import org.jellyfin.sdk.model.api.SortOrder
 import org.jellyfin.sdk.model.api.request.GetItemsRequest
 import timber.log.Timber
 import java.util.UUID
+import kotlin.math.roundToInt
 
 /**
  * An item of the library ranking with its position in the ČSFD best-of rankings (if it is in the top 1000)
@@ -104,7 +115,7 @@ class CsfdRankingViewModel
                                     parentId = parentId,
                                     includeItemTypes = listOf(itemKind),
                                     recursive = true,
-                                    fields = SlimItemFields,
+                                    fields = SlimItemFields + ItemFields.GENRES,
                                     sortBy = listOf(ItemSortBy.COMMUNITY_RATING, ItemSortBy.SORT_NAME),
                                     sortOrder = listOf(SortOrder.DESCENDING, SortOrder.ASCENDING),
                                     // Items without a ČSFD id carry a TMDb/IMDb rating; fetch extra and drop them
@@ -168,10 +179,34 @@ fun CsfdRankingGrid(
         }
 
         is DataLoadingState.Success<List<RankedItem>> -> {
-            Box(modifier = modifier) {
+            var minRating by rememberSaveable { mutableStateOf<Int?>(null) }
+            var decade by rememberSaveable { mutableStateOf<Int?>(null) }
+            var genre by rememberSaveable { mutableStateOf<String?>(null) }
+            val shown =
+                remember(st.data, minRating, decade, genre) {
+                    st.data.filter { ranked ->
+                        val dto = ranked.item.data
+                        val percent = dto.communityRating?.times(10)?.roundToInt() ?: 0
+                        val year = dto.productionYear
+                        (minRating == null || percent >= minRating!!) &&
+                            (decade == null || (year != null && year / 10 * 10 == decade)) &&
+                            (genre == null || dto.genres.orEmpty().any { it.equals(genre, ignoreCase = true) })
+                    }
+                }
+            Column(modifier = modifier) {
+                CsfdRankingFilters(
+                    items = st.data,
+                    minRating = minRating,
+                    decade = decade,
+                    genre = genre,
+                    onMinRating = { minRating = it },
+                    onDecade = { decade = it },
+                    onGenre = { genre = it },
+                    modifier = Modifier.padding(start = 16.dp, bottom = 8.dp),
+                )
                 LaunchedEffect(Unit) { gridFocusRequester.tryRequestFocus() }
                 CardGrid(
-                    pager = st.data,
+                    pager = shown,
                     onClickItem = { _, ranked -> viewModel.navigationManager.navigateTo(ranked.item.destination()) },
                     onLongClickItem = { _, _ -> },
                     onClickPlay = { _, _ -> },
@@ -201,6 +236,77 @@ fun CsfdRankingGrid(
                 )
             }
         }
+    }
+}
+
+/**
+ * Filter buttons above the ranking: minimal ČSFD rating, decade and genre
+ */
+@Composable
+private fun CsfdRankingFilters(
+    items: List<RankedItem>,
+    minRating: Int?,
+    decade: Int?,
+    genre: String?,
+    onMinRating: (Int?) -> Unit,
+    onDecade: (Int?) -> Unit,
+    onGenre: (String?) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val all = stringResource(R.string.csfd_filter_all)
+    var dialog by remember { mutableStateOf<Pair<String, List<DialogItemEntry>>?>(null) }
+    val decades =
+        remember(items) {
+            items
+                .mapNotNull {
+                    it.item.data.productionYear
+                        ?.let { y -> y / 10 * 10 }
+                }.distinct()
+                .sortedDescending()
+        }
+    val genres =
+        remember(items) {
+            items
+                .flatMap {
+                    it.item.data.genres
+                        .orEmpty()
+                }.groupingBy { it }
+                .eachCount()
+                .entries
+                .sortedByDescending { it.value }
+                .map { it.key }
+        }
+    val ratingTitle = stringResource(R.string.csfd_filter_rating)
+    val yearTitle = stringResource(R.string.csfd_filter_year)
+    val genreTitle = stringResource(R.string.csfd_filter_genre)
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = modifier) {
+        Button(onClick = {
+            dialog = ratingTitle to
+                (listOf<Int?>(null) + listOf(90, 80, 70, 60, 50)).map { value ->
+                    DialogItem(text = value?.let { "$it %+" } ?: all) { onMinRating(value) }
+                }
+        }) { Text("$ratingTitle: ${minRating?.let { "$it %+" } ?: all}") }
+        Button(onClick = {
+            dialog = yearTitle to
+                (listOf<Int?>(null) + decades).map { value ->
+                    DialogItem(text = value?.let { "$it–${it + 9}" } ?: all) { onDecade(value) }
+                }
+        }) { Text("$yearTitle: ${decade?.let { "$it–${it + 9}" } ?: all}") }
+        Button(onClick = {
+            dialog = genreTitle to
+                (listOf<String?>(null) + genres).map { value ->
+                    DialogItem(text = value ?: all) { onGenre(value) }
+                }
+        }) { Text("$genreTitle: ${genre ?: all}") }
+    }
+    dialog?.let { (title, entries) ->
+        DialogPopup(
+            showDialog = true,
+            title = title,
+            dialogItems = entries,
+            onDismissRequest = { dialog = null },
+            waitToLoad = false,
+        )
     }
 }
 

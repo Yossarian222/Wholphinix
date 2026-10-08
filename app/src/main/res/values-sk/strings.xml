@@ -177,6 +177,10 @@
     <string name="csfd_tv_tips">TV tipy dňa</string>
     <string name="csfd_tv_tips_day">TV tipy dňa – %1$s</string>
     <string name="csfd_rankings">Rebríčky</string>
+    <string name="csfd_filter_all">Všetko</string>
+    <string name="csfd_filter_rating">Hodnotenie</string>
+    <string name="csfd_filter_year">Rok</string>
+    <string name="csfd_filter_genre">Žáner</string>
     <string name="because_you_watched">Lebo si pozeral: %1$s</string>
     <string name="prefer_dovi_over_hdr10_plus">Uprednostniť Dolby Vision pred HDR10+</string>
     <string name="prefer_dovi_over_hdr10_plus_summary">Odstráni metadáta HDR10+ z videí s Dolby Vision pre TV, ktoré by ich inak prehrali ako HDR10+</string>
