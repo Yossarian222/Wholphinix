@@ -12,10 +12,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.rememberTextFieldState
@@ -229,13 +229,16 @@ private fun EpisodeRow(
                 style = MaterialTheme.typography.titleMedium,
             )
             Text(
-                text = listOfNotNull(
-                    episode.publishedAt?.let {
-                        android.text.format.DateFormat.getMediumDateFormat(context).format(Date(it))
-                    },
-                    duration.takeIf { it > 0 }?.let { "${(it / 60).toInt()} min" },
-                    if (finished) "Dopočuté" else null,
-                ).joinToString(" · "),
+                text =
+                    listOfNotNull(
+                        episode.publishedAt?.let {
+                            android.text.format.DateFormat
+                                .getMediumDateFormat(context)
+                                .format(Date(it))
+                        },
+                        duration.takeIf { it > 0 }?.let { "${(it / 60).toInt()} min" },
+                        if (finished) "Dopočuté" else null,
+                    ).joinToString(" · "),
                 style = MaterialTheme.typography.bodySmall,
             )
             ProgressBar(fraction = if (finished) 1f else fraction)

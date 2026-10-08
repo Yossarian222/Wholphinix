@@ -218,9 +218,10 @@ class AudiobookshelfViewModel
                 try {
                     closeCurrentSession()
                     val (conn, sess) =
-                        service.withConnection(cfg) { c ->
-                            c to service.startPlay(c, podcast.id, episode.id)
-                        }.second
+                        service
+                            .withConnection(cfg) { c ->
+                                c to service.startPlay(c, podcast.id, episode.id)
+                            }.second
                     val track =
                         sess.audioTracks.firstOrNull()
                             ?: throw IllegalStateException("Server returned no audio track")
@@ -290,8 +291,7 @@ class AudiobookshelfViewModel
             }
         }
 
-        private fun isStarted(progress: AbsMediaProgress?): Boolean =
-            progress != null && !progress.isFinished && progress.currentTime > 0
+        private fun isStarted(progress: AbsMediaProgress?): Boolean = progress != null && !progress.isFinished && progress.currentTime > 0
 
         /** Sends the current position to the server. Runs on the main thread, then the request runs in the background. */
         private fun syncNow() {
