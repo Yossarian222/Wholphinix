@@ -20,6 +20,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
@@ -160,6 +161,48 @@ class CsfdTvTipsService
         suspend fun getRanks(): Map<Int, Int> =
             ranks ?: (get("Csfd/Ranks", slowClient)?.let(::parseRanks) ?: mapOf()).also {
                 if (it.isNotEmpty()) ranks = it
+            }
+
+        @Volatile
+        private var myRatings: MutableMap<Int, Int>? = null
+
+        /**
+         * My ČSFD ratings (ČSFD id → 0-5 stars, 0 = "odpad") read by the plugin from the profile set in its settings
+         */
+        suspend fun getMyRatings(): Map<Int, Int> =
+            myRatings ?: (get("Csfd/MyRatings", slowClient)?.let(::parseRanks)?.toMutableMap() ?: mutableMapOf()).also {
+                if (it.isNotEmpty()) myRatings = it
+            }
+
+        /**
+         * Rate on ČSFD through the plugin's account. Returns null on success, otherwise an error message.
+         */
+        suspend fun rate(
+            csfdId: Int,
+            stars: Int,
+        ): String? =
+            withContext(Dispatchers.IO) {
+                val baseUrl = api.baseUrl?.trimEnd('/') ?: return@withContext "No server"
+                try {
+                    val request =
+                        Request
+                            .Builder()
+                            .url("$baseUrl/Csfd/MyRatings/$csfdId?stars=$stars")
+                            .post(ByteArray(0).toRequestBody())
+                            .build()
+                    slowClient.newCall(request).execute().use { response ->
+                        val obj = runCatching { Json.parseToJsonElement(response.body.string()).jsonObject }.getOrNull()
+                        if (response.isSuccessful && obj?.field("Ok")?.jsonPrimitive?.booleanOrNull == true) {
+                            myRatings?.set(csfdId, stars)
+                            null
+                        } else {
+                            obj?.string("Message") ?: "HTTP ${response.code}"
+                        }
+                    }
+                } catch (ex: Exception) {
+                    Timber.w(ex, "ČSFD rating failed")
+                    ex.localizedMessage ?: ex.toString()
+                }
             }
 
         private suspend fun get(

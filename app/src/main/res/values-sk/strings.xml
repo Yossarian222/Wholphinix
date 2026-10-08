@@ -177,6 +177,8 @@
     <string name="csfd_tv_tips">TV tipy dňa</string>
     <string name="csfd_tv_tips_day">TV tipy dňa – %1$s</string>
     <string name="csfd_rankings">Rebríčky</string>
+    <string name="csfd_my_rating">Moje hodnotenie</string>
+    <string name="csfd_trash">odpad!</string>
     <string name="csfd_filter_all">Všetko</string>
     <string name="csfd_filter_rating">Hodnotenie</string>
     <string name="csfd_filter_year">Rok</string>

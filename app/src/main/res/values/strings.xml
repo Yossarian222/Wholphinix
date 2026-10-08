@@ -178,6 +178,8 @@
     <string name="csfd_tv_tips">TV tips of the day</string>
     <string name="csfd_tv_tips_day">TV tips of the day – %1$s</string>
     <string name="csfd_rankings">Rankings</string>
+    <string name="csfd_my_rating">My ČSFD rating</string>
+    <string name="csfd_trash">trash</string>
     <string name="csfd_filter_all">All</string>
     <string name="csfd_filter_rating">Rating</string>
     <string name="csfd_filter_year">Year</string>

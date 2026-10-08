@@ -59,6 +59,7 @@ import com.github.damontecres.wholphin.ui.components.ContextMenu
 import com.github.damontecres.wholphin.ui.components.ContextMenuActions
 import com.github.damontecres.wholphin.ui.components.ContextMenuDialog
 import com.github.damontecres.wholphin.ui.components.CreditsText
+import com.github.damontecres.wholphin.ui.components.CsfdMyRating
 import com.github.damontecres.wholphin.ui.components.DeleteButton
 import com.github.damontecres.wholphin.ui.components.DialogItem
 import com.github.damontecres.wholphin.ui.components.DialogParams
@@ -690,6 +691,7 @@ fun SeriesDetailsHeader(
             dto.genres?.letNotEmpty {
                 GenreText(it, Modifier.padding(start = HeaderUtils.startPadding, bottom = 4.dp))
             }
+            CsfdMyRating(series, Modifier.padding(start = HeaderUtils.startPadding, bottom = 4.dp))
             dto.overview?.let { overview ->
                 OverviewText(
                     overview = overview,

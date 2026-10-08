@@ -22,6 +22,7 @@ import com.github.damontecres.wholphin.data.ChosenStreams
 import com.github.damontecres.wholphin.data.model.BaseItem
 import com.github.damontecres.wholphin.preferences.UserPreferences
 import com.github.damontecres.wholphin.ui.components.CreditsText
+import com.github.damontecres.wholphin.ui.components.CsfdMyRating
 import com.github.damontecres.wholphin.ui.components.GenreText
 import com.github.damontecres.wholphin.ui.components.HeaderUtils
 import com.github.damontecres.wholphin.ui.components.OverviewText
@@ -73,6 +74,8 @@ fun MovieDetailsHeader(
             dto.genres?.letNotEmpty {
                 GenreText(it, Modifier.padding(start = HeaderUtils.startPadding))
             }
+
+            CsfdMyRating(movie, Modifier.padding(start = HeaderUtils.startPadding, top = 4.dp))
 
             VideoStreamDetails(
                 chosenStreams = chosenStreams,
