@@ -10,6 +10,7 @@ import com.github.damontecres.wholphin.data.filter.DefaultForStudiosFilterOption
 import com.github.damontecres.wholphin.data.model.SeerrItemType
 import com.github.damontecres.wholphin.preferences.PlayerBackend
 import com.github.damontecres.wholphin.preferences.UserPreferences
+import com.github.damontecres.wholphin.ui.audiobookshelf.AudiobookshelfPage
 import com.github.damontecres.wholphin.ui.components.ItemGrid
 import com.github.damontecres.wholphin.ui.components.LicenseInfo
 import com.github.damontecres.wholphin.ui.data.MovieSortOptions
@@ -379,6 +380,13 @@ fun DestinationContent(
             LaunchedEffect(Unit) { onClearBackdrop.invoke() }
             DiscoverPage(
                 preferences = preferences,
+                modifier = modifier,
+            )
+        }
+
+        Destination.Audiobookshelf -> {
+            LaunchedEffect(Unit) { onClearBackdrop.invoke() }
+            AudiobookshelfPage(
                 modifier = modifier,
             )
         }

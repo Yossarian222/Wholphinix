@@ -6,6 +6,7 @@ import com.github.damontecres.wholphin.data.ServerRepository
 import com.github.damontecres.wholphin.data.model.JellyfinUser
 import com.github.damontecres.wholphin.data.model.NavPinType
 import com.github.damontecres.wholphin.data.model.ServerUserConfig
+import com.github.damontecres.wholphin.services.audiobookshelf.AudiobookshelfService
 import com.github.damontecres.wholphin.services.hilt.DefaultCoroutineScope
 import com.github.damontecres.wholphin.ui.collectLatestIn
 import com.github.damontecres.wholphin.ui.launchDefault
@@ -52,6 +53,7 @@ class NavDrawerService
         private val serverPreferencesDao: ServerPreferencesDao,
         private val seerrServerRepository: SeerrServerRepository,
         private val musicService: MusicService,
+        private val audiobookshelfService: AudiobookshelfService,
     ) {
         private val _state = MutableStateFlow(NavDrawerItemState())
         val state: StateFlow<NavDrawerItemState> = _state
@@ -62,18 +64,21 @@ class NavDrawerService
                 serverRepository.currentUserFlow,
                 serverRepository.currentUserDtoFlow,
                 seerrServerRepository.active,
-            ) { user, userDto, discoverActive ->
-                Triple(user, userDto, discoverActive)
-            }.collectLatestIn(coroutineScope) { (user, userDto, discoverActive) ->
+                audiobookshelfService.active,
+            ) { user, userDto, discoverActive, absActive ->
+                NavDrawerTrigger(user, userDto, discoverActive, absActive)
+            }.collectLatestIn(coroutineScope) { trigger ->
+                val (user, userDto, discoverActive, absActive) = trigger
                 Timber.d(
-                    "User updated: user=%s, userDto=%s, discoverActive=%s",
+                    "User updated: user=%s, userDto=%s, discoverActive=%s, absActive=%s",
                     user?.id,
                     userDto?.id,
                     discoverActive,
+                    absActive,
                 )
                 try {
                     if (user != null && userDto != null && user.id == userDto.id) {
-                        updateNavDrawer(user, userDto, discoverActive)
+                        updateNavDrawer(user, userDto, discoverActive, absActive)
                     } else {
                         _state.update { NavDrawerItemState() }
                     }
@@ -191,11 +196,14 @@ class NavDrawerService
             user: JellyfinUser,
             userDto: ServerUserConfig,
             discoverActive: Boolean,
+            absActive: Boolean,
         ) {
             val builtins =
                 buildList {
                     add(NavDrawerItem.Favorites)
                     if (discoverActive) add(NavDrawerItem.Discover)
+                    // Shown only once Audiobookshelf is configured in its settings
+                    if (absActive) add(NavDrawerItem.Audiobookshelf)
                 }
             val allLibraries = getAllUserLibraries(user.id, userDto.tvAccess)
             val libraries =
@@ -251,6 +259,14 @@ class NavDrawerService
             }
         }
     }
+
+/** Inputs that decide what the nav drawer shows */
+private data class NavDrawerTrigger(
+    val user: JellyfinUser?,
+    val userDto: ServerUserConfig?,
+    val discoverActive: Boolean,
+    val absActive: Boolean,
+)
 
 data class NavDrawerItemState(
     val items: List<NavDrawerItem> = emptyList(),
