@@ -279,9 +279,14 @@ class SecretPathMiddleware:
             await _plain(send, 200, b"ok")
             return
         first, _, rest = path.lstrip("/").partition("/")
+        method = scope.get("method", "-")
+        ua = dict(scope.get("headers") or []).get(b"user-agent", b"").decode("latin-1")[:80]
         if not hmac.compare_digest(first.encode(), self.secret.encode()):
+            # Never log the secret itself: only a 3-char prefix and its length
+            log.warning("404 %s /%s...(len %d)/%s ua=%s", method, first[:3], len(first), rest.replace(self.secret, "<secret>"), ua)
             await _plain(send, 404, b"not found")
             return
+        log.info("%s /<secret>/%s ua=%s", method, rest, ua)
         # Strip trailing slashes: /<secret>/mcp/ would otherwise get a 307 to /mcp, dropping the secret
         new_path = "/" + rest.rstrip("/")
         scope = dict(scope, path=new_path, raw_path=new_path.encode())
