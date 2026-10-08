@@ -27,6 +27,7 @@
     <string name="delete">Vymazať</string>
     <string name="died">Zomrel</string>
     <string name="directed_by">Réžia: %1$s</string>
+    <string name="starring">Hrajú: %1$s</string>
     <string name="director">Režisér</string>
     <string name="disabled">Zakázané</string>
     <string name="discovered_servers">Objavené servery</string>

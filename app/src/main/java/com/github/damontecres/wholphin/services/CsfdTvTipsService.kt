@@ -151,7 +151,8 @@ class CsfdTvTipsService
         suspend fun getTips(
             limit: Int,
             missing: Int,
-        ): List<CsfdTvTip> = get("Csfd/TvTips?limit=$limit&missing=$missing", okHttpClient)?.let(::parseTips).orEmpty()
+            // The first call of the day fetches the missing tips' details from ČSFD, which takes a while
+        ): List<CsfdTvTip> = get("Csfd/TvTips?limit=$limit&missing=$missing", slowClient)?.let(::parseTips).orEmpty()
 
         /**
          * ČSFD id → position in the ČSFD best films/series rankings (top 1000 each); empty if the plugin is missing

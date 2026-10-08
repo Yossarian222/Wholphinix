@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -106,22 +107,25 @@ class CsfdRankingViewModel
                                     fields = SlimItemFields,
                                     sortBy = listOf(ItemSortBy.COMMUNITY_RATING, ItemSortBy.SORT_NAME),
                                     sortOrder = listOf(SortOrder.DESCENDING, SortOrder.ASCENDING),
-                                    limit = RANKING_SIZE,
+                                    // Items without a ČSFD id carry a TMDb/IMDb rating; fetch extra and drop them
+                                    limit = RANKING_SIZE * 3,
                                     enableTotalRecordCount = false,
                                 ),
                             ).toBaseItems(true)
                     val csfdRanks = ranks.await()
                     _state.update {
                         DataLoadingState.Success(
-                            items.map { item ->
-                                val csfdId =
-                                    item.data.providerIds
-                                        ?.entries
-                                        ?.firstOrNull { it.key.equals("Csfd", ignoreCase = true) }
-                                        ?.value
-                                        ?.toIntOrNull()
-                                RankedItem(item, csfdId?.let { csfdRanks[it] })
-                            },
+                            items
+                                .mapNotNull { item ->
+                                    val csfdId =
+                                        item.data.providerIds
+                                            ?.entries
+                                            ?.firstOrNull { it.key.equals("Csfd", ignoreCase = true) }
+                                            ?.value
+                                            ?.toIntOrNull()
+                                            ?: return@mapNotNull null
+                                    RankedItem(item, csfdRanks[csfdId])
+                                }.take(RANKING_SIZE),
                         )
                     }
                 } catch (ex: Exception) {
@@ -187,6 +191,9 @@ fun CsfdRankingGrid(
                                 onClick = onClick,
                                 onLongClick = onLongClick,
                                 showTitle = true,
+                                // Without a size the card does not build an image URL
+                                fillWidth = widthPx,
+                                imageContentScale = ContentScale.Crop,
                             )
                             ranked?.csfdRank?.let { CsfdRankBadge(it, Modifier.align(Alignment.TopStart)) }
                         }

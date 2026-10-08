@@ -85,6 +85,11 @@ configure<ApplicationExtension> {
     }
 
     signingConfigs {
+        // Same debug key on every machine and CI run, so a new debug APK installs as an update (keeps logins)
+        getByName("debug") {
+            val shared = rootProject.file("debug.keystore")
+            if (shared.exists()) storeFile = shared
+        }
         if (shouldSign.get()) {
             create("ci") {
                 file("ci.keystore").writeBytes(

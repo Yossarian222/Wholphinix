@@ -67,6 +67,7 @@ val SlimItemFields =
     listOf(
         ItemFields.OVERVIEW,
         ItemFields.PROVIDER_IDS,
+        ItemFields.PEOPLE,
         ItemFields.SORT_NAME,
         ItemFields.MEDIA_SOURCE_COUNT,
         ItemFields.CAN_DELETE,
@@ -81,6 +82,7 @@ val HomeItemFields =
     listOf(
         ItemFields.OVERVIEW,
         ItemFields.PROVIDER_IDS,
+        ItemFields.PEOPLE,
         ItemFields.CAN_DELETE,
     )
 

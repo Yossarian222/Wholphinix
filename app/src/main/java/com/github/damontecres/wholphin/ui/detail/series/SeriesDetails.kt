@@ -58,6 +58,7 @@ import com.github.damontecres.wholphin.ui.components.ConfirmDialog
 import com.github.damontecres.wholphin.ui.components.ContextMenu
 import com.github.damontecres.wholphin.ui.components.ContextMenuActions
 import com.github.damontecres.wholphin.ui.components.ContextMenuDialog
+import com.github.damontecres.wholphin.ui.components.CreditsText
 import com.github.damontecres.wholphin.ui.components.DeleteButton
 import com.github.damontecres.wholphin.ui.components.DialogItem
 import com.github.damontecres.wholphin.ui.components.DialogParams
@@ -705,6 +706,7 @@ fun SeriesDetailsHeader(
                         },
                 )
             }
+            CreditsText(dto.people, Modifier.padding(start = HeaderUtils.startPadding))
         }
     }
 }
