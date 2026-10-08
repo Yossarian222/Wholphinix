@@ -53,8 +53,7 @@ val gitDescribe =
         .exec {
             commandLine("git", "describe", "--tags", "--long", "--match=v*")
             isIgnoreExitValue = true
-        }
-        .standardOutput.asText
+        }.standardOutput.asText
         .getOrElse("v0.0.0")
 
 kotlin {
