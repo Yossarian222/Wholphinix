@@ -27,6 +27,7 @@ import com.github.damontecres.wholphin.ui.components.CsfdTrivia
 import com.github.damontecres.wholphin.ui.components.GenreText
 import com.github.damontecres.wholphin.ui.components.HeaderUtils
 import com.github.damontecres.wholphin.ui.components.OverviewText
+import com.github.damontecres.wholphin.ui.components.PremiereDateText
 import com.github.damontecres.wholphin.ui.components.QuickDetails
 import com.github.damontecres.wholphin.ui.components.TitleOrLogo
 import com.github.damontecres.wholphin.ui.components.VideoStreamDetails
@@ -71,6 +72,8 @@ fun MovieDetailsHeader(
                 movie.timeRemainingOrRuntime,
                 Modifier.padding(start = HeaderUtils.startPadding),
             )
+
+            PremiereDateText(dto.premiereDate, Modifier.padding(start = HeaderUtils.startPadding))
 
             dto.genres?.letNotEmpty {
                 GenreText(it, Modifier.padding(start = HeaderUtils.startPadding))

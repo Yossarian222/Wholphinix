@@ -73,6 +73,7 @@ import com.github.damontecres.wholphin.ui.components.LoadingPage
 import com.github.damontecres.wholphin.ui.components.Optional
 import com.github.damontecres.wholphin.ui.components.OverviewText
 import com.github.damontecres.wholphin.ui.components.PersonContextActions
+import com.github.damontecres.wholphin.ui.components.PremiereDateText
 import com.github.damontecres.wholphin.ui.components.QuickDetails
 import com.github.damontecres.wholphin.ui.components.TitleOrLogo
 import com.github.damontecres.wholphin.ui.components.TrailerButton
@@ -681,6 +682,7 @@ fun SeriesDetailsHeader(
                 null,
                 Modifier.padding(start = HeaderUtils.startPadding),
             )
+            PremiereDateText(dto.premiereDate, Modifier.padding(start = HeaderUtils.startPadding))
             dto.studios?.let {
                 val studios = remember { series.studioNames }
                 GenreText(
