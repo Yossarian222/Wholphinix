@@ -306,6 +306,16 @@ class ImageUrlService
                     )
                 }
 
+                // Nothing known about the images (e.g. fields not requested): try the series poster as before
+                seriesId != null -> {
+                    getItemImageUrl(
+                        itemId = seriesId,
+                        imageType = ImageType.PRIMARY,
+                        fillWidth = fillWidth,
+                        fillHeight = fillHeight,
+                    )
+                }
+
                 else -> {
                     null
                 }
