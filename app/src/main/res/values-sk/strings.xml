@@ -763,6 +763,12 @@
     <string name="books">Knihy</string>
     <string name="audio_books">Audioknihy</string>
     <string name="brown">Hnedá</string>
+    <string name="theme_cinema">Kino</string>
+    <string name="theme_gold">Zlatá</string>
+    <string name="theme_midnight">Polnoc</string>
+    <string name="theme_teal">Tyrkys</string>
+    <string name="theme_neon">Neón</string>
+    <string name="theme_graphite">Grafit</string>
     <string name="dpad_seek_mode_minimal">Minimálne</string>
     <string name="dpad_seek_mode_minimal_summary">Malý panel pretáčania v dolnej časti obrazovky (predvolené)</string>
     <string name="dpad_seek_mode_trickplay_summary">Panel pretáčania s náhľadmi Trickplay</string>
