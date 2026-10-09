@@ -70,6 +70,8 @@ val SlimItemFields =
         ItemFields.SORT_NAME,
         ItemFields.MEDIA_SOURCE_COUNT,
         ItemFields.CAN_DELETE,
+        // Cards show an image with a different aspect ratio whole instead of cropping it
+        ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
     )
 
 /**
@@ -82,7 +84,7 @@ val HeaderRowItemFields = SlimItemFields + ItemFields.PEOPLE
 /**
  * ItemFields for displaying items in rows such as in a [com.github.damontecres.wholphin.ui.cards.ItemRow] with [com.github.damontecres.wholphin.ui.cards.SeasonCard]
  */
-val ItemRowFields = SlimItemFields + ItemFields.PRIMARY_IMAGE_ASPECT_RATIO
+val ItemRowFields = SlimItemFields
 
 val HomeItemFields =
     listOf(
@@ -90,6 +92,7 @@ val HomeItemFields =
         ItemFields.PROVIDER_IDS,
         ItemFields.PEOPLE,
         ItemFields.CAN_DELETE,
+        ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
     )
 
 val PhotoItemFields =

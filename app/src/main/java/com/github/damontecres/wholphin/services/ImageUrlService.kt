@@ -9,6 +9,7 @@ import org.jellyfin.sdk.model.UUID
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.jellyfin.sdk.model.api.ImageFormat
 import org.jellyfin.sdk.model.api.ImageType
+import org.jellyfin.sdk.model.serializer.toUUIDOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -36,6 +37,8 @@ class ImageUrlService
             seriesPrimaryTag: String? = null,
             parentThumbTag: String? = null,
             parentBackdropTag: String? = null,
+            parentPrimaryId: UUID? = null,
+            parentPrimaryTag: String? = null,
             fillWidth: Int? = null,
             fillHeight: Int? = null,
         ): String? =
@@ -147,7 +150,34 @@ class ImageUrlService
                     }
                 }
 
-                ImageType.PRIMARY,
+                ImageType.PRIMARY -> {
+                    if (itemType == BaseItemKind.EPISODE || itemType == BaseItemKind.SEASON) {
+                        episodeOrSeasonPrimaryUrl(
+                            itemId = itemId,
+                            seriesId = seriesId,
+                            useSeriesForPrimary = useSeriesForPrimary,
+                            imageTags = imageTags,
+                            parentPrimaryId = parentPrimaryId,
+                            parentPrimaryTag = parentPrimaryTag,
+                            parentThumbId = parentThumbId,
+                            parentBackdropId = parentBackdropId,
+                            seriesPrimaryTag = seriesPrimaryTag,
+                            parentThumbTag = parentThumbTag,
+                            parentBackdropTag = parentBackdropTag,
+                            fillWidth = fillWidth,
+                            fillHeight = fillHeight,
+                        )
+                    } else {
+                        getItemImageUrl(
+                            itemId = itemId,
+                            imageType = imageType,
+                            tag = ownImageTag(imageType, imageTags, backdropTags),
+                            fillWidth = fillWidth,
+                            fillHeight = fillHeight,
+                        )
+                    }
+                }
+
                 ImageType.BANNER,
                 -> {
                     if (useSeriesForPrimary && seriesId != null &&
@@ -194,6 +224,104 @@ class ImageUrlService
                 }
             }
 
+        /**
+         * Primary image of a season or episode, like Jellyfin web: its own image -> the parent's/series' poster ->
+         * the series' thumb/backdrop -> null, so the card shows its title placeholder instead of an empty image.
+         * With [useSeriesForPrimary] (per row option) the series' poster comes first.
+         */
+        private fun episodeOrSeasonPrimaryUrl(
+            itemId: UUID,
+            seriesId: UUID?,
+            useSeriesForPrimary: Boolean,
+            imageTags: Map<ImageType, String?>,
+            parentPrimaryId: UUID?,
+            parentPrimaryTag: String?,
+            parentThumbId: UUID?,
+            parentBackdropId: UUID?,
+            seriesPrimaryTag: String?,
+            parentThumbTag: String?,
+            parentBackdropTag: String?,
+            fillWidth: Int?,
+            fillHeight: Int?,
+        ): String? {
+            val ownTag = imageTags[ImageType.PRIMARY]
+            return when {
+                useSeriesForPrimary && seriesId != null -> {
+                    getItemImageUrl(
+                        itemId = seriesId,
+                        imageType = ImageType.PRIMARY,
+                        tag = seriesPrimaryTag,
+                        fillWidth = fillWidth,
+                        fillHeight = fillHeight,
+                    )
+                }
+
+                ownTag != null -> {
+                    getItemImageUrl(
+                        itemId = itemId,
+                        imageType = ImageType.PRIMARY,
+                        tag = ownTag,
+                        fillWidth = fillWidth,
+                        fillHeight = fillHeight,
+                    )
+                }
+
+                parentPrimaryId != null && parentPrimaryTag != null -> {
+                    getItemImageUrl(
+                        itemId = parentPrimaryId,
+                        imageType = ImageType.PRIMARY,
+                        tag = parentPrimaryTag,
+                        fillWidth = fillWidth,
+                        fillHeight = fillHeight,
+                    )
+                }
+
+                seriesId != null && seriesPrimaryTag != null -> {
+                    getItemImageUrl(
+                        itemId = seriesId,
+                        imageType = ImageType.PRIMARY,
+                        tag = seriesPrimaryTag,
+                        fillWidth = fillWidth,
+                        fillHeight = fillHeight,
+                    )
+                }
+
+                parentThumbId != null && parentThumbTag != null -> {
+                    getItemImageUrl(
+                        itemId = parentThumbId,
+                        imageType = ImageType.THUMB,
+                        tag = parentThumbTag,
+                        fillWidth = fillWidth,
+                        fillHeight = fillHeight,
+                    )
+                }
+
+                parentBackdropId != null && parentBackdropTag != null -> {
+                    getItemImageUrl(
+                        itemId = parentBackdropId,
+                        imageType = ImageType.BACKDROP,
+                        tag = parentBackdropTag,
+                        fillWidth = fillWidth,
+                        fillHeight = fillHeight,
+                    )
+                }
+
+                // Nothing known about the images (e.g. fields not requested): try the series poster as before
+                seriesId != null -> {
+                    getItemImageUrl(
+                        itemId = seriesId,
+                        imageType = ImageType.PRIMARY,
+                        fillWidth = fillWidth,
+                        fillHeight = fillHeight,
+                    )
+                }
+
+                else -> {
+                    null
+                }
+            }
+        }
+
         /** The tag of the item's own image: it changes with the image, so a new image is never served from the cache */
         private fun ownImageTag(
             type: ImageType,
@@ -221,6 +349,8 @@ class ImageUrlService
                     seriesPrimaryTag = item.data.seriesPrimaryImageTag,
                     parentThumbTag = item.data.parentThumbImageTag,
                     parentBackdropTag = item.data.parentBackdropImageTags?.firstOrNull(),
+                    parentPrimaryId = item.data.parentPrimaryImageItemId?.toUUIDOrNull(),
+                    parentPrimaryTag = item.data.parentPrimaryImageTag,
                     backdropTags = item.data.backdropImageTags.orEmpty(),
                     fillWidth = fillWidth,
                     fillHeight = fillHeight,

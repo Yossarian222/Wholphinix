@@ -51,6 +51,17 @@ fun GridCard(
     fillHeight: Int? = null,
 ) {
     val dto = item?.data
+    // A grid cell has a fixed width, so an image wider than the card is shown whole rather than cropped
+    val contentScale =
+        remember(item, imageAspectRatio, imageType, imageContentScale) {
+            if (item != null &&
+                widerOwnPrimaryRatio(item, imageAspectRatio, imageType.imageType, item.useSeriesForPrimary) != null
+            ) {
+                ContentScale.Fit
+            } else {
+                imageContentScale
+            }
+        }
     val focused by interactionSource.collectIsFocusedAsState()
     var focusedAfterDelay by remember { mutableStateOf(false) }
 
@@ -95,7 +106,7 @@ fun GridCard(
                 watchedPercent = dto?.userData?.playedPercentage,
                 numberOfVersions = dto?.mediaSourceCount ?: 0,
                 useFallbackText = false,
-                contentScale = imageContentScale,
+                contentScale = contentScale,
                 fillWidth = fillWidth,
                 fillHeight = fillHeight,
                 modifier =
@@ -108,7 +119,7 @@ fun GridCard(
         AnimatedVisibility(showTitle) {
             SlidingCardText(focused) {
                 Text(
-                    text = item?.title ?: "",
+                    text = item?.cardTitle ?: "",
                     maxLines = 1,
                     textAlign = TextAlign.Center,
                     style = MaterialTheme.typography.bodyMedium,
@@ -121,7 +132,7 @@ fun GridCard(
                             .enableMarquee(focusedAfterDelay),
                 )
                 Text(
-                    text = item?.subtitle ?: "",
+                    text = item?.cardSubtitle ?: "",
                     maxLines = 1,
                     textAlign = TextAlign.Center,
                     style = MaterialTheme.typography.bodySmall,
