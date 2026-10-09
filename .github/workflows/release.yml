@@ -36,9 +36,11 @@ jobs:
           ORG_GRADLE_PROJECT_WholphinExtensionsUsername: "${{ secrets.EXTENSIONS_USERNAME }}"
           ORG_GRADLE_PROJECT_WholphinExtensionsPassword: "${{ secrets.EXTENSIONS_PASSWORD }}"
         run: |
-          ./gradlew clean bundleAppstoreRelease
-          ./gradlew bundleFiretvRelease
-          ./gradlew assembleDefaultRelease
+          if [[ -z "$SIGNING_KEY" ]]; then
+            echo "::error::Release needs the signing secrets (SIGNING_KEY, KEY_ALIAS, KEY_PASSWORD, KEY_STORE_PASSWORD)"
+            exit 1
+          fi
+          ./gradlew clean assembleDefaultRelease
       - name: Verify signatures
         run: |
           echo "Verify APK signatures"
@@ -49,8 +51,9 @@ jobs:
         run: |
           find app/build/outputs/apk -name '*.apk' -print0 |
             while IFS= read -r -d '' line; do
-              # Wholphin-default-release-0.2.9-62-g5c12e03-16-arm64-v8a.apk => Wholphin-arm64-v8a.apk
-              short_name="$(echo $line | sed -E 's/-default-release-[0-9]+\.[0-9]+\.[0-9]+-[0-9]+-g[a-fA-F0-9]+-[0-9]+//')"
+              # Wholphin-default-release-1.0.0-0-g5c12e03-1-arm64-v8a.apk => Wholphin-release-arm64-v8a.apk
+              # (the names the in-app updater looks for, see getDownloadUrl in UpdateChecker.kt)
+              short_name="$(echo $line | sed -E 's/-[0-9]+\.[0-9]+\.[0-9]+-[0-9]+-g[a-fA-F0-9]+-[0-9]+//' | sed -E 's/-default//')"
               echo "$line => $short_name"
               cp "$line" "$short_name"
             done
@@ -58,13 +61,6 @@ jobs:
         run: |
           echo "SHA256 checksums:"
           find app/build/outputs \( -name '*.apk' -or -name '*.aab' \) -print0 | xargs -0 sha256sum
-      - name: Upload AAB
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: AAB
-          path: |
-            app/build/outputs/bundle/**/*.aab
-          compression-level: 0
       - name: Upload mapping files
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
@@ -78,6 +74,7 @@ jobs:
         run: |
           shopt -s globstar
 
+          # Not a draft: the in-app updater reads /releases/latest, which skips drafts
           gh release create "${{ env.TAG_NAME }}" \
-            --latest --title "${{ env.TAG_NAME }}" --verify-tag -n "" --draft \
-            app/build/outputs/apk/**/*.apk
+            --latest --title "${{ env.TAG_NAME }}" --verify-tag --generate-notes \
+            app/build/outputs/apk/**/Wholphin-release*.apk

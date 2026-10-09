@@ -74,7 +74,8 @@ configure<ApplicationExtension> {
     compileSdk = libs.versions.compileSdk.getInt()
 
     defaultConfig {
-        applicationId = "com.github.damontecres.wholphin"
+        // Own id so Wholphinix installs next to the original Wholphin
+        applicationId = "com.github.yossarian222.wholphinix"
         minSdk = libs.versions.minSdk.getInt()
         targetSdk = libs.versions.targetSdk.getInt()
         versionCode = gitTags.trim().lines().size
