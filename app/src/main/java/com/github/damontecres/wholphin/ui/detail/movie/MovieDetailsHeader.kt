@@ -23,6 +23,7 @@ import com.github.damontecres.wholphin.data.model.BaseItem
 import com.github.damontecres.wholphin.preferences.UserPreferences
 import com.github.damontecres.wholphin.ui.components.CreditsText
 import com.github.damontecres.wholphin.ui.components.CsfdMyRating
+import com.github.damontecres.wholphin.ui.components.CsfdTrivia
 import com.github.damontecres.wholphin.ui.components.GenreText
 import com.github.damontecres.wholphin.ui.components.HeaderUtils
 import com.github.damontecres.wholphin.ui.components.OverviewText
@@ -100,7 +101,7 @@ fun MovieDetailsHeader(
             dto.overview?.let { overview ->
                 OverviewText(
                     overview = overview,
-                    maxLines = 3,
+                    maxLines = 5,
                     onClick = overviewOnClick,
                     textBoxHeight = Dp.Unspecified,
                     modifier =
@@ -115,6 +116,7 @@ fun MovieDetailsHeader(
             }
 
             CreditsText(movie.data.people, Modifier.padding(start = HeaderUtils.startPadding), clickableDirectors = true)
+            CsfdTrivia(movie, Modifier.padding(start = HeaderUtils.startPadding, top = 8.dp))
         }
     }
 }

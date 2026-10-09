@@ -28,6 +28,7 @@ import org.jellyfin.sdk.model.api.request.GetItemsRequest
 import org.jellyfin.sdk.model.serializer.toUUIDOrNull
 import timber.log.Timber
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -162,6 +163,23 @@ class CsfdTvTipsService
             ranks ?: (get("Csfd/Ranks", slowClient)?.let(::parseRanks) ?: mapOf()).also {
                 if (it.isNotEmpty()) ranks = it
             }
+
+        private val trivia = ConcurrentHashMap<Int, List<String>>()
+
+        /**
+         * Interesting facts ("Zaujímavosti") about a film/series from ČSFD, best rated first; empty if none or the
+         * plugin is missing/too old
+         */
+        suspend fun getTrivia(
+            csfdId: Int,
+            limit: Int = 4,
+        ): List<String> =
+            trivia[csfdId] ?: (
+                get("Csfd/Trivia/$csfdId?limit=$limit", slowClient)
+                    ?.let { json -> (json as? JsonArray).orEmpty().mapNotNull { it.jsonPrimitive.contentOrNull } }
+                    ?.also { trivia[csfdId] = it }
+                    .orEmpty()
+            )
 
         @Volatile
         private var myRatings: MutableMap<Int, Int>? = null

@@ -9,7 +9,6 @@ import coil3.request.ImageRequest
 import com.github.damontecres.wholphin.services.hilt.DefaultCoroutineScope
 import com.github.damontecres.wholphin.ui.components.ScreensaverItem
 import com.github.damontecres.wholphin.ui.formatDate
-import com.github.damontecres.wholphin.ui.launchDefault
 import com.github.damontecres.wholphin.util.ApiRequestPager
 import com.github.damontecres.wholphin.util.ExceptionHandler
 import com.github.damontecres.wholphin.util.GetItemsRequestHandler
@@ -68,12 +67,14 @@ class ScreensaverService
                     _state.update {
                         val enabled =
                             prefs.appPreferences.interfacePreferences.screensaverPreference.enabled
-                        keepScreenOnInternal(enabled)
+                        // Preferences can change during playback (e.g. a saved subtitle delay), which must not let
+                        // the OS or in-app screensaver start over the video
+                        keepScreenOnInternal(enabled || it.paused)
                         ScreensaverState(
                             enabled = enabled,
                             enabledTemp = false,
                             active = false,
-                            paused = false,
+                            paused = it.paused,
                             dimEnabled = prefs.appPreferences.interfacePreferences.screensaverPreference.dimEnabled,
                             dimActive = false,
                         )
@@ -172,7 +173,8 @@ class ScreensaverService
          * Signal to the OS for keeping the screen on such as during playback or when the in-app screensaver is active
          */
         fun keepScreenOn(keep: Boolean) {
-            scope.launchDefault {
+            // Synchronous so that a closing player's "false" can't overtake the next player's "true"
+            synchronized(this) {
                 val screensaverEnabled = state.value.enabled
                 val dimEnabled = state.value.dimEnabled
                 Timber.d("Keep screen on: %s, screensaverEnabled=%s", keep, screensaverEnabled)

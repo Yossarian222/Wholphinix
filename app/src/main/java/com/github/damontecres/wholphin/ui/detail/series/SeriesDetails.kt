@@ -60,6 +60,7 @@ import com.github.damontecres.wholphin.ui.components.ContextMenuActions
 import com.github.damontecres.wholphin.ui.components.ContextMenuDialog
 import com.github.damontecres.wholphin.ui.components.CreditsText
 import com.github.damontecres.wholphin.ui.components.CsfdMyRating
+import com.github.damontecres.wholphin.ui.components.CsfdTrivia
 import com.github.damontecres.wholphin.ui.components.DeleteButton
 import com.github.damontecres.wholphin.ui.components.DialogItem
 import com.github.damontecres.wholphin.ui.components.DialogParams
@@ -695,7 +696,7 @@ fun SeriesDetailsHeader(
             dto.overview?.let { overview ->
                 OverviewText(
                     overview = overview,
-                    maxLines = 3,
+                    maxLines = 5,
                     onClick = overviewOnClick,
                     textBoxHeight = Dp.Unspecified,
                     modifier =
@@ -709,6 +710,7 @@ fun SeriesDetailsHeader(
                 )
             }
             CreditsText(dto.people, Modifier.padding(start = HeaderUtils.startPadding), clickableDirectors = true)
+            CsfdTrivia(series, Modifier.padding(start = HeaderUtils.startPadding, top = 8.dp))
         }
     }
 }

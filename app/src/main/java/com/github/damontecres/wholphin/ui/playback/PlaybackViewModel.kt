@@ -208,6 +208,8 @@ class PlaybackViewModel
                         screensaverService.keepScreenOn(false)
                         disconnectPlayer()
                     }
+                    // No screensaver while the player is open, even when paused or buffering
+                    screensaverService.keepScreenOn(true)
                     init()
                 }
         }
@@ -1641,10 +1643,6 @@ class PlaybackViewModel
                     }
                 }
             }
-        }
-
-        override fun onIsPlayingChanged(isPlaying: Boolean) {
-            screensaverService.keepScreenOn(isPlaying)
         }
 
         override fun onAvailableCommandsChanged(availableCommands: Player.Commands) {
