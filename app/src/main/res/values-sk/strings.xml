@@ -802,4 +802,19 @@
     <string name="csfd_rating_prompt_sent">Hodnotenie odoslané na ČSFD</string>
     <!-- ČSFD watchlist -->
     <string name="csfd_watchlist">Chcem vidieť (ČSFD)</string>
+    <!-- Claude -->
+    <string name="claude_settings">Claude</string>
+    <string name="claude_settings_summary">Claude na gauči: zaujímavosti a tipy na TV</string>
+    <string name="claude_companion">Claude spoločník</string>
+    <string name="claude_companion_summary">Krátke hlášky počas filmu a tip na večer na domovskej obrazovke</string>
+    <string name="claude_api_key">Anthropic API kľúč</string>
+    <string name="claude_api_key_not_set">Nenastavený – bez kľúča sa nič neposiela</string>
+    <string name="claude_api_key_set">Nastavený (…%1$s)</string>
+    <string name="claude_frequency">Ako často</string>
+    <string name="claude_frequency_never">Nikdy</string>
+    <string name="claude_frequency_sometimes">Občas</string>
+    <string name="claude_frequency_often">Často</string>
+    <string name="claude_model">Model</string>
+    <string name="claude_model_haiku_subtitle">Rýchly a lacný (odporúčaný)</string>
+    <string name="claude_model_sonnet_subtitle">Múdrejší, drahší</string>
 </resources>

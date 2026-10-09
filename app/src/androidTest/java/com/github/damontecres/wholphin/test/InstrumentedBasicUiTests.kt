@@ -56,6 +56,10 @@ class InstrumentedBasicUiTests {
                     appPreferences = mockk(relaxed = true),
                     backdropService = mockk(relaxed = true),
                     screensaverService = screensaverService,
+                    tvMessageService =
+                        mockk(relaxed = true) {
+                            every { current } returns MutableStateFlow(null)
+                        },
                     modifier = Modifier,
                 )
             }

@@ -1,6 +1,7 @@
 # Portainer stack "jellyfin-mcp" (Repository: Yossarian222/Wholphinix, compose path tools/jellyfin-mcp/docker-compose.yml)
 # Stack environment variables to set in Portainer:
 #   TS_AUTHKEY, JELLYFIN_API_KEY, JELLYFIN_USER, MCP_SECRET
+# Optional: SEERR_URL, SEERR_API_KEY (request_on_seerr), TARGET_DEVICE
 services:
   ts:
     image: tailscale/tailscale:stable
@@ -30,4 +31,8 @@ services:
       - JELLYFIN_USER=${JELLYFIN_USER}
       - MCP_SECRET=${MCP_SECRET}
       - TARGET_CLIENT=Wholphin
+      - TARGET_DEVICE=${TARGET_DEVICE:-}
+      # Optional, for request_on_seerr; leave empty to disable
+      - SEERR_URL=${SEERR_URL:-}
+      - SEERR_API_KEY=${SEERR_API_KEY:-}
     restart: unless-stopped

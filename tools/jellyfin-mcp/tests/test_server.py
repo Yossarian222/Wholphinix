@@ -12,6 +12,7 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client as streamablehttp_client
 
 from jellyfin_mcp import server
+from jellyfin_mcp.seerr import SeerrClient
 from jellyfin_mcp.jellyfin import (
     JellyfinClient,
     Stream,
@@ -39,6 +40,9 @@ class FakeJellyfin:
         self.position_ticks = 600 * 10_000_000  # 10 min
         self.media_source_id: str | None = None
         self.wholphin_user = USER
+        self.tips_status = 200
+        self.tips_params: dict = {}
+        self.items_params: dict = {}
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path
@@ -50,6 +54,30 @@ class FakeJellyfin:
         if path == "/Users":
             return httpx.Response(200, json=[{"Name": "Roman", "Id": USER},
                                              {"Name": "Kids", "Id": OTHER_USER}])
+        if path == "/Csfd/TvTips":
+            self.tips_params = params
+            return httpx.Response(self.tips_status, json=[
+                {"CsfdId": 10, "Title": "Pelíšky", "Year": 1999, "Time": "20:15", "Channel": "JOJ",
+                 "ItemId": "1111111111111111111111111111111a", "InLibrary": True, "RatingPercent": 90},
+                {"CsfdId": 11, "Title": "Vesničko má středisková", "Year": 1985, "Time": "21:00",
+                 "Channel": "ČT1", "ItemId": None, "InLibrary": False, "RatingPercent": 88,
+                 "MediaType": "movie", "Genres": ["Komédia"], "Overview": "x" * 500, "Poster": "p"},
+            ])
+        if path == "/Items" and params.get("isPlayed") == "false":
+            self.items_params = params
+            return httpx.Response(200, json={"Items": [
+                {"Id": f"{n:032x}", "Name": name, "ProductionYear": 2000 + n, "CommunityRating": rating,
+                 "Genres": genres, "RunTimeTicks": minutes * 60 * 10_000_000, "Overview": "o"}
+                for n, (name, rating, genres, minutes) in enumerate([
+                    ("Dlhá dráma", 9.1, ["Dráma"], 190),
+                    ("Akčňák", 8.5, ["Akčný", "Thriller"], 110),
+                    ("Komédia 1", 8.0, ["Komédia"], 95),
+                    ("Komédia 2", 7.5, ["Komédia", "Rodinný"], 100),
+                    ("Horor", 7.0, ["Horor"], 90),
+                    ("Ďalší", 6.0, ["Dráma"], 100),
+                    ("Posledný", 5.0, ["Dráma"], 100),
+                ], start=1)
+            ]})
         if path == "/Items" and params.get("searchTerm"):
             return httpx.Response(
                 200,
@@ -116,6 +144,40 @@ def fake():
         JellyfinClient("http://jf", "key", "Roman", transport=httpx.MockTransport(f.handler))
     )
     return f
+
+
+class FakeSeerr:
+    def __init__(self) -> None:
+        self.requests: list[dict] = []
+        self.queries: list[str] = []
+        self.raw_queries: list[bytes] = []
+        self.api_keys: set[str] = set()
+
+    def handler(self, request: httpx.Request) -> httpx.Response:
+        self.api_keys.add(request.headers.get("x-api-key", ""))
+        if request.url.path == "/api/v1/search":
+            self.queries.append(request.url.params["query"])
+            self.raw_queries.append(request.url.query)
+            return httpx.Response(200, json={"results": [
+                {"id": 1, "mediaType": "person", "name": "Someone"},
+                {"id": 500, "mediaType": "movie", "title": "Cosy Dens", "releaseDate": "1999-04-01"},
+                {"id": 501, "mediaType": "movie", "title": "Cosy Dens", "releaseDate": "2019-01-01",
+                 "mediaInfo": {"status": 5}},
+                {"id": 600, "mediaType": "tv", "name": "Cosy Dens", "firstAirDate": "2005-01-01"},
+            ]})
+        if request.url.path == "/api/v1/request" and request.method == "POST":
+            body = json.loads(request.content)
+            self.requests.append(body)
+            return httpx.Response(201, json={"id": 77, "status": 1})
+        return httpx.Response(404)
+
+
+@pytest.fixture
+def fake_seerr():
+    f = FakeSeerr()
+    server.set_seerr(SeerrClient("http://seerr", "seerr-key", transport=httpx.MockTransport(f.handler)))
+    yield f
+    server.set_seerr(None)
 
 
 @pytest.fixture(scope="module")
@@ -202,7 +264,8 @@ def test_lists_tools(base_url, fake):
 
     names = run(go())
     assert {"search_library", "play", "play_episode", "set_subtitles", "set_audio",
-            "control", "whats_playing", "continue_watching"} <= names
+            "control", "whats_playing", "continue_watching", "show_message", "tv_tips_today",
+            "recommend_tonight", "request_on_seerr"} <= names
 
 
 def test_search_and_play_resumes(base_url, fake):
@@ -299,3 +362,89 @@ def test_trailing_slash_and_secret_not_logged(base_url, fake, caplog):
         time.sleep(0.1)
     assert caplog.records
     assert all(SECRET not in rec.getMessage() for rec in caplog.records)
+
+
+def test_mood_genres():
+    assert "komed" in server.mood_genres("niečo vtipné")
+    assert "rodinn" in server.mood_genres("s deťmi")
+    assert server.mood_genres("western") == ["western"]
+    assert server.mood_genres(None) == []
+
+
+def test_show_message(base_url, fake):
+    out = run(_call(base_url, "show_message", {"text": "Večera je hotová!", "seconds": 120}))
+    assert out == {"shown": True, "seconds": 30.0}
+    assert fake.calls[-1][1:] == (
+        f"/Sessions/{SESSION}/Command", {},
+        {"Name": "DisplayMessage",
+         "Arguments": {"Header": "Claude", "Text": "Večera je hotová!", "TimeoutMs": "30000"}},
+    )
+    run(_call(base_url, "show_message", {"text": "Ahoj", "title": "Mama"}))
+    assert fake.calls[-1][3]["Arguments"] == {"Header": "Mama", "Text": "Ahoj", "TimeoutMs": "8000"}
+
+
+def test_show_message_validates_length(base_url, fake):
+    for text in ["x" * 301, "   "]:
+        res = run(_call_raw(base_url, "show_message", {"text": text}))
+        assert res.isError
+    assert fake.calls == []
+
+
+def test_tv_tips_today(base_url, fake):
+    out = run(_call(base_url, "tv_tips_today", {}))
+    assert fake.tips_params == {"limit": "10", "missing": "5", "userId": USER}
+    assert out["in_library"] == [{"title": "Pelíšky", "year": 1999, "time": "20:15", "channel": "JOJ",
+                                  "csfd_percent": 90, "id": "1111111111111111111111111111111a"}]
+    miss = out["not_in_library"][0]
+    assert miss["title"] == "Vesničko má středisková" and miss["media_type"] == "movie"
+    assert len(miss["overview"]) <= 220 and "Poster" not in miss
+
+
+def test_tv_tips_old_plugin(base_url, fake):
+    fake.tips_status = 401
+    res = run(_call_raw(base_url, "tv_tips_today", {}))
+    assert res.isError and "too old" in res.content[0].text
+
+
+def test_recommend_tonight(base_url, fake):
+    out = run(_call(base_url, "recommend_tonight", {}))
+    assert fake.items_params["isPlayed"] == "false" and fake.items_params["userId"] == USER
+    assert [c["name"] for c in out["candidates"]] == ["Dlhá dráma", "Akčňák", "Komédia 1", "Komédia 2", "Horor"]
+    assert out["candidates"][0]["csfd_percent"] == 91
+    assert "ČSFD 91 %" in out["candidates"][0]["reason"]
+
+    out = run(_call(base_url, "recommend_tonight", {"mood": "niečo vtipné", "max_minutes": 97}))
+    assert [c["name"] for c in out["candidates"]] == ["Komédia 1"]
+    assert "sedí na náladu" in out["candidates"][0]["reason"]
+
+    out = run(_call(base_url, "recommend_tonight", {"mood": "western"}))
+    assert "note" in out and len(out["candidates"]) == 5
+
+
+def test_request_on_seerr_not_configured(base_url, fake, monkeypatch):
+    monkeypatch.delenv("SEERR_URL", raising=False)
+    monkeypatch.delenv("SEERR_API_KEY", raising=False)
+    server.set_seerr(None)
+    res = run(_call_raw(base_url, "request_on_seerr", {"title": "Pelíšky"}))
+    assert res.isError and "Seerr nie je nastavený" in res.content[0].text
+
+
+def test_request_on_seerr(base_url, fake, fake_seerr):
+    out = run(_call(base_url, "request_on_seerr", {"title": "Pelíšky a pelechy", "year": 1999}))
+    assert out["requested"] is True and out["request_id"] == 77 and out["tmdb_id"] == 500
+    assert fake_seerr.requests == [{"mediaType": "movie", "mediaId": 500}]
+    assert fake_seerr.queries == ["Pelíšky a pelechy"]
+    # Seerr rejects '+' for spaces, they must be percent-encoded
+    assert b"+" not in fake_seerr.raw_queries[0]
+    assert fake_seerr.api_keys == {"seerr-key"}
+
+    out = run(_call(base_url, "request_on_seerr", {"title": "Cosy Dens", "year": 2019}))
+    assert out["requested"] is False and out["already"] == "available"
+
+    out = run(_call(base_url, "request_on_seerr", {"title": "Cosy Dens", "media_type": "tv"}))
+    assert out["requested"] is True
+    assert fake_seerr.requests[-1] == {"mediaType": "tv", "mediaId": 600, "seasons": "all"}
+
+    out = run(_call(base_url, "request_on_seerr", {"title": "Cosy Dens", "year": 1970}))
+    assert out["requested"] is False and "not found" in out["message"]
+    assert len(fake_seerr.requests) == 2

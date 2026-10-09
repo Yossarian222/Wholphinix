@@ -33,7 +33,9 @@ import com.github.damontecres.wholphin.services.BackdropService
 import com.github.damontecres.wholphin.services.NavigationManager
 import com.github.damontecres.wholphin.services.ScreensaverService
 import com.github.damontecres.wholphin.services.SetupDestination
+import com.github.damontecres.wholphin.services.TvMessageService
 import com.github.damontecres.wholphin.ui.components.AppScreensaver
+import com.github.damontecres.wholphin.ui.components.TvMessageOverlay
 import com.github.damontecres.wholphin.ui.nav.ApplicationContent
 import com.github.damontecres.wholphin.ui.setup.SwitchServerContent
 import com.github.damontecres.wholphin.ui.setup.SwitchUserContent
@@ -47,6 +49,7 @@ fun MainContent(
     userPreferences: UserPreferences,
     backdropService: BackdropService,
     screensaverService: ScreensaverService,
+    tvMessageService: TvMessageService,
     modifier: Modifier = Modifier,
 ) {
     val preferences by rememberUpdatedState(userPreferences)
@@ -159,6 +162,8 @@ fun MainContent(
                         .background(Color.Black.copy(alpha = alpha)),
                 )
             }
+            // Messages from the server (e.g. Claude via the MCP server) and the Claude companion, over everything
+            TvMessageOverlay(tvMessageService, Modifier.fillMaxSize())
         }
     }
 }

@@ -42,6 +42,7 @@ import com.github.damontecres.wholphin.preferences.ShowNextUpWhen
 import com.github.damontecres.wholphin.preferences.SkipSegmentBehavior
 import com.github.damontecres.wholphin.preferences.UserPreferences
 import com.github.damontecres.wholphin.preferences.enabled
+import com.github.damontecres.wholphin.services.ClaudeCompanionService
 import com.github.damontecres.wholphin.services.DatePlayedService
 import com.github.damontecres.wholphin.services.DeviceProfileService
 import com.github.damontecres.wholphin.services.ImageUrlService
@@ -160,6 +161,7 @@ class PlaybackViewModel
         private val screensaverService: ScreensaverService,
         private val musicService: MusicService,
         private val pendingRatingService: PendingRatingService,
+        private val claudeCompanionService: ClaudeCompanionService,
         @Assisted private val destination: Destination,
     ) : ViewModel(),
         Player.Listener,
@@ -211,6 +213,7 @@ class PlaybackViewModel
             // Acquired here, before anything asynchronous, so the release in onCleared always comes after it.
             screensaverService.acquireKeepScreenOn(this)
             addCloseable { screensaverService.releaseKeepScreenOn(this@PlaybackViewModel) }
+            addCloseable { claudeCompanionService.onPlaybackStopped() }
             initJob =
                 viewModelScope.launchIO {
                     addCloseable {
@@ -474,6 +477,9 @@ class PlaybackViewModel
                 }
                 this@PlaybackViewModel.currentItem = playlistItem
                 this@PlaybackViewModel.itemId = item.id
+                if (playlistItem is PlaylistItem.Media) {
+                    claudeCompanionService.onPlaybackStarted(item.id, item.type)
+                }
 
                 val isLiveTv = item.type == BaseItemKind.TV_CHANNEL
                 val base = item.data
@@ -1091,6 +1097,7 @@ class PlaybackViewModel
             reason: Int,
         ) {
             updateKeepScreenOn()
+            claudeCompanionService.onPlayingChanged(playWhenReady)
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {

@@ -21,17 +21,20 @@ from .jellyfin import (
     JellyfinError,
     NoTargetSession,
     Stream,
+    _fold,
     pick_stream,
     summarize_item,
     validate_id,
 )
+from .seerr import MEDIA_STATUS, SeerrClient, SeerrNotConfigured, pick_result
 
 log = logging.getLogger("jellyfin_mcp")
 
 INSTRUCTIONS = """\
 You control the Jellyfin media server and the Wholphinix app on the user's living-room TV.
-The user usually writes in Slovak. Typical requests: play a movie or the next episode of a
-series, switch subtitles or dubbing (audio language), pause, rewind, stop.
+The user usually writes or speaks in Slovak (often by voice from the Claude mobile app, so
+names may be misheard - search with variants). Typical requests: play a movie or the next
+episode of a series, switch subtitles or dubbing (audio language), pause, rewind, stop.
 
 Workflow:
 - To play something, call search_library first, then play with the chosen id. If several
@@ -40,9 +43,18 @@ Workflow:
   episode. For "S2E5" style requests use play_episode.
 - For subtitles/dubbing call set_subtitles / set_audio with a language ("slovenčina", "cz",
   "eng") or an index from whats_playing. "titulky preč/vypni" means set_subtitles("off").
-- "dabing" means audio track language.
+- "dabing" means audio track language. "Pusti X s českým dabingom": play, then set_audio("cz").
+- "Napíš na telku / daj vedieť na TV ...": show_message with a short text (max 300 chars). It
+  pops up in a corner of the TV, also over a running film, without interrupting it.
+- "Čo dnes dávajú v telke / v TV?": tv_tips_today. Mention channel and time, and point out
+  which ones are already in the library (those can be played right away with play(item_id)).
+- "Čo si dnes pozrieť / niečo na večer / mám chuť na komédiu": recommend_tonight (mood = the
+  user's words, max_minutes when they say how much time they have). Pick 1-3 of the
+  candidates yourself and say briefly why; offer to play the one they choose.
+- "Stiahni / chcem / objednaj film X" for something not in the library: request_on_seerr.
+  Confirm the title and year first if it is ambiguous.
 - If a tool says Wholphinix is not connected, tell the user to open the app on the TV.
-Keep replies short.
+Reply in Slovak, informally (tykanie), and keep replies short - they are often read aloud.
 """
 
 
@@ -73,6 +85,29 @@ def set_client(c: JellyfinClient) -> None:
     """For tests."""
     global _client
     _client = c
+
+
+_seerr: SeerrClient | None = None
+
+
+def seerr() -> SeerrClient:
+    """Seerr/Jellyseerr client, only if SEERR_URL and SEERR_API_KEY are set."""
+    global _seerr
+    if _seerr is None:
+        url = os.environ.get("SEERR_URL")
+        key = os.environ.get("SEERR_API_KEY")
+        if not url or not key:
+            raise SeerrNotConfigured(
+                "Seerr nie je nastavený (chýba SEERR_URL alebo SEERR_API_KEY v prostredí MCP servera)"
+            )
+        _seerr = SeerrClient(url, key)
+    return _seerr
+
+
+def set_seerr(c: SeerrClient | None) -> None:
+    """For tests."""
+    global _seerr
+    _seerr = c
 
 
 mcp = FastMCP(
@@ -265,6 +300,196 @@ async def control(
             target = pos + seconds if action == "forward" else pos - seconds
             await c.playstate(sid, "Seek", max(target, 0))
     return {"ok": True, "action": action}
+
+
+MAX_MESSAGE_CHARS = 300
+MAX_MESSAGE_SECONDS = 30
+
+
+@mcp.tool()
+async def show_message(text: str, title: str = "Claude", seconds: float = 8) -> dict[str, Any]:
+    """Show a short message on the TV, e.g. "Večera je hotová!".
+
+    It appears in a corner over whatever is on screen (also over a playing film) without pausing
+    it or taking focus, and disappears after `seconds` (1-30). Max 300 characters.
+    """
+    text = text.strip()
+    if not text:
+        raise ValueError("text is empty")
+    if len(text) > MAX_MESSAGE_CHARS:
+        raise ValueError(
+            f"text is {len(text)} characters long, max {MAX_MESSAGE_CHARS}: shorten it"
+        )
+    title = (title or "Claude").strip()[:60] or "Claude"
+    seconds = min(max(float(seconds), 1.0), MAX_MESSAGE_SECONDS)
+    c = client()
+    session = await c.target_session()
+    await c.display_message(session["Id"], text, header=title, timeout_ms=int(seconds * 1000))
+    return {"shown": True, "seconds": seconds}
+
+
+def _short(text: Any, limit: int = 220) -> str | None:
+    if not text:
+        return None
+    text = " ".join(str(text).split())
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
+
+
+@mcp.tool()
+async def tv_tips_today() -> dict[str, Any]:
+    """What good films/series are on TV today (ČSFD "TV tipy"), and which of them are in the library.
+
+    in_library items have an id usable with play(); not_in_library ones can be requested with
+    request_on_seerr (title, year, media_type).
+    """
+    tips = await client().tv_tips(limit=10, missing=5)
+    in_library: list[dict[str, Any]] = []
+    missing: list[dict[str, Any]] = []
+    for t in tips:
+        out = {
+            "title": t.get("Title"),
+            "year": t.get("Year"),
+            "time": t.get("Time"),
+            "channel": t.get("Channel"),
+            "csfd_percent": t.get("RatingPercent"),
+        }
+        if t.get("InLibrary") and t.get("ItemId"):
+            out["id"] = str(t["ItemId"]).replace("-", "")
+            in_library.append(out)
+        else:
+            out["media_type"] = t.get("MediaType") or "movie"
+            out["genres"] = t.get("Genres") or []
+            if t.get("DurationMinutes"):
+                out["runtime_min"] = t.get("DurationMinutes")
+            out["overview"] = _short(t.get("Overview"))
+            missing.append({k: v for k, v in out.items() if v not in (None, [])})
+    return {"in_library": in_library, "not_in_library": missing}
+
+
+# Slovak mood words (folded, prefixes) -> genre name fragments (folded; Slovak, Czech and English
+# names, the ČSFD plugin writes Slovak/Czech genres, other metadata providers English ones)
+_MOOD_GENRES: list[tuple[tuple[str, ...], tuple[str, ...]]] = [
+    (("vesel", "vtip", "smie", "smia", "zasmi", "komed", "odlah", "pohod", "funny", "comedy"),
+     ("komed", "comedy")),
+    (("napat", "napin", "thrill", "krimi", "detekt", "zahad", "mystery"),
+     ("thriller", "krimi", "crime", "mysteri", "zahad", "detektiv")),
+    (("akci", "akcn", "adrenal", "action"), ("akcn", "action", "dobrodruz", "adventure")),
+    (("bat", "strach", "horor", "horror", "desiv"), ("horor", "horror")),
+    (("roman", "lask", "rande", "zamil"), ("romant",)),
+    (("vazn", "smut", "dram", "dojim", "rozmysl"), ("dram",)),
+    (("sci", "vesmir", "buduc", "fantas"), ("sci-fi", "science", "fantas", "vedecko")),
+    (("rodin", "deti", "detm", "detsk", "family", "anim", "rozpravk"),
+     ("rodinn", "family", "animovan", "animation", "rozpravk")),
+    (("dokument", "pouc", "skutoc"), ("dokument", "documentary", "zivotopis", "biograf", "histor")),
+    (("vojn", "war", "histor"), ("vojnov", "valecn", "war", "histor")),
+]
+
+
+def mood_genres(mood: str | None) -> list[str]:
+    """Genre name fragments a mood phrase refers to; unknown words are used as genre fragments."""
+    if not mood:
+        return []
+    words = [w for w in _fold(mood).replace(",", " ").split() if len(w) >= 3]
+    out: list[str] = []
+    for w in words:
+        hits = [genres for keys, genres in _MOOD_GENRES if any(w.startswith(k) for k in keys)]
+        if hits:
+            for genres in hits:
+                out.extend(g for g in genres if g not in out)
+    if not out:
+        out = words
+    return out
+
+
+@mcp.tool()
+async def recommend_tonight(mood: str | None = None, max_minutes: int | None = None) -> dict[str, Any]:
+    """Candidates for tonight: unwatched movies from the library, best ČSFD rating first.
+
+    mood: the user's words ("niečo vtipné", "napätie", "romantika", "s deťmi"...), matched to
+    genres. max_minutes: skip longer films. Returns up to 5 candidates with a short reason;
+    choose and recommend yourself, then play(id) on request.
+    """
+    movies = await client().unwatched_movies()
+    if max_minutes:
+        movies = [
+            m for m in movies
+            if not m.get("RunTimeTicks") or m["RunTimeTicks"] / TICKS_PER_SECOND / 60 <= max_minutes
+        ]
+    wanted = mood_genres(mood)
+
+    def genre_match(m: dict[str, Any]) -> list[str]:
+        return [g for g in (m.get("Genres") or []) if any(w in _fold(g) for w in wanted)]
+
+    matching = [m for m in movies if genre_match(m)] if wanted else movies
+    mood_matched = bool(matching) or not wanted
+    picked = (matching or movies)[:5]
+
+    candidates = []
+    for m in picked:
+        rating = m.get("CommunityRating")
+        runtime = round(m["RunTimeTicks"] / TICKS_PER_SECOND / 60) if m.get("RunTimeTicks") else None
+        genres = m.get("Genres") or []
+        reason = ", ".join(
+            x
+            for x in [
+                f"ČSFD {round(rating * 10)} %" if rating else None,
+                f"sedí na náladu ({', '.join(genre_match(m))})" if wanted and genre_match(m) else None,
+                f"{runtime} min" if runtime else None,
+            ]
+            if x
+        )
+        candidates.append(
+            {
+                "id": m["Id"],
+                "name": m.get("Name"),
+                "year": m.get("ProductionYear"),
+                "csfd_percent": round(rating * 10) if rating else None,
+                "genres": genres,
+                "runtime_min": runtime,
+                "overview": _short(m.get("Overview"), 180),
+                "reason": reason,
+            }
+        )
+    out: dict[str, Any] = {"candidates": candidates, "unwatched_considered": len(movies)}
+    if not mood_matched:
+        out["note"] = f"Nothing unwatched matches the mood '{mood}', these are the best rated ones"
+    return out
+
+
+@mcp.tool()
+async def request_on_seerr(
+    title: str, year: int | None = None, media_type: Literal["movie", "tv"] = "movie"
+) -> dict[str, Any]:
+    """Request a film or series that is not in the library through Seerr/Jellyseerr (it gets downloaded).
+
+    Finds the title (original or Czech/Slovak name) and creates the request; if it is already
+    available or requested, says so instead.
+    """
+    s = seerr()
+    results = await s.search(title)
+    match = pick_result(results, media_type, year)
+    if match is None:
+        return {
+            "requested": False,
+            "message": f"'{title}' ({media_type}{f', {year}' if year else ''}) not found in Seerr",
+            "other_results": [
+                {"title": r.get("title") or r.get("name"), "media_type": r.get("mediaType"),
+                 "year": (r.get("releaseDate") or r.get("firstAirDate") or "")[:4] or None}
+                for r in results[:5]
+                if r.get("mediaType") in ("movie", "tv")
+            ],
+        }
+    found = {
+        "title": match.get("title") or match.get("name"),
+        "year": (match.get("releaseDate") or match.get("firstAirDate") or "")[:4] or None,
+        "media_type": media_type,
+        "tmdb_id": match.get("id"),
+    }
+    status = (match.get("mediaInfo") or {}).get("status")
+    if status and status >= 2:
+        return {"requested": False, "already": MEDIA_STATUS.get(status, str(status)), **found}
+    req = await s.request(media_type, int(match["id"]))
+    return {"requested": True, "request_id": req.get("id"), **found}
 
 
 class SecretPathMiddleware:

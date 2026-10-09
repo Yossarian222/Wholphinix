@@ -57,6 +57,7 @@ import com.github.damontecres.wholphin.preferences.ScreensaverPreference
 import com.github.damontecres.wholphin.preferences.SkipSegmentPreferences
 import com.github.damontecres.wholphin.preferences.advancedPreferences
 import com.github.damontecres.wholphin.preferences.basicPreferences
+import com.github.damontecres.wholphin.preferences.claudePreferenceGroups
 import com.github.damontecres.wholphin.preferences.experimentalPreferences
 import com.github.damontecres.wholphin.preferences.lazyListWrapScrolling
 import com.github.damontecres.wholphin.preferences.screensaverPreferences
@@ -155,6 +156,7 @@ fun PreferencesContent(
             PreferenceScreenOption.SCREENSAVER -> screensaverPreferences
             PreferenceScreenOption.SKIP_SEGMENTS -> SkipSegmentPreferences
             PreferenceScreenOption.EXPERIMENTAL -> experimentalPreferences
+            PreferenceScreenOption.CLAUDE -> claudePreferenceGroups
         }
     val screenTitle =
         when (preferenceScreenOption) {
@@ -165,6 +167,7 @@ fun PreferencesContent(
             PreferenceScreenOption.SCREENSAVER -> R.string.screensaver_settings
             PreferenceScreenOption.SKIP_SEGMENTS -> R.string.skip_behavior
             PreferenceScreenOption.EXPERIMENTAL -> R.string.experimental_settings
+            PreferenceScreenOption.CLAUDE -> R.string.claude_settings
         }
 
     var visible by remember { mutableStateOf(false) }
@@ -824,6 +827,7 @@ fun PreferencesPage(
             PreferenceScreenOption.SCREENSAVER,
             PreferenceScreenOption.SKIP_SEGMENTS,
             PreferenceScreenOption.EXPERIMENTAL,
+            PreferenceScreenOption.CLAUDE,
             -> {
                 PreferencesContent(
                     initialPreferences,

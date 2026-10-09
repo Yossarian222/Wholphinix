@@ -49,6 +49,7 @@ class ServerEventListener
         private val api: ApiClient,
         private val serverRepository: ServerRepository,
         private val navigationManager: NavigationManager,
+        private val tvMessageService: TvMessageService,
     ) : DefaultLifecycleObserver {
         private val activity = (context as AppCompatActivity)
 
@@ -104,9 +105,20 @@ class ServerEventListener
                                         message.data?.name,
                                     )
                                     when (message.data?.name) {
-                                        GeneralCommandType.DISPLAY_MESSAGE,
-                                        GeneralCommandType.SEND_STRING,
-                                        -> {
+                                        GeneralCommandType.DISPLAY_MESSAGE -> {
+                                            // Shown over everything, also over the player, without taking focus
+                                            val args = message.data?.arguments.orEmpty()
+                                            val text = args["Text"] ?: args["String"]
+                                            if (!text.isNullOrBlank()) {
+                                                tvMessageService.show(
+                                                    title = args["Header"],
+                                                    text = text,
+                                                    timeoutMs = args["TimeoutMs"]?.toLongOrNull(),
+                                                )
+                                            }
+                                        }
+
+                                        GeneralCommandType.SEND_STRING -> {
                                             val header = message.data?.arguments["Header"]
                                             val text =
                                                 message.data?.arguments["Text"]

@@ -243,6 +243,26 @@ message ExperimentalPreferences {
   bool prefer_dolby_vision_over_hdr10_plus = 5;
 }
 
+enum ClaudeFrequency {
+  CLAUDE_SOMETIMES = 0;
+  CLAUDE_OFTEN = 1;
+  CLAUDE_NEVER = 2;
+}
+
+enum ClaudeModel {
+  CLAUDE_HAIKU = 0;
+  CLAUDE_SONNET = 1;
+}
+
+// The Claude companion on the TV (calls the Anthropic API directly)
+message ClaudePreferences {
+  bool enabled = 1;
+  // Anthropic API key, never logged
+  string api_key = 2;
+  ClaudeFrequency frequency = 3;
+  ClaudeModel model = 4;
+}
+
 message AppPreferences {
   // The currently signed in server and user IDs, mostly for restoring a session
   string current_server_id = 1;
@@ -261,4 +281,5 @@ message AppPreferences {
   PhotoPreferences photo_preferences = 12;
   MusicPreferences music_preferences = 13;
   ExperimentalPreferences experimental_preferences = 14;
+  ClaudePreferences claude_preferences = 15;
 }
