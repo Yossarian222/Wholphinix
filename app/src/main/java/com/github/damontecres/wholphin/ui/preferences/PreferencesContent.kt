@@ -816,8 +816,9 @@ fun PreferencesPage(
     preferenceScreenOption: PreferenceScreenOption,
     modifier: Modifier = Modifier,
 ) {
+    // No opaque background, so the app backdrop (random library backdrop) shows behind the settings
     Box(
-        modifier = modifier.background(MaterialTheme.colorScheme.background),
+        modifier = modifier,
     ) {
         when (preferenceScreenOption) {
             PreferenceScreenOption.BASIC,
