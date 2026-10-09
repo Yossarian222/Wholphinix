@@ -180,28 +180,6 @@ def fake_seerr():
     server.set_seerr(None)
 
 
-@pytest.fixture(scope="module")
-def base_url():
-    import os
-
-    os.environ["MCP_SECRET"] = SECRET
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    port = sock.getsockname()[1]
-    sock.close()
-    config = uvicorn.Config(server.create_app(), host="127.0.0.1", port=port, log_level="warning")
-    srv = uvicorn.Server(config)
-    t = threading.Thread(target=srv.run, daemon=True)
-    t.start()
-    for _ in range(100):
-        if srv.started:
-            break
-        time.sleep(0.05)
-    yield f"http://127.0.0.1:{port}"
-    srv.should_exit = True
-    t.join(timeout=5)
-
-
 async def _call_raw(base_url: str, tool: str, args: dict):
     async with streamablehttp_client(f"{base_url}/{SECRET}/mcp") as (r, w, _):
         async with ClientSession(r, w) as s:

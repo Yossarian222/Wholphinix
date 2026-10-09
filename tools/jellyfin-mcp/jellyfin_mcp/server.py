@@ -1,6 +1,7 @@
 """MCP server that lets Claude control Jellyfin playback on the Wholphinix TV session.
 
-Exposed over streamable HTTP at /<MCP_SECRET>/mcp. The secret path segment is the only
+Exposed over streamable HTTP at /<MCP_SECRET>/mcp (and the optional WhatsApp webhook at
+/<MCP_SECRET>/whatsapp, see whatsapp.py). The secret path segment is the only
 authentication, so keep it long and random and never commit it.
 """
 
@@ -26,6 +27,7 @@ from .jellyfin import (
     summarize_item,
     validate_id,
 )
+from . import whatsapp
 from .seerr import MEDIA_STATUS, SeerrClient, SeerrNotConfigured, pick_result
 
 log = logging.getLogger("jellyfin_mcp")
@@ -490,6 +492,10 @@ async def request_on_seerr(
         return {"requested": False, "already": MEDIA_STATUS.get(status, str(status)), **found}
     req = await s.request(media_type, int(match["id"]))
     return {"requested": True, "request_id": req.get("id"), **found}
+
+
+# WhatsApp webhook (GET/POST /<MCP_SECRET>/whatsapp); 404 unless the WHATSAPP_* env is set
+whatsapp.register(mcp, INSTRUCTIONS)
 
 
 class SecretPathMiddleware:

@@ -89,13 +89,69 @@ Server je obyčajný vzdialený MCP konektor, takže funguje aj v mobilnej Claud
 
 Wholphinix musí byť na TV otvorený a prihlásený, inak Claude odpovie, že TV nie je pripojená.
 
+## WhatsApp
+
+Voliteľne môžeš TV ovládať aj správami na WhatsApp: napíšeš „pusti Pelíšky“ na číslo bota a odpovie ti Claude, ktorý použije tie isté nástroje ako MCP konektor. Používa oficiálne **WhatsApp Business Cloud API** od Mety a **Anthropic API** (platíš za tokeny podľa [cenníka](https://www.anthropic.com/pricing), bežný príkaz sú zlomky centa).
+
+```
+WhatsApp ──▶ Meta Cloud API ──webhook──▶ Tailscale Funnel ──▶ jellyfin-mcp /<MCP_SECRET>/whatsapp ──▶ Claude API
+                                                                        └──▶ nástroje (Jellyfin, Seerr) ──▶ odpoveď cez Graph API
+```
+
+### Nastavenie v Mete
+1. Na [developers.facebook.com](https://developers.facebook.com) → *My Apps → Create App* → typ **Business** (use case „Connect with customers through WhatsApp“), priraď ju k svojmu Business portfóliu (ak ho nemáš, vytvorí sa).
+2. V appke pridaj produkt **WhatsApp** → *API Setup*:
+   - Na skúšanie stačí **testovacie číslo** od Mety (zadarmo; správy môže posielať len na max. 5 overených čísel, ktoré pridáš v *To* → *Manage phone number list*).
+   - Na trvalé použitie pridaj **vlastné číslo** (*Add phone number*). Číslo nesmie byť zaregistrované v bežnom WhatsAppe ani WhatsApp Business appke (najprv by si ho musel odtiaľ zmazať) – ideálne nová SIM/eSIM alebo pevná linka s overením hovorom.
+   - Z *API Setup* si zapíš **Phone number ID** → `WHATSAPP_PHONE_NUMBER_ID` (nie samotné telefónne číslo).
+3. **Trvalý token** (dočasný z *API Setup* vyprší za 24 h): [business.facebook.com](https://business.facebook.com) → *Settings → Users → System users → Add* (rola Admin) → *Assign assets* → tvoja appka (Full control) a WhatsApp účet (Full control) → *Generate new token* → appka, expirácia **Never**, oprávnenia `whatsapp_business_messaging` a `whatsapp_business_management` → `WHATSAPP_TOKEN`.
+4. *App settings → Basic → App secret → Show* → `WHATSAPP_APP_SECRET` (ním Meta podpisuje webhooky, server bez platného podpisu vráti 403).
+5. Vymysli si náhodný reťazec (napr. rovnakým príkazom ako `MCP_SECRET`) → `WHATSAPP_VERIFY_TOKEN`.
+6. Doplň premenné v Portaineri (nižšie) a stack nasaď znova, až potom pokračuj.
+7. *WhatsApp → Configuration → Webhook → Edit*:
+   - Callback URL: `https://<ts-host>/<MCP_SECRET>/whatsapp` (u nás `https://jellyfin-mcp.platypus-vimba.ts.net/<MCP_SECRET>/whatsapp`)
+   - Verify token: hodnota `WHATSAPP_VERIFY_TOKEN` → *Verify and save* (server vráti `hub.challenge`)
+   - *Webhook fields → Manage* → zapni **`messages`**.
+8. Pre trvalú prevádzku s vlastným číslom prepni appku do režimu **Live** (*App Mode*; Meta pýta URL zásad ochrany súkromia – stačí jednoduchá stránka). Na skúšanie s testovacím číslom stačí režim Development.
+9. Napíš z povoleného čísla na číslo bota, napr. „čo beží na telke?“.
+
+### Premenné (Portainer)
+| Premenná | Povinná | Popis |
+|---|---|---|
+| `WHATSAPP_TOKEN` | áno | trvalý token System Usera |
+| `WHATSAPP_PHONE_NUMBER_ID` | áno | Phone number ID z *API Setup* |
+| `WHATSAPP_APP_SECRET` | áno | App secret (overenie podpisu `X-Hub-Signature-256`) |
+| `WHATSAPP_VERIFY_TOKEN` | áno | tvoj náhodný reťazec pre overenie webhooku |
+| `WHATSAPP_ALLOWED_NUMBERS` | áno | čísla, ktoré smú ovládať TV, čiarkou oddelené, s predvoľbou bez `+`, napr. `421905123456,421911222333` |
+| `ANTHROPIC_API_KEY` | áno | kľúč z [platform.claude.com](https://platform.claude.com) → *API Keys* |
+| `CLAUDE_MODEL` | nie | predvolene `claude-sonnet-5-5` (dobrý pomer cena/výkon pre nástroje); lacnejšie `claude-haiku-5-5` |
+| `CLAUDE_EFFORT` | nie | `low` (predvolené, rýchle odpovede), `medium`, `high` |
+| `GRAPH_VERSION` | nie | verzia Graph API, predvolene `v23.0`; ak ju Meta označí za zastaranú, nastav novšiu (vidno ju v *API Setup* v ukážke `curl`) |
+
+Kým nie je nastavených prvých šesť, endpoint `/whatsapp` vracia 404 a zvyšok servera beží ako doteraz.
+
+### Ako sa správa
+- Odpovedá len na čísla z `WHATSAPP_ALLOWED_NUMBERS`, ostatné ticho ignoruje (v logu je len posledné trojčíslie).
+- Pamätá si posledných 10 výmen s každým číslom; po 30 minútach ticha začína odznova (pamäť je len v procese, reštart ju zmaže).
+- Prijatú správu označí ako prečítanú (modré fajky), Meta dostane odpoveď hneď a spracovanie beží na pozadí; opakované doručenie tej istej správy sa ignoruje.
+- **v1 rozumie len textu** – na hlasovku, obrázok či nálepku odpovie „Zatiaľ rozumiem len textu 🙂“.
+- Pri chybe Clauda alebo Jellyfinu pošle krátke ospravedlnenie.
+
+### Cena
+- **WhatsApp**: keď píšeš ty botovi, otvorí sa 24-hodinové okno zákazníckej starostlivosti a odpovede (service/free-form správy) v ňom sú **zadarmo**. Bot sám nikdy nezačína konverzáciu (na to by potreboval platené šablóny), takže pri bežnom používaní neplatíš Mete nič. Aktuálne podmienky: [developers.facebook.com/docs/whatsapp/pricing](https://developers.facebook.com/docs/whatsapp/pricing).
+- **Claude**: každá správa = 1 až 6 volaní API. Systémový prompt a definície nástrojov sa cachujú (prompt caching), takže opakované volania sú lacnejšie.
+
+### Funnel
+`serve.json` posiela celý koreň (`/`) na `127.0.0.1:8765`, takže cesta `/<MCP_SECRET>/whatsapp` prejde bez zmeny. Webhook je chránený tajnou cestou aj podpisom Mety.
+
 ## Bezpečnosť
 - Verejne dostupný je len tento jeden endpoint (Funnel). NAS, Jellyfin ani ostatné služby verejné nie sú.
 - Bez správneho tajného kľúča v ceste server vráti 404. Kľúč sa nezapisuje do logov.
 - Nástroje vedia len vyhľadávať v knižnici a ovládať prehrávanie, nič nemažú ani nemenia. **Jellyfin API kľúč však má plné administrátorské práva** (vie mazať, meniť používateľov, nastavenia servera…). Chráň ho rovnako ako heslo admina a drž v tajnosti aj `MCP_SECRET` – kto pozná URL, dostane sa k nástrojom.
 - Id položiek od Clauda sa pred vložením do URL Jellyfin API overujú (musia to byť Jellyfin GUID), ostatné hodnoty idú ako query parametre.
 - Server ovláda len reláciu Wholphinixu prihláseného používateľa `JELLYFIN_USER`. TV ostatných členov domácnosti (iní Jellyfin používatelia) neovláda; ak taká relácia nie je, nástroj hlási, že Wholphinix nie je pripojený.
-- Ak `MCP_SECRET` unikne, zmeň ho v Portaineri a uprav URL konektora v Claude. Ak unikne API kľúč, zmaž ho v Jellyfine (*Dashboard → API Keys*) a vytvor nový.
+- WhatsApp webhook prijme len požiadavky s platným podpisom Mety (`WHATSAPP_APP_SECRET`) a vykoná len správy z `WHATSAPP_ALLOWED_NUMBERS`. Tokeny, celé čísla ani text správ sa na úrovni INFO nelogujú.
+- Ak `MCP_SECRET` unikne, zmeň ho v Portaineri a uprav URL konektora v Claude (a Callback URL webhooku v Mete, ak používaš WhatsApp). Ak unikne API kľúč, zmaž ho v Jellyfine (*Dashboard → API Keys*) a vytvor nový.
 
 ## Vývoj
 ```bash
