@@ -14,6 +14,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -80,6 +81,7 @@ import dagger.assisted.AssistedInject
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
@@ -91,6 +93,7 @@ import kotlinx.coroutines.withContext
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.userLibraryApi
 import org.jellyfin.sdk.model.api.BaseItemKind
+import org.jellyfin.sdk.model.api.BaseItemPerson
 import org.jellyfin.sdk.model.api.CollectionType
 import org.jellyfin.sdk.model.api.ImageType
 import org.jellyfin.sdk.model.api.ItemSortBy
@@ -102,6 +105,7 @@ import org.jellyfin.sdk.model.serializer.toUUID
 import org.jellyfin.sdk.model.serializer.toUUIDOrNull
 import timber.log.Timber
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 @HiltViewModel(assistedFactory = CollectionFolderViewModel.Factory::class)
 class CollectionFolderViewModel
@@ -568,6 +572,23 @@ class CollectionFolderViewModel
             }
         }
 
+        private val peopleCache = ConcurrentHashMap<UUID, List<BaseItemPerson>>()
+
+        override suspend fun getPeople(itemId: UUID): List<BaseItemPerson>? =
+            peopleCache[itemId] ?: try {
+                withContext(WholphinDispatchers.IO) {
+                    api.userLibraryApi
+                        .getItem(itemId)
+                        .content.people
+                        .orEmpty()
+                }.also { peopleCache[itemId] = it }
+            } catch (ex: CancellationException) {
+                throw ex
+            } catch (ex: Exception) {
+                Timber.w(ex, "Error fetching people for %s", itemId)
+                null
+            }
+
         override fun navigateTo(destination: Destination) {
             release()
             navigationManager.navigateTo(destination)
@@ -771,6 +792,11 @@ interface CollectionFolderViewActions {
 
     fun updateBackdrop(item: BaseItem)
 
+    /**
+     * The cast & crew of an item for the header; the grid items are fetched without them
+     */
+    suspend fun getPeople(itemId: UUID): List<BaseItemPerson>? = null
+
     fun onSortChange(
         sortAndDirection: SortAndDirection,
         recursive: Boolean,
@@ -917,6 +943,34 @@ fun CollectionFolderViewContent(
                             focusedItem?.let(viewActions::updateBackdrop)
                         }
                     }
+                    // The header shows the director & actors, but the grid pages are fetched without them
+                    val focusedPeople by produceState<List<BaseItemPerson>?>(
+                        null,
+                        focusedItem?.id,
+                        state.viewOptions.showDetails,
+                    ) {
+                        value = null
+                        val item = focusedItem
+                        if (item != null &&
+                            state.viewOptions.showDetails &&
+                            item.data.people == null &&
+                            item.type != BaseItemKind.EPISODE &&
+                            item.destinationOverride == null
+                        ) {
+                            // Wait until the focus settles while scrolling
+                            delay(300)
+                            value = viewActions.getPeople(item.id)
+                        }
+                    }
+                    val headerItem =
+                        remember(focusedItem, focusedPeople) {
+                            val people = focusedPeople
+                            if (focusedItem != null && people != null) {
+                                focusedItem.copy(data = focusedItem.data.copy(people = people))
+                            } else {
+                                focusedItem
+                            }
+                        }
                     CollectionFolderHeader(
                         listIsNotEmpty = state.items.successValue?.isNotEmpty() == true,
                         showHeader = showHeader || state.items !is DataLoadingState.Success,
@@ -995,7 +1049,7 @@ fun CollectionFolderViewContent(
                                         letterPosition = { viewActions.positionOfLetter(it) ?: -1 },
                                         viewOptions = state.viewOptions,
                                         onClickPlay = gridActions.onClickPlayRemoteButton!!,
-                                        focusedItem = focusedItem,
+                                        focusedItem = headerItem,
                                     )
                                 } else {
                                     CollectionFolderList(

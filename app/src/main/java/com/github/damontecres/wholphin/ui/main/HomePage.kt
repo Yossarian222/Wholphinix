@@ -139,7 +139,8 @@ fun HomePage(
                 remember {
                     { clickedPosition: RowColumn, item: BaseItem ->
                         position = clickedPosition
-                        if (currentHomePrefs.clickToPlay &&
+                        if (item.destinationOverride == null &&
+                            currentHomePrefs.clickToPlay &&
                             homeRows.getOrNull(clickedPosition.row)?.isContinueWatchingNextUp == true
                         ) {
                             viewModel.navigationManager.navigateTo(Destination.Playback(item))
@@ -150,8 +151,13 @@ fun HomePage(
                 }
             val onLongClickItem =
                 remember {
-                    { clickedPosition: RowColumn, item: BaseItem ->
+                    onLongClick@{ clickedPosition: RowColumn, item: BaseItem ->
                         position = clickedPosition
+                        if (item.destinationOverride != null) {
+                            // Not on the server (eg a ČSFD TV tip found in Seerr), so no watched/favorite/delete
+                            viewModel.navigationManager.navigateTo(item.destination())
+                            return@onLongClick
+                        }
                         val row =
                             (homeRows.getOrNull(clickedPosition.row) as? HomeRowLoadingState.Success)
                         val canRemoveContinueWatching =
@@ -203,7 +209,12 @@ fun HomePage(
             val onClickPlay =
                 remember {
                     { _: RowColumn, item: BaseItem ->
-                        viewModel.navigationManager.navigateTo(Destination.Playback(item))
+                        if (item.destinationOverride != null) {
+                            // Not on the server, so nothing to play
+                            viewModel.navigationManager.navigateTo(item.destination())
+                        } else {
+                            viewModel.navigationManager.navigateTo(Destination.Playback(item))
+                        }
                     }
                 }
             val onClickViewMore =

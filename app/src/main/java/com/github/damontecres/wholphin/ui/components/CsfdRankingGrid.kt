@@ -104,6 +104,8 @@ class CsfdRankingViewModel
             _state.update { DataLoadingState.Loading }
             viewModelScope.launchIO {
                 try {
+                    // The ranks can take minutes on the first call of the week, so the items come first and the
+                    // positions are added when they arrive
                     val ranks = async { csfdTvTipsService.getRanks() }
                     // The ČSFD plugin stores the ČSFD rating as the community rating, so this is the library's own chart
                     val items =
@@ -123,21 +125,27 @@ class CsfdRankingViewModel
                                     enableTotalRecordCount = false,
                                 ),
                             ).toBaseItems(true)
-                    val csfdRanks = ranks.await()
+                            .mapNotNull { item ->
+                                val csfdId =
+                                    item.data.providerIds
+                                        ?.entries
+                                        ?.firstOrNull { it.key.equals("Csfd", ignoreCase = true) }
+                                        ?.value
+                                        ?.toIntOrNull()
+                                        ?: return@mapNotNull null
+                                csfdId to item
+                            }.take(RANKING_SIZE)
+                    val csfdRanks = if (ranks.isCompleted) ranks.await() else null
                     _state.update {
-                        DataLoadingState.Success(
-                            items
-                                .mapNotNull { item ->
-                                    val csfdId =
-                                        item.data.providerIds
-                                            ?.entries
-                                            ?.firstOrNull { it.key.equals("Csfd", ignoreCase = true) }
-                                            ?.value
-                                            ?.toIntOrNull()
-                                            ?: return@mapNotNull null
-                                    RankedItem(item, csfdRanks[csfdId])
-                                }.take(RANKING_SIZE),
-                        )
+                        DataLoadingState.Success(items.map { (csfdId, item) -> RankedItem(item, csfdRanks?.get(csfdId)) })
+                    }
+                    if (csfdRanks == null) {
+                        val lateRanks = ranks.await()
+                        if (lateRanks.isNotEmpty()) {
+                            _state.update {
+                                DataLoadingState.Success(items.map { (csfdId, item) -> RankedItem(item, lateRanks[csfdId]) })
+                            }
+                        }
                     }
                 } catch (ex: Exception) {
                     Timber.e(ex, "Error fetching ČSFD ranking")

@@ -63,8 +63,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.jellyfin.sdk.api.client.ApiClient
+import org.jellyfin.sdk.api.client.extensions.userLibraryApi
 import org.jellyfin.sdk.model.api.BaseItemKind
+import org.jellyfin.sdk.model.api.BaseItemPerson
 import org.jellyfin.sdk.model.api.request.GetArtistsRequest
 import org.jellyfin.sdk.model.api.request.GetItemsRequest
 import org.jellyfin.sdk.model.api.request.GetPersonsRequest
@@ -597,6 +600,21 @@ class FavoritesViewModel
                     backdropService.submit(item)
                 }
             }
+
+            override suspend fun getPeople(itemId: UUID): List<BaseItemPerson>? =
+                try {
+                    withContext(WholphinDispatchers.IO) {
+                        api.userLibraryApi
+                            .getItem(itemId)
+                            .content.people
+                            .orEmpty()
+                    }
+                } catch (ex: CancellationException) {
+                    throw ex
+                } catch (ex: Exception) {
+                    Timber.w(ex, "Error fetching people for %s", itemId)
+                    null
+                }
 
             override fun onSortChange(
                 sortAndDirection: SortAndDirection,

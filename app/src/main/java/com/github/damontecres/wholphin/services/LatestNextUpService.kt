@@ -6,7 +6,7 @@
 package com.github.damontecres.wholphin.services
 
 import com.github.damontecres.wholphin.data.model.BaseItem
-import com.github.damontecres.wholphin.ui.SlimItemFields
+import com.github.damontecres.wholphin.ui.HeaderRowItemFields
 import com.github.damontecres.wholphin.util.LocalDateTimeSerializer
 import com.github.damontecres.wholphin.util.WholphinDispatchers
 import kotlinx.coroutines.async
@@ -58,7 +58,7 @@ class LatestNextUpService
             val request =
                 GetResumeItemsRequest(
                     userId = userId,
-                    fields = SlimItemFields,
+                    fields = HeaderRowItemFields,
                     limit = limit,
                     mediaTypes = listOf(MediaType.VIDEO),
                     excludeItemTypes = if (!includeEpisodes) listOf(BaseItemKind.EPISODE) else null,
@@ -90,7 +90,7 @@ class LatestNextUpService
             val request =
                 GetNextUpRequest(
                     userId = userId,
-                    fields = SlimItemFields,
+                    fields = HeaderRowItemFields,
                     imageTypeLimit = 1,
                     parentId = null,
                     limit = limit,

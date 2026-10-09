@@ -4,8 +4,11 @@ import android.widget.Toast
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -16,6 +19,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -23,7 +27,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import com.github.damontecres.wholphin.R
 import com.github.damontecres.wholphin.data.model.BaseItem
@@ -117,11 +123,18 @@ fun CsfdMyRating(
         StarRating(
             rating100 = (stars ?: 0) * 20,
             onRatingChange = { rating100 ->
-                viewModel.rate(csfdId, rating100 / 20)
+                val newStars = rating100 / 20
+                // 0 would be "odpad", which has its own button; the first star again is not a reason to send it
+                if (newStars > 0 && newStars != stars) {
+                    viewModel.rate(csfdId, newStars)
+                }
             },
             precision = StarRatingPrecision.FULL,
             enabled = true,
             playSoundOnFocus = true,
+            allowZero = false,
+            // Right of the fifth star is the "odpad!" button
+            wrapAround = false,
             modifier =
                 Modifier
                     .height(ratingBarHeight)
@@ -135,11 +148,23 @@ fun CsfdMyRating(
                                 .TransformOrigin(0f, 0.5f)
                     },
         )
-        if (stars == 0) {
+        // Room for the stars growing to the right while focused
+        Spacer(Modifier.width(ratingBarHeight * 6 * (scale - 1f).coerceAtLeast(0f)))
+        // ČSFD's rating below one star, red when chosen
+        Surface(
+            onClick = { if (stars != 0) viewModel.rate(csfdId, 0) },
+            shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(6.dp)),
+            colors =
+                ClickableSurfaceDefaults.colors(
+                    containerColor = Color.Transparent,
+                    focusedContainerColor = MaterialTheme.colorScheme.inverseSurface,
+                ),
+        ) {
             Text(
                 text = stringResource(R.string.csfd_trash),
                 style = MaterialTheme.typography.bodyMedium,
-                color = csfdColor(0),
+                color = if (stars == 0) csfdColor(0) else Color.Unspecified,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
             )
         }
     }

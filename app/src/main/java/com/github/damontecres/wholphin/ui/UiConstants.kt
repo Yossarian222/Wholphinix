@@ -67,11 +67,17 @@ val SlimItemFields =
     listOf(
         ItemFields.OVERVIEW,
         ItemFields.PROVIDER_IDS,
-        ItemFields.PEOPLE,
         ItemFields.SORT_NAME,
         ItemFields.MEDIA_SOURCE_COUNT,
         ItemFields.CAN_DELETE,
     )
+
+/**
+ * [SlimItemFields] plus cast & crew, for the rows below a home style header which shows the director and actors.
+ * Grids leave them out because a page of items with their whole cast is big; their header loads the people of the
+ * focused item only.
+ */
+val HeaderRowItemFields = SlimItemFields + ItemFields.PEOPLE
 
 /**
  * ItemFields for displaying items in rows such as in a [com.github.damontecres.wholphin.ui.cards.ItemRow] with [com.github.damontecres.wholphin.ui.cards.SeasonCard]

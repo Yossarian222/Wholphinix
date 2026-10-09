@@ -24,7 +24,7 @@ import com.github.damontecres.wholphin.services.ServerReportService
 import com.github.damontecres.wholphin.services.ThemeSongPlayer
 import com.github.damontecres.wholphin.services.UserPreferencesService
 import com.github.damontecres.wholphin.services.deleteItem
-import com.github.damontecres.wholphin.ui.SlimItemFields
+import com.github.damontecres.wholphin.ui.HeaderRowItemFields
 import com.github.damontecres.wholphin.ui.collectLatestIn
 import com.github.damontecres.wholphin.ui.data.RowColumn
 import com.github.damontecres.wholphin.ui.data.SortAndDirection
@@ -301,7 +301,7 @@ class CollectionViewModel
                     recursive = false,
                     sortBy = sort?.let { listOf(sort.sort) },
                     sortOrder = sort?.let { listOf(sort.direction) },
-                    fields = SlimItemFields,
+                    fields = HeaderRowItemFields,
                 ).let {
                     filter?.applyTo(it, false) ?: it
                 }

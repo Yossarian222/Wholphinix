@@ -206,6 +206,10 @@ fun StarRating(
     playSoundOnFocus: Boolean,
     modifier: Modifier = Modifier,
     bgColor: Color = AppColors.TransparentBlack75, // MaterialTheme.colorScheme.background,
+    // Whether clicking the only selected first star clears the rating (FULL precision)
+    allowZero: Boolean = true,
+    // Whether left/right wrap around the stars instead of leaving them
+    wrapAround: Boolean = true,
 ) {
     val context = LocalContext.current
     var tempRating by remember(rating100) { mutableIntStateOf(rating100) }
@@ -290,9 +294,9 @@ fun StarRating(
                                         .focusRequester(focusRequesters[i - 1])
                                         .focusProperties {
                                             left =
-                                                if (i == 1) focusRequesters.last() else FocusRequester.Default
+                                                if (wrapAround && i == 1) focusRequesters.last() else FocusRequester.Default
                                             right =
-                                                if (i == 5) focusRequesters.first() else FocusRequester.Default
+                                                if (wrapAround && i == 5) focusRequesters.first() else FocusRequester.Default
                                         }.selectable(
                                             selected = isRated,
                                             onClick = {
@@ -300,7 +304,7 @@ fun StarRating(
                                                 val newRating100 =
                                                     when (precision) {
                                                         StarRatingPrecision.FULL -> {
-                                                            if (i == 1 && rating100 > 0 && rating100 <= 20) 0 else i * 20
+                                                            if (allowZero && i == 1 && rating100 > 0 && rating100 <= 20) 0 else i * 20
                                                         }
 
                                                         StarRatingPrecision.HALF -> {

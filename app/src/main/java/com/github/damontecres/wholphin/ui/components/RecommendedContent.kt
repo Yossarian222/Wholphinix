@@ -29,8 +29,8 @@ import com.github.damontecres.wholphin.services.SuggestionService
 import com.github.damontecres.wholphin.services.SuggestionsResource
 import com.github.damontecres.wholphin.services.UserPreferencesService
 import com.github.damontecres.wholphin.services.deleteItem
+import com.github.damontecres.wholphin.ui.HeaderRowItemFields
 import com.github.damontecres.wholphin.ui.OneTimeLaunchedEffect
-import com.github.damontecres.wholphin.ui.SlimItemFields
 import com.github.damontecres.wholphin.ui.data.AddPlaylistViewModel
 import com.github.damontecres.wholphin.ui.data.ItemDetailsDialog
 import com.github.damontecres.wholphin.ui.data.ItemDetailsDialogInfo
@@ -221,7 +221,7 @@ class RecommendedViewModel
                     itemId = seedId,
                     userId = serverRepository.currentUser?.id,
                     limit = limit * 3,
-                    fields = SlimItemFields,
+                    fields = HeaderRowItemFields,
                 ).content.items
                 .filter { it.type == suggestionsType && it.userData?.played != true }
                 .take(limit)

@@ -287,7 +287,14 @@ fun HomeRowGrid(
                         CardGrid(
                             pager = st.items,
                             onClickItem = onClickItem,
-                            onLongClickItem = contextMenu::showContextMenu,
+                            onLongClickItem = { index, item ->
+                                if (item.destinationOverride != null) {
+                                    // Not on the server (eg a ČSFD TV tip found in Seerr), so no context menu
+                                    viewModel.navigateTo(item.destination(index))
+                                } else {
+                                    contextMenu.showContextMenu(index, item)
+                                }
+                            },
                             onClickPlay = { _, _ -> },
                             letterPosition = { -1 },
                             gridFocusRequester = gridFocusRequester,
