@@ -66,8 +66,10 @@ jobs:
             echo "::error::Release needs the signing secrets (SIGNING_KEY, KEY_ALIAS, KEY_PASSWORD, KEY_STORE_PASSWORD)"
             exit 1
           fi
-          # Unit tests in the same run, so a release needs no separate CI build beforehand
-          ./gradlew clean testDefaultDebugUnitTest assembleDefaultRelease
+          # Unit tests in the same run, so a release needs no separate CI build beforehand.
+          # Separate Gradle runs: tests and R8 in parallel ran the runner out of memory.
+          ./gradlew clean testDefaultDebugUnitTest --no-daemon
+          ./gradlew assembleDefaultRelease --no-daemon
       - name: Verify signatures
         run: |
           echo "Verify APK signatures"
