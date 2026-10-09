@@ -12,6 +12,8 @@ import com.github.damontecres.wholphin.data.model.JellyfinUser
 import com.github.damontecres.wholphin.ui.collectLatestIn
 import com.github.damontecres.wholphin.ui.launchDefault
 import com.github.damontecres.wholphin.ui.launchIO
+import com.github.damontecres.wholphin.ui.nav.Destination
+import com.github.damontecres.wholphin.ui.onMain
 import com.github.damontecres.wholphin.ui.showToast
 import dagger.hilt.android.qualifiers.ActivityContext
 import dagger.hilt.android.scopes.ActivityScoped
@@ -28,7 +30,11 @@ import org.jellyfin.sdk.api.sockets.subscribe
 import org.jellyfin.sdk.model.api.GeneralCommandMessage
 import org.jellyfin.sdk.model.api.GeneralCommandType
 import org.jellyfin.sdk.model.api.MediaType
+import org.jellyfin.sdk.model.api.PlayCommand
+import org.jellyfin.sdk.model.api.PlayMessage
+import org.jellyfin.sdk.model.api.PlayRequest
 import org.jellyfin.sdk.model.api.UserUpdatedMessage
+import org.jellyfin.sdk.model.extensions.ticks
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -42,6 +48,7 @@ class ServerEventListener
         @param:ActivityContext private val context: Context,
         private val api: ApiClient,
         private val serverRepository: ServerRepository,
+        private val navigationManager: NavigationManager,
     ) : DefaultLifecycleObserver {
         private val activity = (context as AppCompatActivity)
 
@@ -70,6 +77,9 @@ class ServerEventListener
                             listOf(
                                 GeneralCommandType.DISPLAY_MESSAGE,
                                 GeneralCommandType.SEND_STRING,
+                                // Handled by PlaybackViewModel while a video is playing
+                                GeneralCommandType.SET_AUDIO_STREAM_INDEX,
+                                GeneralCommandType.SET_SUBTITLE_STREAM_INDEX,
                             ),
                         supportsMediaControl = true,
                     )
@@ -121,6 +131,14 @@ class ServerEventListener
                                 }.launchIn(this@coroutineScope)
 
                             api.webSocket
+                                .subscribe<PlayMessage>()
+                                .onEach { message ->
+                                    message.data?.let { handlePlayRequest(it) }
+                                }.catch { ex ->
+                                    Timber.e(ex, "Error in play message websocket subscription")
+                                }.launchIn(this@coroutineScope)
+
+                            api.webSocket
                                 .subscribe<UserUpdatedMessage>()
                                 .catch { ex ->
                                     Timber.e(ex, "Error in user updated websocket subscription")
@@ -138,6 +156,31 @@ class ServerEventListener
                         }
                     }
                 }
+        }
+
+        /**
+         * Remote "play this" from another Jellyfin client (or the Claude MCP bridge).
+         * Only PlayNow is supported; the first item is played, replacing any current playback.
+         */
+        private suspend fun handlePlayRequest(request: PlayRequest) {
+            Timber.i("Got PlayRequest: %s items, command=%s", request.itemIds?.size, request.playCommand)
+            if (request.playCommand != PlayCommand.PLAY_NOW) {
+                Timber.w("Ignoring unsupported play command %s", request.playCommand)
+                return
+            }
+            val itemId = request.itemIds?.firstOrNull() ?: return
+            val positionMs =
+                request.startPositionTicks
+                    ?.ticks
+                    ?.inWholeMilliseconds
+                    ?.coerceAtLeast(0L) ?: 0L
+            onMain {
+                if (navigationManager.backStack.lastOrNull() is Destination.Playback) {
+                    // Don't stack players on top of each other
+                    navigationManager.goBack()
+                }
+                navigationManager.navigateTo(Destination.Playback(itemId = itemId, positionMs = positionMs))
+            }
         }
 
         override fun onResume(owner: LifecycleOwner) {

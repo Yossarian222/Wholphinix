@@ -1,0 +1,30 @@
+name: jellyfin-mcp
+
+on:
+  pull_request:
+    paths:
+      - "tools/jellyfin-mcp/**"
+      - ".github/workflows/jellyfin-mcp.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "tools/jellyfin-mcp/**"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools/jellyfin-mcp
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install ".[test]"
+      - name: Test
+        run: pytest -q

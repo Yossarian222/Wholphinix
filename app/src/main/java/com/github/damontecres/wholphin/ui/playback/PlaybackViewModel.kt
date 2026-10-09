@@ -107,6 +107,9 @@ import org.jellyfin.sdk.api.client.extensions.videosApi
 import org.jellyfin.sdk.api.sockets.subscribe
 import org.jellyfin.sdk.model.DeviceInfo
 import org.jellyfin.sdk.model.api.BaseItemKind
+import org.jellyfin.sdk.model.api.GeneralCommand
+import org.jellyfin.sdk.model.api.GeneralCommandMessage
+import org.jellyfin.sdk.model.api.GeneralCommandType
 import org.jellyfin.sdk.model.api.ImageType
 import org.jellyfin.sdk.model.api.MediaSegmentType
 import org.jellyfin.sdk.model.api.MediaStreamType
@@ -1441,6 +1444,13 @@ class PlaybackViewModel
                                 }.catch { ex ->
                                     Timber.e(ex, "Error in websocket subscription")
                                 }.launchIn(this)
+                            api.webSocket
+                                .subscribe<GeneralCommandMessage>()
+                                .onEach { message ->
+                                    message.data?.let { handleGeneralCommand(it) }
+                                }.catch { ex ->
+                                    Timber.e(ex, "Error in general command websocket subscription")
+                                }.launchIn(this)
                         }
                     }
             } catch (ex: CancellationException) {
@@ -1449,6 +1459,29 @@ class PlaybackViewModel
                 Timber.e(ex, "Error in playback websocket subscription")
                 if (viewModelScope.isActive) {
                     subscribeToWebSocket()
+                }
+            }
+        }
+
+        /**
+         * Remote audio/subtitle track switching (e.g. from the Claude MCP bridge).
+         * Jellyfin uses -1 for "subtitles off".
+         */
+        private fun handleGeneralCommand(command: GeneralCommand) {
+            val index = command.arguments["Index"]?.toIntOrNull()
+            when (command.name) {
+                GeneralCommandType.SET_AUDIO_STREAM_INDEX -> {
+                    Timber.i("Remote audio stream change to %s", index)
+                    if (index != null && index >= 0) changeAudioStream(index)
+                }
+
+                GeneralCommandType.SET_SUBTITLE_STREAM_INDEX -> {
+                    Timber.i("Remote subtitle stream change to %s", index)
+                    if (index != null) changeSubtitleStream(if (index < 0) TrackIndex.DISABLED else index)
+                }
+
+                else -> {
+                    // Other general commands are handled by ServerEventListener
                 }
             }
         }
