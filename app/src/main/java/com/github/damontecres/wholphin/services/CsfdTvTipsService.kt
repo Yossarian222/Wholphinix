@@ -1,23 +1,29 @@
 package com.github.damontecres.wholphin.services
 
+import com.github.damontecres.wholphin.data.ServerRepository
 import com.github.damontecres.wholphin.data.model.BaseItem
 import com.github.damontecres.wholphin.services.hilt.AuthOkHttpClient
+import com.github.damontecres.wholphin.services.hilt.IoCoroutineScope
 import com.github.damontecres.wholphin.ui.HomeItemFields
 import com.github.damontecres.wholphin.ui.toBaseItems
 import com.github.damontecres.wholphin.util.GetItemsRequestHandler
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -33,6 +39,7 @@ import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.abs
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * A ČSFD "TV tip dňa". [itemId] is set when it is in the user's library, otherwise [titles] can be used to find it in Seerr.
@@ -64,22 +71,66 @@ class CsfdTvTipsService
         private val api: ApiClient,
         @param:AuthOkHttpClient private val okHttpClient: OkHttpClient,
         private val seerrService: SeerrService,
+        private val serverRepository: ServerRepository,
+        @param:IoCoroutineScope private val scope: CoroutineScope,
     ) {
         // The plugin downloads 20 ranking pages from ČSFD on its first call of the week
         private val slowClient by lazy { okHttpClient.newBuilder().readTimeout(3, TimeUnit.MINUTES).build() }
 
+        /**
+         * What is cached for one user on one server, so switching the user or server does not show the old ones
+         */
+        private class Caches(
+            val key: Pair<UUID, UUID>?,
+        ) {
+            @Volatile
+            var ranks: Map<Int, Int>? = null
+
+            @Volatile
+            var ranksJob: Deferred<Map<Int, Int>>? = null
+
+            /** Updated by [rate] while it may be read */
+            @Volatile
+            var myRatings: ConcurrentHashMap<Int, Int>? = null
+
+            val trivia = ConcurrentHashMap<Int, List<String>>()
+        }
+
         @Volatile
-        private var ranks: Map<Int, Int>? = null
+        private var currentCaches = Caches(null)
+
+        private fun caches(): Caches {
+            val key = serverRepository.current.value?.let { it.server.id to it.user.id }
+            currentCaches.let { if (it.key == key) return it }
+            return synchronized(this) {
+                currentCaches.takeIf { it.key == key } ?: Caches(key).also { currentCaches = it }
+            }
+        }
 
         /**
          * Items for the home row: tips in the library (playable) followed by the best rated missing tips that were
-         * found in Seerr, which open the Seerr page to request them
+         * found in Seerr, which open the Seerr page to request them.
+         *
+         * The first call of the day can take minutes (the plugin fetches the missing tips from ČSFD), so this gives up
+         * after [ROW_TIMEOUT] with an empty row instead of holding up the home page. The request keeps running in the
+         * background, so the plugin caches the tips and the next load is fast.
          */
         suspend fun getRowItems(
             userId: UUID,
             useSeries: Boolean,
             limit: Int,
             missing: Int = 7,
+        ): List<BaseItem> {
+            val load = scope.async { loadRowItems(userId, useSeries, limit, missing) }
+            return withTimeoutOrNull(ROW_TIMEOUT) { load.await() }
+                ?: listOf<BaseItem>().also { Timber.i("ČSFD TV tips took too long, showing an empty row") }
+        }
+
+        private suspend fun loadRowItems(
+            userId: UUID,
+            useSeries: Boolean,
+            limit: Int,
+            missing: Int,
         ): List<BaseItem> {
             val tips = getTips(limit, missing)
             val ids = tips.mapNotNull { it.itemId }
@@ -98,7 +149,14 @@ class CsfdTvTipsService
             val seerrActive = runCatching { seerrService.active.first() }.getOrDefault(false)
             val requestable =
                 if (seerrActive) {
-                    tips.filter { it.itemId == null }.mapNotNull { findInSeerr(it) }
+                    // In parallel, each tip may need several searches; awaitAll keeps the order
+                    coroutineScope {
+                        tips
+                            .filter { it.itemId == null }
+                            .map { async { findInSeerr(it) } }
+                            .awaitAll()
+                            .filterNotNull()
+                    }
                 } else {
                     listOf()
                 }
@@ -159,12 +217,22 @@ class CsfdTvTipsService
         /**
          * ČSFD id → position in the ČSFD best films/series rankings (top 1000 each); empty if the plugin is missing
          */
-        suspend fun getRanks(): Map<Int, Int> =
-            ranks ?: (get("Csfd/Ranks", slowClient)?.let(::parseRanks) ?: mapOf()).also {
-                if (it.isNotEmpty()) ranks = it
-            }
-
-        private val trivia = ConcurrentHashMap<Int, List<String>>()
+        suspend fun getRanks(): Map<Int, Int> {
+            val caches = caches()
+            caches.ranks?.let { return it }
+            // Shared and outside of the caller, so a caller giving up does not abort the slow first download
+            val job =
+                synchronized(caches) {
+                    caches.ranksJob?.takeIf { it.isActive }
+                        ?: scope
+                            .async {
+                                (get("Csfd/Ranks", slowClient)?.let(::parseRanks) ?: mapOf()).also {
+                                    if (it.isNotEmpty()) caches.ranks = it
+                                }
+                            }.also { caches.ranksJob = it }
+                }
+            return job.await()
+        }
 
         /**
          * Interesting facts ("Zaujímavosti") about a film/series from ČSFD, best rated first; empty if none or the
@@ -173,24 +241,25 @@ class CsfdTvTipsService
         suspend fun getTrivia(
             csfdId: Int,
             limit: Int = 4,
-        ): List<String> =
-            trivia[csfdId] ?: (
+        ): List<String> {
+            val trivia = caches().trivia
+            return trivia[csfdId] ?: (
                 get("Csfd/Trivia/$csfdId?limit=$limit", slowClient)
-                    ?.let { json -> (json as? JsonArray).orEmpty().mapNotNull { it.jsonPrimitive.contentOrNull } }
+                    ?.let { json -> (json as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull } }
                     ?.also { trivia[csfdId] = it }
                     .orEmpty()
             )
-
-        @Volatile
-        private var myRatings: MutableMap<Int, Int>? = null
+        }
 
         /**
          * My ČSFD ratings (ČSFD id → 0-5 stars, 0 = "odpad") read by the plugin from the profile set in its settings
          */
-        suspend fun getMyRatings(): Map<Int, Int> =
-            myRatings ?: (get("Csfd/MyRatings", slowClient)?.let(::parseRanks)?.toMutableMap() ?: mutableMapOf()).also {
-                if (it.isNotEmpty()) myRatings = it
+        suspend fun getMyRatings(): Map<Int, Int> {
+            val caches = caches()
+            return caches.myRatings ?: ConcurrentHashMap(get("Csfd/MyRatings", slowClient)?.let(::parseRanks).orEmpty()).also {
+                if (it.isNotEmpty()) caches.myRatings = it
             }
+        }
 
         /**
          * Rate on ČSFD through the plugin's account. Returns null on success, otherwise an error message.
@@ -201,6 +270,7 @@ class CsfdTvTipsService
         ): String? =
             withContext(Dispatchers.IO) {
                 val baseUrl = api.baseUrl?.trimEnd('/') ?: return@withContext "No server"
+                val caches = caches()
                 try {
                     val request =
                         Request
@@ -209,9 +279,9 @@ class CsfdTvTipsService
                             .post(ByteArray(0).toRequestBody())
                             .build()
                     slowClient.newCall(request).execute().use { response ->
-                        val obj = runCatching { Json.parseToJsonElement(response.body.string()).jsonObject }.getOrNull()
-                        if (response.isSuccessful && obj?.field("Ok")?.jsonPrimitive?.booleanOrNull == true) {
-                            myRatings?.set(csfdId, stars)
+                        val obj = runCatching { Json.parseToJsonElement(response.body.string()) as? JsonObject }.getOrNull()
+                        if (response.isSuccessful && (obj?.field("Ok") as? JsonPrimitive)?.booleanOrNull == true) {
+                            caches.myRatings?.set(csfdId, stars)
                             null
                         } else {
                             obj?.string("Message") ?: "HTTP ${response.code}"
@@ -246,17 +316,19 @@ class CsfdTvTipsService
             }
 
         companion object {
+            private val ROW_TIMEOUT = 12.seconds
+
             fun parseTips(json: String): List<CsfdTvTip> = parseTips(Json.parseToJsonElement(json))
 
             fun parseTips(json: JsonElement): List<CsfdTvTip> =
                 (json as? JsonArray)
                     .orEmpty()
                     .mapNotNull { element ->
-                        val obj = element.jsonObject
+                        val obj = element as? JsonObject ?: return@mapNotNull null
                         val csfdId = obj.int("CsfdId") ?: return@mapNotNull null
                         // GUIDs come without dashes
                         val itemId = obj.string("ItemId")?.toUUIDOrNull()
-                        val inLibrary = obj.field("InLibrary")?.jsonPrimitive?.booleanOrNull ?: (itemId != null)
+                        val inLibrary = (obj.field("InLibrary") as? JsonPrimitive)?.booleanOrNull ?: (itemId != null)
                         CsfdTvTip(
                             csfdId = csfdId,
                             title = obj.string("Title").orEmpty(),
@@ -276,17 +348,21 @@ class CsfdTvTipsService
             fun parseRanks(json: JsonElement): Map<Int, Int> =
                 (json as? JsonObject)
                     .orEmpty()
-                    .mapNotNull { (id, rank) -> id.toIntOrNull()?.let { it to (rank.jsonPrimitive.intOrNull ?: return@mapNotNull null) } }
-                    .toMap()
+                    .mapNotNull { (id, rank) ->
+                        id.toIntOrNull()?.let {
+                            it to
+                                ((rank as? JsonPrimitive)?.intOrNull ?: return@mapNotNull null)
+                        }
+                    }.toMap()
 
             /** The server may emit PascalCase or camelCase */
             private fun JsonObject.field(name: String) = this[name] ?: this[name.replaceFirstChar { it.lowercase() }]
 
-            private fun JsonObject.string(name: String) = field(name)?.jsonPrimitive?.contentOrNull
+            private fun JsonObject.string(name: String) = (field(name) as? JsonPrimitive)?.contentOrNull
 
-            private fun JsonObject.int(name: String) = field(name)?.jsonPrimitive?.intOrNull
+            private fun JsonObject.int(name: String) = (field(name) as? JsonPrimitive)?.intOrNull
 
             private fun JsonObject.strings(name: String) =
-                runCatching { field(name)?.jsonArray?.mapNotNull { it.jsonPrimitive.contentOrNull } }.getOrNull().orEmpty()
+                (field(name) as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.orEmpty()
         }
     }
