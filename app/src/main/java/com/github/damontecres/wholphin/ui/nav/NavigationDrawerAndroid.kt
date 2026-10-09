@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,6 +46,8 @@ import androidx.compose.ui.focus.FocusState
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -56,6 +59,7 @@ import androidx.tv.material3.NavigationDrawerItemColors
 import androidx.tv.material3.NavigationDrawerItemDefaults
 import androidx.tv.material3.NavigationDrawerScope
 import androidx.tv.material3.rememberDrawerState
+import com.github.damontecres.wholphin.ui.theme.LocalNavScale
 
 /**
  * This is a re-implementation of [androidx.tv.material3.ModalNavigationDrawer].
@@ -122,9 +126,18 @@ private fun DrawerSheet(
                 }
             }.focusGroup()
 
+    // Scale the whole drawer (widths, icons, text) by the user's navigation panel size preference
+    val density = LocalDensity.current
+    val navScale = LocalNavScale.current
+    val scaledDensity =
+        remember(density, navScale) {
+            Density(density = density.density * navScale, fontScale = density.fontScale)
+        }
     Box(modifier = internalModifier) {
-        NavigationDrawerScopeImpl(drawerState.currentValue == DrawerValue.Open).apply {
-            content(drawerState.currentValue)
+        CompositionLocalProvider(LocalDensity provides scaledDensity) {
+            NavigationDrawerScopeImpl(drawerState.currentValue == DrawerValue.Open).apply {
+                content(drawerState.currentValue)
+            }
         }
     }
 }

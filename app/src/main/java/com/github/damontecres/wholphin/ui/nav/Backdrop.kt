@@ -76,6 +76,7 @@ fun Backdrop(
     enableTopScrim: Boolean = true,
     useExistingImageAsPlaceholder: Boolean = false,
     crossfadeDuration: Duration = 800.milliseconds,
+    dimAlpha: Float = 0f,
 ) {
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val baseBackgroundColor = MaterialTheme.colorScheme.background
@@ -172,6 +173,13 @@ fun Backdrop(
                         .drawWithContent {
                             val start = if (isRtl) size.width else 0f
                             drawContent()
+                            // Extra dimming, eg for the random fallback backdrop so text stays readable
+                            if (dimAlpha > 0f) {
+                                drawRect(
+                                    brush = SolidColor(Color.Black),
+                                    alpha = dimAlpha,
+                                )
+                            }
                             if (drawerIsOpen) {
                                 drawRect(
                                     brush = SolidColor(Color.Black),

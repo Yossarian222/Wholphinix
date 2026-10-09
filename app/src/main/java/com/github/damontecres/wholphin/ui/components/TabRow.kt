@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.github.damontecres.wholphin.ui.PreviewTvSpec
+import com.github.damontecres.wholphin.ui.theme.LocalNavScale
 import com.github.damontecres.wholphin.ui.theme.WholphinTheme
 import com.github.damontecres.wholphin.ui.tryRequestFocus
 import com.github.damontecres.wholphin.ui.util.StringStringProvider
@@ -196,6 +197,7 @@ fun Tab(
 ) {
     var tabWidth by remember { mutableStateOf(0.dp) }
     val density = LocalDensity.current
+    val navScale = LocalNavScale.current
 
     val focused by interactionSource.collectIsFocusedAsState()
     val contentColor =
@@ -217,14 +219,14 @@ fun Tab(
                 },
     ) {
         Column(
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp * navScale),
             modifier = Modifier,
         ) {
             Text(
                 text = title,
-                fontSize = 16.sp,
+                fontSize = 16.sp * navScale,
                 color = contentColor,
-                modifier = Modifier.padding(horizontal = 16.dp),
+                modifier = Modifier.padding(horizontal = 16.dp * navScale),
             )
             TabIndicator(
                 selected = selected,
@@ -257,7 +259,7 @@ fun TabIndicator(
     Box(
         modifier =
             modifier
-                .height(2.dp)
+                .height(2.dp * LocalNavScale.current)
                 .fillMaxWidth()
                 .width(width)
                 .background(backgroundColor),

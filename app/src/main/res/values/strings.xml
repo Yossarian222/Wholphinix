@@ -194,6 +194,8 @@
     <string name="play_with_transcoding">Play with transcoding</string>
     <string name="media_information">Media Information</string>
     <string name="show_clock">Show Clock</string>
+    <string name="font_size_scale">Font size</string>
+    <string name="nav_panel_scale">Navigation panel size</string>
     <string name="aired_episode_order">Aired Episode Order</string>
     <string name="create_playlist">Create new playlist</string>
     <string name="add_to_playlist">Add to playlist</string>
@@ -788,6 +790,13 @@
         <item>@string/backdrop_style_dynamic</item>
         <item>@string/backdrop_style_image</item>
         <item>@string/none</item>
+    </string-array>
+
+    <string-array name="ui_scale_options" translatable="false">
+        <item>85 %</item>
+        <item>100 %</item>
+        <item>115 %</item>
+        <item>130 %</item>
     </string-array>
 
     <string-array name="screensaver_item_types">

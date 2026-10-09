@@ -43,11 +43,9 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.jellyfin.sdk.api.client.ApiClient
@@ -81,12 +79,8 @@ class SearchViewModel
         private val navDrawerService: NavDrawerService,
     ) : ViewModel(),
         ContextMenuProvider {
-        val seerrActive =
-            seerrService.active.stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.Eagerly,
-                initialValue = false,
-            )
+        // Search is library only (Jellyfin), no Seerr/Discover results. Seerr requests remain available in TV tips.
+        val seerrActive: StateFlow<Boolean> = MutableStateFlow(false)
 
         private val _state = MutableStateFlow(SearchState())
         val state: StateFlow<SearchState> = _state
@@ -605,23 +599,16 @@ data class SearchState(
     val discoverEnabled: Boolean = true,
 )
 
+// Library search is limited to movies & series
 private val allSearchableTypes =
     listOf(
         BaseItemKind.MOVIE,
         BaseItemKind.SERIES,
-        BaseItemKind.EPISODE,
-        BaseItemKind.BOX_SET,
-        BaseItemKind.PERSON,
-        BaseItemKind.TV_CHANNEL,
-        BaseItemKind.LIVE_TV_PROGRAM,
-        BaseItemKind.MUSIC_ALBUM,
-        BaseItemKind.MUSIC_ARTIST,
-        BaseItemKind.AUDIO,
-        BaseItemKind.MUSIC_VIDEO,
-        BaseItemKind.PLAYLIST,
-        BaseItemKind.VIDEO,
-        BaseItemKind.PHOTO,
-        BaseItemKind.PHOTO_ALBUM,
     )
+
+/**
+ * Minimum number of typed characters before searching while typing
+ */
+const val SEARCH_MIN_QUERY_LENGTH = 3
 
 private const val SEARCH_LIMIT = 50

@@ -142,15 +142,21 @@ fun SearchPage(
         viewModel.search(searchQuery, combinedMode)
     }
 
+    // Live suggestions: from the 3rd typed character, search (debounced) while typing
     LaunchedEffect(query, combinedMode) {
         when {
             immediateSearchQuery == query -> {
                 immediateSearchQuery = null
             }
 
+            query.trim().length >= SEARCH_MIN_QUERY_LENGTH -> {
+                delay(300.milliseconds)
+                viewModel.search(query.trim(), combinedMode)
+            }
+
             else -> {
-                delay(750.milliseconds)
-                viewModel.search(query, combinedMode)
+                // Too short to search while typing
+                viewModel.search("", combinedMode)
             }
         }
     }
