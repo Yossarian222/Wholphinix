@@ -3,7 +3,7 @@
 > **Wholphinix (tento fork)** – samostatná appka s ID `com.github.yossarian222.wholphinix`, inštaluje sa **vedľa** originálneho Wholphinu.
 > - Prvá inštalácia: stiahni `Wholphin-release-arm64-v8a.apk` (rpi5/väčšina TV) alebo `Wholphin-release.apk` (univerzálny) z [Releases](https://github.com/Yossarian222/Wholphinix/releases/latest) a nainštaluj, napr. `adb install -r Wholphin-release-arm64-v8a.apk`.
 > - Ďalšie verzie: priamo v appke *Nastavenia → Skontrolovať aktualizácie → Inštalovať* (Android sa raz spýta na povolenie inštalácie z tejto appky).
-> - Nová verzia = git tag `vX.Y.Z` na `main` → workflow *Create release* zostaví, podpíše (secrets `SIGNING_KEY`…) a zverejní APK.
+> - Nová verzia: *Actions → Create release → Run workflow* s číslom verzie (napr. `1.0.1`), prípadne push tagu `vX.Y.Z` → workflow vytvorí tag, zostaví, podpíše (secrets `SIGNING_KEY`…) a zverejní APK.
 
 > "Never half-phin two jellies. Always wholphin one jelly."
 
