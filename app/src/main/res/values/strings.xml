@@ -984,4 +984,10 @@
         <item quantity="other">%1$d Episodes</item>
     </plurals>
     <string name="audiobookshelf">Audiobookshelf</string>
+
+    <!-- Detail & rating prompt -->
+    <string name="premiere_date">Premiere: %1$s</string>
+    <string name="csfd_rating_prompt_title">How did you like %1$s?</string>
+    <string name="csfd_rating_prompt_not_now">Not now</string>
+    <string name="csfd_rating_prompt_sent">Rating sent to ČSFD</string>
 </resources>
