@@ -534,11 +534,11 @@ fun SeriesDetailsContent(
                             Modifier
                                 .fillMaxWidth()
                                 .focusRequester(focusRequesters[SEASONS_ROW])
-                                // Up goes to the play buttons, not to a header element out of view
+                                // Up goes to the director line (or the play buttons), not to a header element out of view
                                 .focusProperties {
                                     onExit = {
                                         if (requestedFocusDirection == FocusDirection.Up) {
-                                            focusRequesters[HEADER_ROW].tryRequestFocus()
+                                            headerFocus.fromBelow.tryRequestFocus()
                                         }
                                     }
                                 }.focusGroup(),

@@ -39,6 +39,9 @@ class DetailHeaderFocus(
             buttons,
         )
 
+    /** Where UP from the first row below the buttons goes: the "Réžia: …" line if shown, else the buttons */
+    val fromBelow: FocusRequester get() = director.takeIf { it in order } ?: buttons
+
     fun above(requester: FocusRequester): FocusRequester? = order.indexOf(requester).takeIf { it > 0 }?.let { order[it - 1] }
 
     fun below(requester: FocusRequester): FocusRequester? = order.indexOf(requester).takeIf { it >= 0 }?.let { order.getOrNull(it + 1) }

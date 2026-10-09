@@ -323,7 +323,8 @@ fun MovieDetailsContent(
 
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
     val headerFocus = rememberDetailHeaderFocus(movie, focusRequesters[HEADER_ROW])
-    // The first row under the play buttons goes up to them, not to a header element out of view
+    // The first row under the play buttons goes up to the director line (or the buttons), not to a header element
+    // out of view
     val firstRow =
         when {
             state.people.isNotEmpty() -> PEOPLE_ROW
@@ -336,7 +337,7 @@ fun MovieDetailsContent(
         Modifier
             .focusProperties {
                 onExit = {
-                    if (requestedFocusDirection == FocusDirection.Up) focusRequesters[HEADER_ROW].tryRequestFocus()
+                    if (requestedFocusDirection == FocusDirection.Up) headerFocus.fromBelow.tryRequestFocus()
                 }
             }.focusGroup()
 
