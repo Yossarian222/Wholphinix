@@ -67,7 +67,7 @@ jobs:
             exit 1
           fi
           # Unit tests in the same run, so a release needs no separate CI build beforehand
-          ./gradlew clean testDefaultReleaseUnitTest assembleDefaultRelease
+          ./gradlew clean testDefaultDebugUnitTest assembleDefaultRelease
       - name: Verify signatures
         run: |
           echo "Verify APK signatures"
