@@ -1,13 +1,11 @@
 package com.github.damontecres.wholphin.ui.components
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
@@ -38,7 +36,8 @@ class CreditsViewModel
 /**
  * "Réžia: …" and "Hrajú: …" lines. Actors keep the metadata order (TMDb/ČSFD billing), so the first ones are the best known.
  *
- * With [clickableDirectors] each director opens their page, which lists their movies & series in the library.
+ * With [clickableDirectors] the whole "Réžia: …" line is focusable (with [directorModifier]) and opens the first director's
+ * page, which lists their movies & series in the library. Each line is a single line, ellipsized.
  */
 @Composable
 fun CreditsText(
@@ -47,6 +46,7 @@ fun CreditsText(
     showDirector: Boolean = true,
     maxActors: Int = 4,
     clickableDirectors: Boolean = false,
+    directorModifier: Modifier = Modifier,
 ) {
     val (directors, actors) =
         remember(people) {
@@ -61,7 +61,7 @@ fun CreditsText(
     Column(modifier = modifier) {
         if (showDirector && directors.isNotEmpty()) {
             if (clickableDirectors) {
-                ClickableDirectors(directors)
+                ClickableDirectors(directors, directorModifier)
             } else {
                 CreditLine(stringResource(R.string.directed_by, directors.joinToString(", ") { it.name!! }))
             }
@@ -75,32 +75,30 @@ fun CreditsText(
 @Composable
 private fun ClickableDirectors(
     directors: List<BaseItemPerson>,
+    modifier: Modifier = Modifier,
     viewModel: CreditsViewModel = hiltViewModel(),
 ) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    Surface(
+        onClick = {
+            viewModel.navigationManager.navigateTo(Destination.MediaItem(directors.first().id, BaseItemKind.PERSON, null))
+        },
+        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(6.dp)),
+        colors =
+            ClickableSurfaceDefaults.colors(
+                containerColor = Color.Transparent,
+                focusedContainerColor = MaterialTheme.colorScheme.inverseSurface,
+            ),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
+        // The text stays aligned with "Hrajú: …" below, the padding is only for the focus background
+        modifier = modifier.offset(x = (-6).dp),
     ) {
-        CreditLine(stringResource(R.string.directed_by, "").trimEnd())
-        directors.forEach { director ->
-            Surface(
-                onClick = {
-                    viewModel.navigationManager.navigateTo(Destination.MediaItem(director.id, BaseItemKind.PERSON, null))
-                },
-                shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(6.dp)),
-                colors =
-                    ClickableSurfaceDefaults.colors(
-                        containerColor = Color.Transparent,
-                        focusedContainerColor = MaterialTheme.colorScheme.inverseSurface,
-                    ),
-            ) {
-                Text(
-                    text = director.name!!,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                )
-            }
-        }
+        Text(
+            text = stringResource(R.string.directed_by, directors.joinToString(", ") { it.name!! }),
+            style = MaterialTheme.typography.bodyMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+        )
     }
 }
 
