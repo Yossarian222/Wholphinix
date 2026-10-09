@@ -41,6 +41,12 @@ jobs:
         uses: ./.github/actions/setup
       - name: Build app
         id: buildapp
+        env:
+          # Same private key for every build, so a new debug APK installs as an update (empty = default debug key)
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
         run: |
           set +e
           ./gradlew clean assembleDefaultDebug testDefaultDebugUnitTest --no-daemon 2>&1 | tee build.log
@@ -58,5 +64,33 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: wholphinix-debug-apk
-          path: app/build/outputs/apk/**/*.apk
+          path: app/build/outputs/apk/**/debug/*.apk
           retention-days: 7
+      # Release APK for the TV: not debuggable, signed with the private key from the repository secrets
+      # (SIGNING_KEY = base64 keystore, KEY_ALIAS, KEY_PASSWORD, KEY_STORE_PASSWORD). Without the secrets it is
+      # signed with a throwaway key only to check that the release (R8) build works, and not uploaded.
+      - name: Build release APK
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+        run: |
+          if [ -z "$SIGNING_KEY" ]; then
+            echo "No signing secrets, using a throwaway key"
+            pass=$(openssl rand -hex 16)
+            keytool -genkeypair -keystore "$RUNNER_TEMP/throwaway.jks" -alias throwaway -keyalg RSA -keysize 2048 \
+              -validity 1 -storepass "$pass" -keypass "$pass" -dname "CN=throwaway" -noprompt
+            export SIGNING_KEY=$(base64 -w0 "$RUNNER_TEMP/throwaway.jks") KEY_ALIAS=throwaway \
+              KEY_PASSWORD="$pass" KEY_STORE_PASSWORD="$pass"
+          else
+            echo "HAS_RELEASE_KEY=true" >> "$GITHUB_ENV"
+          fi
+          ./gradlew assembleDefaultRelease --no-daemon
+      - name: Upload release APK
+        if: env.HAS_RELEASE_KEY == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: wholphinix-release-apk
+          path: app/build/outputs/apk/**/release/*.apk
+          retention-days: 14

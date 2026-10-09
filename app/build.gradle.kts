@@ -85,11 +85,6 @@ configure<ApplicationExtension> {
     }
 
     signingConfigs {
-        // Same debug key on every machine and CI run, so a new debug APK installs as an update (keeps logins)
-        getByName("debug") {
-            val shared = rootProject.file("debug.keystore")
-            if (shared.exists()) storeFile = shared
-        }
         if (shouldSign.get()) {
             create("ci") {
                 file("ci.keystore").writeBytes(
@@ -136,6 +131,11 @@ configure<ApplicationExtension> {
             isShrinkResources = false
             isDebuggable = true
             applicationIdSuffix = ".debug"
+            // CI signs with the private key from the GitHub secrets, so each new APK installs as an update (keeps
+            // logins). Without it (local builds) the default per-machine debug key is used.
+            if (shouldSign.get()) {
+                signingConfig = signingConfigs.getByName("ci")
+            }
         }
     }
     flavorDimensions += "version"

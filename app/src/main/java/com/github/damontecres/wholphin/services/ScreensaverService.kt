@@ -1,6 +1,7 @@
 package com.github.damontecres.wholphin.services
 
 import android.content.Context
+import android.content.Intent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -39,6 +40,7 @@ import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
 
 /**
  * Handles the queue of items to show on the screensaver, both in-app or OS
@@ -60,6 +62,13 @@ class ScreensaverService
 
         private var waitJob: Job? = null
         private var dimJob: Job? = null
+
+        /** Starts the system screensaver (e.g. Aerial Views) after [SYSTEM_SCREENSAVER_DELAY] without input */
+        private var idleJob: Job? = null
+
+        /** The system screensaver could not be started, so the OS screen timeout is used instead */
+        @Volatile
+        private var systemScreensaverUnavailable = false
 
         /** Who currently needs the screen on (players, slideshow). Guarded by `this`. */
         private val keepOnOwners = mutableSetOf<Any>()
@@ -92,6 +101,7 @@ class ScreensaverService
          * Reset the timer before showing the in-app screensaver
          */
         fun pulse() {
+            restartIdleTimer()
             waitJob?.cancel()
             if (_state.value.enabled) {
 //                Timber.v("pulse")
@@ -172,6 +182,41 @@ class ScreensaverService
             if (cancelJob) {
                 waitJob?.cancel()
                 dimJob?.cancel()
+                idleJob?.cancel()
+            }
+        }
+
+        /**
+         * After [SYSTEM_SCREENSAVER_DELAY] without input, and with nothing playing, start the system screensaver
+         * (the one chosen in the TV settings, e.g. Aerial Views). Called on every key press and when playback stops
+         * or pauses.
+         */
+        private fun restartIdleTimer() {
+            idleJob?.cancel()
+            idleJob =
+                scope.launch(ExceptionHandler()) {
+                    delay(SYSTEM_SCREENSAVER_DELAY)
+                    if (!synchronized(this@ScreensaverService) { requestedKeepOn }) {
+                        startSystemScreensaver()
+                    }
+                }
+        }
+
+        private fun startSystemScreensaver() {
+            Timber.i("Idle for %s, starting the system screensaver", SYSTEM_SCREENSAVER_DELAY)
+            try {
+                // SystemUI's "start screensaver now" activity, it shows the screensaver selected in the TV settings
+                context.startActivity(
+                    Intent(Intent.ACTION_MAIN)
+                        .setClassName("com.android.systemui", "com.android.systemui.Somnambulator")
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+            } catch (ex: Exception) {
+                Timber.w(ex, "Cannot start the system screensaver, falling back to the OS screen timeout")
+                systemScreensaverUnavailable = true
+                synchronized(this) {
+                    keepScreenOnInternal(state.value.enabled || requestedKeepOn)
+                }
             }
         }
 
@@ -197,6 +242,8 @@ class ScreensaverService
             synchronized(this) {
                 if (keepOnOwners.remove(owner) && !requestedKeepOn) {
                     applyKeepScreenOn(false)
+                    // e.g. a paused movie: the screensaver starts 15 minutes after the pause, not after the last key
+                    restartIdleTimer()
                 }
             }
         }
@@ -225,7 +272,9 @@ class ScreensaverService
         }
 
         private fun keepScreenOnInternal(keep: Boolean) {
-            keepScreenOn.update { keep }
+            // The screen stays on so the idle timer above decides when the screensaver starts, unless that is not
+            // possible on this device
+            keepScreenOn.update { keep || !systemScreensaverUnavailable }
         }
 
         /**
@@ -324,6 +373,8 @@ class ScreensaverService
         }
 
         companion object {
+            val SYSTEM_SCREENSAVER_DELAY = 15.minutes
+
             val enterAnimation = fadeIn(animationSpec = tween(durationMillis = 1000))
             val exitAnimation = fadeOut(animationSpec = tween(durationMillis = 500))
         }

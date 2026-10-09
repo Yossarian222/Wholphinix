@@ -9,6 +9,7 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import com.github.damontecres.wholphin.services.ScreensaverService
 import com.github.damontecres.wholphin.services.audiobookshelf.AbsConfig
 import com.github.damontecres.wholphin.services.audiobookshelf.AbsConnection
 import com.github.damontecres.wholphin.services.audiobookshelf.AbsEpisode
@@ -74,6 +75,7 @@ class AudiobookshelfViewModel
     constructor(
         @param:ApplicationContext private val context: Context,
         private val service: AudiobookshelfService,
+        private val screensaverService: ScreensaverService,
     ) : ViewModel() {
         private val _state = MutableStateFlow(AbsUiState())
         val state: StateFlow<AbsUiState> = _state.asStateFlow()
@@ -108,7 +110,15 @@ class AudiobookshelfViewModel
                         if (!isPlaying) syncNow()
                     }
 
+                    override fun onPlayWhenReadyChanged(
+                        playWhenReady: Boolean,
+                        reason: Int,
+                    ) {
+                        updateKeepScreenOn()
+                    }
+
                     override fun onPlaybackStateChanged(playbackState: Int) {
+                        updateKeepScreenOn()
                         if (playbackState == Player.STATE_ENDED) {
                             syncNow()
                         }
@@ -257,6 +267,19 @@ class AudiobookshelfViewModel
 
         fun pause() = player.pause()
 
+        /** No screensaver while a podcast plays; paused for 15 minutes starts the system screensaver */
+        private fun updateKeepScreenOn() {
+            val playing =
+                player.playWhenReady &&
+                    player.playbackState != Player.STATE_ENDED &&
+                    player.playbackState != Player.STATE_IDLE
+            if (playing) {
+                screensaverService.acquireKeepScreenOn(this)
+            } else {
+                screensaverService.releaseKeepScreenOn(this)
+            }
+        }
+
         /**
          * The audio file URL. The file endpoints need authentication, which the player gets as the `token` query
          * parameter (like the cover images). `contentUrl` already contains the server's base path, if any.
@@ -373,6 +396,7 @@ class AudiobookshelfViewModel
                     }
                 }
             }
+            screensaverService.releaseKeepScreenOn(this)
             player.release()
             super.onCleared()
         }

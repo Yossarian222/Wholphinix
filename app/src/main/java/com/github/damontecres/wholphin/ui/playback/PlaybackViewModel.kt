@@ -205,8 +205,8 @@ class PlaybackViewModel
         val initJob: Job
 
         init {
-            // No screensaver while the player is open, even when paused or buffering. Done here, before anything
-            // asynchronous, so the release in onCleared always comes after it.
+            // No screensaver while playing (also while buffering); paused for 15 minutes starts the system one.
+            // Acquired here, before anything asynchronous, so the release in onCleared always comes after it.
             screensaverService.acquireKeepScreenOn(this)
             addCloseable { screensaverService.releaseKeepScreenOn(this@PlaybackViewModel) }
             initJob =
@@ -1072,7 +1072,27 @@ class PlaybackViewModel
                 )
             }
 
+        /** Keeps the screen on while playing or about to play, a pause or the end lets the screensaver start */
+        private fun updateKeepScreenOn() {
+            val p = player
+            val playing =
+                p.playWhenReady && p.playbackState != Player.STATE_ENDED && p.playbackState != Player.STATE_IDLE
+            if (playing) {
+                screensaverService.acquireKeepScreenOn(this)
+            } else {
+                screensaverService.releaseKeepScreenOn(this)
+            }
+        }
+
+        override fun onPlayWhenReadyChanged(
+            playWhenReady: Boolean,
+            reason: Int,
+        ) {
+            updateKeepScreenOn()
+        }
+
         override fun onPlaybackStateChanged(playbackState: Int) {
+            updateKeepScreenOn()
             if (playbackState == Player.STATE_ENDED) {
                 Timber.v("Playback state is STATE_ENDED")
                 viewModelScope.launchDefault {
