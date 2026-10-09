@@ -217,6 +217,8 @@ class CsfdTvTipsService
                     imageUrlOverride = discover.posterUrl ?: tip.poster,
                     backdropUrlOverride = discover.backDropUrl ?: tip.photo,
                     destinationOverride = discover.destination,
+                    // Seerr may know it from Jellyfin even though the plugin did not match it
+                    inLibrary = discover.jellyfinItemId != null,
                 )
             }
             Timber.i("ČSFD title %s not found in Seerr", tip.title)
