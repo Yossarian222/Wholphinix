@@ -5,6 +5,7 @@ Targets Jellyfin 10.9+ (uses the /Items?userId=... and /UserItems/Resume routes)
 
 from __future__ import annotations
 
+import re
 import unicodedata
 from dataclasses import dataclass
 from typing import Any
@@ -20,6 +21,31 @@ class JellyfinError(Exception):
 
 class NoTargetSession(JellyfinError):
     pass
+
+
+# Jellyfin item/user ids are GUIDs, usually serialized as 32 hex chars (sometimes dashed)
+_GUID_RE = re.compile(
+    r"[0-9a-fA-F]{32}|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+)
+
+
+def validate_id(value: str, name: str = "id") -> str:
+    """Reject anything that is not a Jellyfin GUID before it is put into a URL path.
+
+    Ids come from the model (tool arguments), so without this e.g. "../Users" or "x?y=z"
+    could steer the request to a different API endpoint authenticated with the admin key.
+    """
+    if not isinstance(value, str) or not _GUID_RE.fullmatch(value):
+        raise ValueError(
+            f"Invalid {name} {value!r}: expected a Jellyfin id (32 hex characters) "
+            "as returned by search_library"
+        )
+    return value
+
+
+def _norm_id(value: Any) -> str:
+    """Canonical form for comparing ids that may or may not contain dashes."""
+    return str(value or "").replace("-", "").lower()
 
 
 # Language aliases -> ISO 639-2 codes Jellyfin typically stores in MediaStream.Language
@@ -211,6 +237,7 @@ class JellyfinClient:
         return data.get("Items", [])
 
     async def item(self, item_id: str) -> dict[str, Any]:
+        validate_id(item_id, "item_id")
         return await self._get(f"/Items/{item_id}", userId=await self.user_id())
 
     async def next_up(self, series_id: str | None = None, limit: int = 1) -> list[dict[str, Any]]:
@@ -225,6 +252,7 @@ class JellyfinClient:
         return data.get("Items", [])
 
     async def episodes(self, series_id: str, season: int | None = None) -> list[dict[str, Any]]:
+        validate_id(series_id, "series_id")
         data = await self._get(
             f"/Shows/{series_id}/Episodes",
             userId=await self.user_id(),
@@ -243,19 +271,35 @@ class JellyfinClient:
         )
         return data.get("Items", [])
 
-    async def streams(self, item_id: str) -> list[Stream]:
+    async def streams(self, item_id: str, media_source_id: str | None = None) -> list[Stream]:
+        """Audio/subtitle streams of the media source being played.
+
+        Items with several versions (e.g. 1080p and 4K files) have several MediaSources whose
+        stream indexes differ, so use the one the session reports (PlayState.MediaSourceId)
+        and fall back to the first.
+        """
         item = await self.item(item_id)
         sources = item.get("MediaSources") or []
-        raw = sources[0].get("MediaStreams", []) if sources else item.get("MediaStreams", [])
+        source = None
+        if media_source_id:
+            wanted = _norm_id(media_source_id)
+            source = next((s for s in sources if _norm_id(s.get("Id")) == wanted), None)
+        if source is None and sources:
+            source = sources[0]
+        raw = source.get("MediaStreams", []) if source else item.get("MediaStreams", [])
         return [Stream.from_api(s) for s in raw if s.get("Type") in ("Audio", "Subtitle")]
 
     # ---- Sessions / remote control ----
 
     async def target_session(self) -> dict[str, Any]:
         sessions = await self._get("/Sessions", activeWithinSeconds=960)
+        # Only control JELLYFIN_USER's own Wholphinix, never another household member's TV
+        uid = _norm_id(await self.user_id())
 
         def matches(s: dict[str, Any]) -> bool:
             if not s.get("SupportsRemoteControl"):
+                return False
+            if _norm_id(s.get("UserId")) != uid:
                 return False
             if self.target_device and self.target_device not in (s.get("DeviceName") or "").lower():
                 return False
@@ -264,7 +308,8 @@ class JellyfinClient:
         candidates = [s for s in sessions if matches(s)]
         if not candidates:
             raise NoTargetSession(
-                "Wholphinix is not connected. Open the app on the TV (it must be in the foreground)."
+                "Wholphinix is not connected. Open the app on the TV (it must be in the foreground"
+                f" and signed in as Jellyfin user '{self.username}')."
             )
         candidates.sort(key=lambda s: s.get("LastActivityDate") or "", reverse=True)
         return candidates[0]
@@ -286,9 +331,4 @@ class JellyfinClient:
     async def general_command(self, session_id: str, name: str, arguments: dict[str, str]) -> None:
         await self._post(
             f"/Sessions/{session_id}/Command", json={"Name": name, "Arguments": arguments}
-        )
-
-    async def display_message(self, session_id: str, text: str) -> None:
-        await self.general_command(
-            session_id, "DisplayMessage", {"Header": "Claude", "Text": text, "TimeoutMs": "4000"}
         )

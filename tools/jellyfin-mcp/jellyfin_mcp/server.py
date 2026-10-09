@@ -23,6 +23,7 @@ from .jellyfin import (
     Stream,
     pick_stream,
     summarize_item,
+    validate_id,
 )
 
 log = logging.getLogger("jellyfin_mcp")
@@ -129,6 +130,7 @@ async def play(item_id: str, from_start: bool = False) -> dict[str, Any]:
     Movies/episodes resume where they were left off unless from_start=True.
     For a series id, plays the next unwatched episode (or S1E1 if none was started).
     """
+    validate_id(item_id, "item_id")
     c = client()
     session = await c.target_session()
     item = await c.item(item_id)
@@ -150,6 +152,7 @@ async def play_episode(
     series_id: str, season: int, episode: int, from_start: bool = False
 ) -> dict[str, Any]:
     """Play a specific episode, e.g. season=2, episode=5 for S02E05."""
+    validate_id(series_id, "series_id")
     c = client()
     session = await c.target_session()
     eps = await c.episodes(series_id, season=season)
@@ -168,7 +171,8 @@ async def _now_playing() -> tuple[dict[str, Any], dict[str, Any], list[Stream]]:
     item = session.get("NowPlayingItem")
     if not item:
         raise JellyfinError("Nothing is playing on the TV right now")
-    return session, item, await c.streams(item["Id"])
+    media_source_id = (session.get("PlayState") or {}).get("MediaSourceId")
+    return session, item, await c.streams(item["Id"], media_source_id)
 
 
 @mcp.tool()
@@ -255,6 +259,8 @@ async def control(
         if seconds is None:
             await c.playstate(sid, "FastForward" if action == "forward" else "Rewind")
         else:
+            # PositionTicks is the position from the client's last progress report (sent every
+            # few seconds), so the jump can be off by that much; good enough for "back 30 s".
             pos = ((session.get("PlayState") or {}).get("PositionTicks") or 0) / TICKS_PER_SECOND
             target = pos + seconds if action == "forward" else pos - seconds
             await c.playstate(sid, "Seek", max(target, 0))
@@ -313,9 +319,12 @@ def main() -> None:
 
     logging.basicConfig(level=logging.INFO)
     # Don't log full request paths: they contain the secret
+    # Default 127.0.0.1: the container shares the tailscale container's network namespace
+    # (network_mode: service:ts), Funnel proxies to 127.0.0.1:8765, so nothing else needs to
+    # reach it. Set MCP_HOST=0.0.0.0 only for a different network setup.
     uvicorn.run(
         create_app(),
-        host="0.0.0.0",
+        host=os.environ.get("MCP_HOST", "127.0.0.1"),
         port=int(os.environ.get("PORT", "8765")),
         access_log=False,
     )

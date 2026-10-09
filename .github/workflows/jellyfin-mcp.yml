@@ -11,6 +11,9 @@ on:
     paths:
       - "tools/jellyfin-mcp/**"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
