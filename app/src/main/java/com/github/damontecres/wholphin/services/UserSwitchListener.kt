@@ -51,10 +51,10 @@ class UserSwitchListener
 
         private suspend fun switchUser(user: JellyfinUser) =
             supervisorScope {
-                // Switch the locale to either the user's choice or the system default (empty)
+                // Switch the locale to either the user's choice or Slovak (Wholphinix default, TVs often run in English)
                 val localeList =
                     user.uiLanguage?.let { LocaleListCompat.forLanguageTags(it) }
-                        ?: LocaleListCompat.getEmptyLocaleList()
+                        ?: LocaleListCompat.forLanguageTags("sk")
                 Timber.i("Switching locale to %s", localeList)
                 withContext(WholphinDispatchers.Main) {
                     AppCompatDelegate.setApplicationLocales(localeList)

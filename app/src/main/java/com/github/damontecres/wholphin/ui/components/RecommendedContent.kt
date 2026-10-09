@@ -30,6 +30,7 @@ import com.github.damontecres.wholphin.services.SuggestionsResource
 import com.github.damontecres.wholphin.services.UserPreferencesService
 import com.github.damontecres.wholphin.services.deleteItem
 import com.github.damontecres.wholphin.ui.OneTimeLaunchedEffect
+import com.github.damontecres.wholphin.ui.SlimItemFields
 import com.github.damontecres.wholphin.ui.data.AddPlaylistViewModel
 import com.github.damontecres.wholphin.ui.data.ItemDetailsDialog
 import com.github.damontecres.wholphin.ui.data.ItemDetailsDialogInfo
@@ -42,6 +43,7 @@ import com.github.damontecres.wholphin.ui.main.HomePageContent
 import com.github.damontecres.wholphin.ui.nav.Destination
 import com.github.damontecres.wholphin.ui.rememberPosition
 import com.github.damontecres.wholphin.ui.toBaseItems
+import com.github.damontecres.wholphin.ui.util.ResArgStringProvider
 import com.github.damontecres.wholphin.ui.util.ResStringProvider
 import com.github.damontecres.wholphin.util.ApiRequestPager
 import com.github.damontecres.wholphin.util.GetItemsRequestHandler
@@ -61,7 +63,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.jellyfin.sdk.api.client.ApiClient
+import org.jellyfin.sdk.api.client.extensions.libraryApi
 import org.jellyfin.sdk.model.api.BaseItemKind
+import org.jellyfin.sdk.model.api.ItemSortBy
+import org.jellyfin.sdk.model.api.SortOrder
 import org.jellyfin.sdk.model.api.request.GetItemsRequest
 import timber.log.Timber
 import java.util.UUID
@@ -105,13 +110,29 @@ class RecommendedViewModel
                     userPreferencesService.flow
                         .first()
                         .appPreferences.homePagePreferences.maxItemsPerRow
+                val seeds = recentlyWatched()
+                val becauseTitles = seeds.map { ResArgStringProvider(R.string.because_you_watched, it.second) }
                 _state.update {
                     it.copy(
                         loading = LoadingState.Loading,
                         rows =
                             recommendedRows.map { HomeRowLoadingState.Loading(ResStringProvider(it.title)) } +
+                                becauseTitles.map { HomeRowLoadingState.Loading(it) } +
                                 listOf(HomeRowLoadingState.Loading(ResStringProvider(R.string.suggestions))),
                     )
+                }
+                seeds.forEachIndexed { i, (seedId, _) ->
+                    val index = recommendedRows.size + i
+                    viewModelScope.launchIO {
+                        val result =
+                            try {
+                                HomeRowLoadingState.Success(becauseTitles[i], similarUnwatched(seedId, limit), viewOptions)
+                            } catch (ex: Exception) {
+                                Timber.e(ex, "Exception fetching similar items for %s", seedId)
+                                HomeRowLoadingState.Error(becauseTitles[i], null, ex)
+                            }
+                        _state.update { it.copy(rows = it.rows.toMutableList().apply { set(index, result) }) }
+                    }
                 }
                 val jobs =
                     recommendedRows.mapIndexed { index, row ->
@@ -151,6 +172,60 @@ class RecommendedViewModel
                 }
             }
         }
+
+        /**
+         * The last [count] movies/series the user finished in this library, newest first, as id and name
+         */
+        private suspend fun recentlyWatched(count: Int = 2): List<Pair<UUID, String>> {
+            val isSeries = suggestionsType == BaseItemKind.SERIES
+            if (!isSeries && suggestionsType != BaseItemKind.MOVIE) return listOf()
+            return try {
+                GetItemsRequestHandler
+                    .execute(
+                        api,
+                        GetItemsRequest(
+                            userId = serverRepository.currentUser?.id,
+                            parentId = parentId,
+                            includeItemTypes = listOf(if (isSeries) BaseItemKind.EPISODE else BaseItemKind.MOVIE),
+                            recursive = true,
+                            isPlayed = true,
+                            sortBy = listOf(ItemSortBy.DATE_PLAYED),
+                            sortOrder = listOf(SortOrder.DESCENDING),
+                            limit = 30,
+                            enableTotalRecordCount = false,
+                        ),
+                    ).content.items
+                    .mapNotNull {
+                        if (isSeries) {
+                            it.seriesId?.let { id -> id to (it.seriesName ?: "") }
+                        } else {
+                            it.id to (it.name ?: "")
+                        }
+                    }.distinctBy { it.first }
+                    .take(count)
+            } catch (ex: Exception) {
+                Timber.w(ex, "Could not get recently watched")
+                listOf()
+            }
+        }
+
+        /**
+         * Unwatched items the server considers similar (genres, people, studios…) to [seedId], same type as this library
+         */
+        private suspend fun similarUnwatched(
+            seedId: UUID,
+            limit: Int,
+        ): List<BaseItem?> =
+            api.libraryApi
+                .getSimilarItems(
+                    itemId = seedId,
+                    userId = serverRepository.currentUser?.id,
+                    limit = limit * 3,
+                    fields = SlimItemFields,
+                ).content.items
+                .filter { it.type == suggestionsType && it.userData?.played != true }
+                .take(limit)
+                .map { BaseItem(it, true) }
 
         private suspend fun <T> execute(
             row: RecommendedRow<T>,

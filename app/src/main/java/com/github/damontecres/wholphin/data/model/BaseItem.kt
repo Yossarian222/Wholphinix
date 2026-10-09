@@ -8,6 +8,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import com.github.damontecres.wholphin.R
 import com.github.damontecres.wholphin.WholphinApplication
 import com.github.damontecres.wholphin.ui.abbreviateNumber
+import com.github.damontecres.wholphin.ui.components.csfdInlineContentId
 import com.github.damontecres.wholphin.ui.detail.CardGridItem
 import com.github.damontecres.wholphin.ui.detail.music.artistsString
 import com.github.damontecres.wholphin.ui.detail.series.SeasonEpisodeIds
@@ -34,6 +35,7 @@ import org.jellyfin.sdk.model.api.CollectionType
 import org.jellyfin.sdk.model.extensions.ticks
 import java.util.Locale
 import java.util.UUID
+import kotlin.math.roundToInt
 import kotlin.time.Duration
 
 /**
@@ -46,6 +48,8 @@ data class BaseItem(
     val useSeriesForPrimary: Boolean = false,
     val imageUrlOverride: String? = null,
     val destinationOverride: Destination? = null,
+    /** Backdrop for items that are not on the server (eg ČSFD TV tips found in Seerr) */
+    val backdropUrlOverride: String? = null,
 ) : CardGridItem {
     val id get() = data.id
 
@@ -60,6 +64,9 @@ data class BaseItem(
     val type get() = data.type
 
     val name get() = data.name
+
+    private val hasCsfdRating: Boolean
+        get() = data.providerIds?.any { it.key.equals("Csfd", ignoreCase = true) && !it.value.isNullOrBlank() } == true
 
     val title get() = if (type == BaseItemKind.EPISODE) data.seriesName else name
 
@@ -238,12 +245,18 @@ data class BaseItem(
                         data.communityRating?.let {
                             buildAnnotatedString {
                                 dot()
-                                append(String.format(Locale.getDefault(), "%.1f", it))
-                                appendInlineContent(id = "star")
+                                if (hasCsfdRating) {
+                                    // The ČSFD plugin stores the ČSFD percentage / 10 as the community rating
+                                    appendInlineContent(id = csfdInlineContentId((it * 10).roundToInt()))
+                                } else {
+                                    append(String.format(Locale.getDefault(), "%.1f", it))
+                                    appendInlineContent(id = "star")
+                                }
                             }
                         },
+                    // Only one rating is shown: ČSFD, else the community rating (IMDb/TMDb), else critics
                     criticRating =
-                        data.criticRating?.let {
+                        data.criticRating?.takeIf { data.communityRating == null }?.let {
                             buildAnnotatedString {
                                 dot()
                                 append("${it.toInt()}%")

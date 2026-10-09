@@ -37,6 +37,7 @@
     <string name="delete">Delete</string>
     <string name="died">Died</string>
     <string name="directed_by">Directed by %1$s</string>
+    <string name="starring">Starring: %1$s</string>
     <string name="director">Director</string>
     <string name="disabled">Disabled</string>
     <string name="discovered_servers">Discovered Servers</string>
@@ -173,7 +174,17 @@
     <string name="video_scale">Video Scale</string>
     <string name="video">Video</string>
     <string name="videos">Videos</string>
-    <string name="watch_live">Watch live</string>g
+    <string name="watch_live">Watch live</string>
+    <string name="csfd_tv_tips">TV tips of the day</string>
+    <string name="csfd_tv_tips_day">TV tips of the day – %1$s</string>
+    <string name="csfd_rankings">Rankings</string>
+    <string name="csfd_my_rating">My ČSFD rating</string>
+    <string name="csfd_trash">trash</string>
+    <string name="csfd_filter_all">All</string>
+    <string name="csfd_filter_rating">Rating</string>
+    <string name="csfd_filter_year">Year</string>
+    <string name="csfd_filter_genre">Genre</string>
+    <string name="because_you_watched">Because you watched %1$s</string>g
     <plurals name="years_old">
         <item quantity="zero">%1$d years old</item>
         <item quantity="one">%1$d year old</item>
