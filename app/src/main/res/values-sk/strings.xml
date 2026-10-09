@@ -800,4 +800,6 @@
     <string name="csfd_rating_prompt_title">Ako sa ti páčil %1$s?</string>
     <string name="csfd_rating_prompt_not_now">Teraz nie</string>
     <string name="csfd_rating_prompt_sent">Hodnotenie odoslané na ČSFD</string>
+    <!-- ČSFD watchlist -->
+    <string name="csfd_watchlist">Chcem vidieť (ČSFD)</string>
 </resources>

@@ -990,4 +990,6 @@
     <string name="csfd_rating_prompt_title">How did you like %1$s?</string>
     <string name="csfd_rating_prompt_not_now">Not now</string>
     <string name="csfd_rating_prompt_sent">Rating sent to ČSFD</string>
+    <!-- ČSFD watchlist -->
+    <string name="csfd_watchlist">Want to see (ČSFD)</string>
 </resources>
