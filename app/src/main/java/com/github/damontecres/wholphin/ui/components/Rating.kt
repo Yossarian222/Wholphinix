@@ -118,7 +118,10 @@ fun SimpleStarRating(
 }
 
 // ČSFD colours: red for 70%+, blue for 30-69%, dark grey ("odpad") below 30%
-private val CsfdRed = Color(0xFFBA0305)
+val CsfdRed = Color(0xFFBA0305)
+
+// Darker ČSFD red behind white text, e.g. the stream labels in the details
+val CsfdDarkRed = Color(0xFF8A0F12)
 private val CsfdBlue = Color(0xFF658DB4)
 private val CsfdGrey = Color(0xFF535353)
 
