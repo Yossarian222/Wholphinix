@@ -332,3 +332,55 @@ class JellyfinClient:
         await self._post(
             f"/Sessions/{session_id}/Command", json={"Name": name, "Arguments": arguments}
         )
+
+    async def display_message(
+        self, session_id: str, text: str, header: str = "Claude", timeout_ms: int = 8000
+    ) -> None:
+        """Show a message bubble on the TV (Wholphinix draws it over everything, also the player)."""
+        await self.general_command(
+            session_id,
+            "DisplayMessage",
+            {"Header": header, "Text": text, "TimeoutMs": str(int(timeout_ms))},
+        )
+
+    # ---- ČSFD plugin / recommendations ----
+
+    async def tv_tips(self, limit: int = 10, missing: int = 5) -> list[dict[str, Any]]:
+        """Today's ČSFD "TV tips" from the Jellyfin ČSFD plugin, matched against JELLYFIN_USER's library.
+
+        The endpoint normally takes the user from the caller's token. An API key has no user, so
+        the user is passed as userId (the plugin allows that only for admins / API keys).
+        """
+        r = await self._http.get(
+            "/Csfd/TvTips",
+            params={"limit": limit, "missing": missing, "userId": await self.user_id()},
+            # The first call of the day downloads the missing tips' details from ČSFD
+            timeout=120.0,
+        )
+        if r.status_code == 404:
+            raise JellyfinError("The ČSFD plugin is not installed on the Jellyfin server (GET /Csfd/TvTips -> 404)")
+        if r.status_code in (400, 401, 403):
+            raise JellyfinError(
+                f"GET /Csfd/TvTips -> HTTP {r.status_code}: the ČSFD plugin is too old for API-key access"
+                " (needs the userId parameter), update the plugin"
+            )
+        if r.status_code >= 400:
+            raise JellyfinError(f"GET /Csfd/TvTips -> HTTP {r.status_code}")
+        data = r.json()
+        return data if isinstance(data, list) else []
+
+    async def unwatched_movies(self, limit: int = 300) -> list[dict[str, Any]]:
+        """Unwatched movies of JELLYFIN_USER, best rated (CommunityRating = ČSFD % / 10) first."""
+        data = await self._get(
+            "/Items",
+            userId=await self.user_id(),
+            recursive="true",
+            includeItemTypes="Movie",
+            isPlayed="false",
+            sortBy="CommunityRating,SortName",
+            sortOrder="Descending,Ascending",
+            limit=limit,
+            fields="ProductionYear,Genres,Overview,UserData",
+            enableTotalRecordCount="false",
+        )
+        return data.get("Items", [])
