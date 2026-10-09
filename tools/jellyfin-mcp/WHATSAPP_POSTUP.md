@@ -14,20 +14,22 @@ Stručný postup krok za krokom. Podrobnosti sú v [README → WhatsApp](README.
 
 ## Zostáva
 
+> 📍 **Stav:** body A–D hotové, kľúče a tokeny sú bezpečne uložené u používateľa. **Pokračujeme doma bodom E (Portainer)** – Portainer sa dá upravovať len z domácej siete.
+
 ### A) Druhý mobil
-- [ ] Step 1 → *Send a test message* → pole **To / Add recipient** → pridať druhé číslo a zadať overovací kód z WhatsAppu (max. 5 čísel)
+- [x] Step 1 → *Send a test message* → pole **To / Add recipient** → pridať druhé číslo a zadať overovací kód z WhatsAppu (max. 5 čísel)
 
 ### B) Trvalý token (System User)
-- [ ] business.facebook.com → **Nastavenia → Users → System users → Add** (meno napr. `lojzo-bot`, rola **Admin**)
-- [ ] **Assign assets**: *Apps* → appka → **Full control**; *WhatsApp accounts* → WABA → **Full control**
-- [ ] **Generate new token** → appka, Expiration **Never**, oprávnenia `whatsapp_business_messaging` + `whatsapp_business_management`
-- [ ] Token skopírovať rovno do Portainera (Meta ho ukáže len raz) → `WHATSAPP_TOKEN`
+- [x] business.facebook.com → **Nastavenia → Users → System users → Add** (meno napr. `lojzo-bot`, rola **Admin**)
+- [x] **Assign assets**: *Apps* → appka → **Full control**; *WhatsApp accounts* → WABA → **Full control**
+- [x] **Generate new token** → appka, Expiration **Never**, oprávnenia `whatsapp_business_messaging` + `whatsapp_business_management`
+- [x] Token skopírovať rovno do Portainera (Meta ho ukáže len raz) → `WHATSAPP_TOKEN`
 
 ### C) App Secret
-- [ ] developers.facebook.com → appka → **App settings → Basic → App secret → Show** → `WHATSAPP_APP_SECRET`
+- [x] developers.facebook.com → appka → **App settings → Basic → App secret → Show** → `WHATSAPP_APP_SECRET`
 
 ### D) Anthropic API kľúč
-- [ ] console.anthropic.com → **API Keys → Create key** → `ANTHROPIC_API_KEY`
+- [x] console.anthropic.com → **API Keys → Create key** → `ANTHROPIC_API_KEY`
 
 ### E) Portainer – stack `jellyfin-mcp`
 - [ ] Doplniť premenné:
