@@ -1,5 +1,6 @@
 package com.github.damontecres.wholphin.ui.detail.movie
 
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,7 +20,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -56,11 +59,14 @@ import com.github.damontecres.wholphin.ui.data.ChooseVersionParams
 import com.github.damontecres.wholphin.ui.data.ItemDetailsDialog
 import com.github.damontecres.wholphin.ui.data.ItemDetailsDialogInfo
 import com.github.damontecres.wholphin.ui.detail.PlaylistDialog
+import com.github.damontecres.wholphin.ui.detail.rememberDetailHeaderFocus
 import com.github.damontecres.wholphin.ui.discover.DiscoverRow
 import com.github.damontecres.wholphin.ui.discover.DiscoverRowData
+import com.github.damontecres.wholphin.ui.ifElse
 import com.github.damontecres.wholphin.ui.letNotEmpty
 import com.github.damontecres.wholphin.ui.nav.Destination
 import com.github.damontecres.wholphin.ui.rememberInt
+import com.github.damontecres.wholphin.ui.tryRequestFocus
 import com.github.damontecres.wholphin.ui.util.ResStringProvider
 import com.github.damontecres.wholphin.util.DataLoadingState
 import com.github.damontecres.wholphin.util.DiscoverRequestType
@@ -316,6 +322,23 @@ fun MovieDetailsContent(
     val resumePosition = dto.userData?.playbackPositionTicks?.ticks ?: Duration.ZERO
 
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    val headerFocus = rememberDetailHeaderFocus(movie, focusRequesters[HEADER_ROW])
+    // The first row under the play buttons goes up to them, not to a header element out of view
+    val firstRow =
+        when {
+            state.people.isNotEmpty() -> PEOPLE_ROW
+            state.chapters.isNotEmpty() -> CHAPTER_ROW
+            state.extras.isNotEmpty() -> EXTRAS_ROW
+            state.similar.isNotEmpty() -> SIMILAR_ROW
+            else -> null
+        }
+    val upToButtons =
+        Modifier
+            .focusProperties {
+                onExit = {
+                    if (requestedFocusDirection == FocusDirection.Up) focusRequesters[HEADER_ROW].tryRequestFocus()
+                }
+            }.focusGroup()
 
     RequestOrRestoreFocus(focusRequesters.getOrNull(position))
 
@@ -339,6 +362,7 @@ fun MovieDetailsContent(
                         chosenStreams = state.chosenStreams,
                         bringIntoViewRequester = bringIntoViewRequester,
                         overviewOnClick = overviewOnClick,
+                        focus = headerFocus,
                         modifier =
                             Modifier
                                 .fillMaxWidth()
@@ -383,7 +407,8 @@ fun MovieDetailsContent(
                             Modifier
                                 .fillMaxWidth()
                                 .padding(bottom = 16.dp)
-                                .focusRequester(focusRequesters[HEADER_ROW]),
+                                .focusRequester(focusRequesters[HEADER_ROW])
+                                .then(headerFocus.chainGroup(focusRequesters[HEADER_ROW])),
                     )
                 }
             }
@@ -402,7 +427,8 @@ fun MovieDetailsContent(
                         modifier =
                             Modifier
                                 .fillMaxWidth()
-                                .focusRequester(focusRequesters[PEOPLE_ROW]),
+                                .focusRequester(focusRequesters[PEOPLE_ROW])
+                                .ifElse(firstRow == PEOPLE_ROW, upToButtons),
                     )
                 }
             }
@@ -418,7 +444,8 @@ fun MovieDetailsContent(
                         modifier =
                             Modifier
                                 .fillMaxWidth()
-                                .focusRequester(focusRequesters[CHAPTER_ROW]),
+                                .focusRequester(focusRequesters[CHAPTER_ROW])
+                                .ifElse(firstRow == CHAPTER_ROW, upToButtons),
                     )
                 }
             }
@@ -434,7 +461,8 @@ fun MovieDetailsContent(
                         modifier =
                             Modifier
                                 .fillMaxWidth()
-                                .focusRequester(focusRequesters[EXTRAS_ROW]),
+                                .focusRequester(focusRequesters[EXTRAS_ROW])
+                                .ifElse(firstRow == EXTRAS_ROW, upToButtons),
                     )
                 }
             }
@@ -473,7 +501,8 @@ fun MovieDetailsContent(
                         modifier =
                             Modifier
                                 .fillMaxWidth()
-                                .focusRequester(focusRequesters[SIMILAR_ROW]),
+                                .focusRequester(focusRequesters[SIMILAR_ROW])
+                                .ifElse(firstRow == SIMILAR_ROW, upToButtons),
                     )
                 }
             }

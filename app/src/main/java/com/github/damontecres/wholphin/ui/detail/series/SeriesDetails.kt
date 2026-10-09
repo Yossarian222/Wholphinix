@@ -27,7 +27,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
@@ -80,12 +82,15 @@ import com.github.damontecres.wholphin.ui.components.TrailerButton
 import com.github.damontecres.wholphin.ui.data.AddPlaylistViewModel
 import com.github.damontecres.wholphin.ui.data.ItemDetailsDialog
 import com.github.damontecres.wholphin.ui.data.ItemDetailsDialogInfo
+import com.github.damontecres.wholphin.ui.detail.DetailHeaderFocus
 import com.github.damontecres.wholphin.ui.detail.PlaylistDialog
+import com.github.damontecres.wholphin.ui.detail.rememberDetailHeaderFocus
 import com.github.damontecres.wholphin.ui.discover.DiscoverRow
 import com.github.damontecres.wholphin.ui.discover.DiscoverRowData
 import com.github.damontecres.wholphin.ui.letNotEmpty
 import com.github.damontecres.wholphin.ui.nav.Destination
 import com.github.damontecres.wholphin.ui.rememberInt
+import com.github.damontecres.wholphin.ui.tryRequestFocus
 import com.github.damontecres.wholphin.ui.util.ResStringProvider
 import com.github.damontecres.wholphin.util.DataLoadingState
 import com.github.damontecres.wholphin.util.DiscoverRequestType
@@ -360,6 +365,7 @@ fun SeriesDetailsContent(
     var position by rememberInt()
     val focusRequesters = remember { List(DISCOVER_ROW + 1) { FocusRequester() } }
     val playFocusRequester = remember { FocusRequester() }
+    val headerFocus = rememberDetailHeaderFocus(series, focusRequesters[HEADER_ROW])
     RequestOrRestoreFocus(focusRequesters.getOrNull(position))
 
     Box(
@@ -381,6 +387,7 @@ fun SeriesDetailsContent(
                         showLogo = preferences.appPreferences.interfacePreferences.showLogos,
                         overviewOnClick = overviewOnClick,
                         bringIntoViewRequester = bringIntoViewRequester,
+                        focus = headerFocus,
                         modifier =
                             Modifier
                                 .fillMaxWidth()
@@ -393,6 +400,7 @@ fun SeriesDetailsContent(
                             Modifier
                                 .padding(start = HeaderUtils.startPadding)
                                 .focusRequester(focusRequesters[HEADER_ROW])
+                                .then(headerFocus.chainGroup(focusRequesters[HEADER_ROW]))
                                 .focusRestorer(playFocusRequester)
                                 .focusGroup()
                                 .padding(bottom = 16.dp),
@@ -525,7 +533,15 @@ fun SeriesDetailsContent(
                         modifier =
                             Modifier
                                 .fillMaxWidth()
-                                .focusRequester(focusRequesters[SEASONS_ROW]),
+                                .focusRequester(focusRequesters[SEASONS_ROW])
+                                // Up goes to the play buttons, not to a header element out of view
+                                .focusProperties {
+                                    onExit = {
+                                        if (requestedFocusDirection == FocusDirection.Up) {
+                                            focusRequesters[HEADER_ROW].tryRequestFocus()
+                                        }
+                                    }
+                                }.focusGroup(),
                         cardContent = @Composable { index, item, mod, onClick, onLongClick ->
                             SeasonCard(
                                 item = item,
@@ -657,10 +673,19 @@ fun SeriesDetailsHeader(
     showLogo: Boolean,
     overviewOnClick: () -> Unit,
     bringIntoViewRequester: BringIntoViewRequester,
+    focus: DetailHeaderFocus,
     modifier: Modifier = Modifier,
 ) {
     val scope = rememberCoroutineScope()
     val dto = series.data
+    val bringIntoView =
+        Modifier.onFocusChanged {
+            if (it.hasFocus) {
+                scope.launch(ExceptionHandler()) {
+                    bringIntoViewRequester.bringIntoView()
+                }
+            }
+        }
     Column(
         verticalArrangement = Arrangement.spacedBy(4.dp),
         modifier = modifier,
@@ -694,24 +719,30 @@ fun SeriesDetailsHeader(
             dto.genres?.letNotEmpty {
                 GenreText(it, Modifier.padding(start = HeaderUtils.startPadding, bottom = 4.dp))
             }
-            CsfdMyRating(series, Modifier.padding(start = HeaderUtils.startPadding, bottom = 4.dp))
+            CsfdMyRating(
+                series,
+                Modifier
+                    .padding(start = HeaderUtils.startPadding, bottom = 4.dp)
+                    .then(focus.chainGroup(focus.rating))
+                    .focusRequester(focus.rating)
+                    .then(bringIntoView),
+            )
+            // Description (upper half of the text), one line each of director & actors, then trivia (lower half)
             dto.overview?.let { overview ->
                 OverviewText(
                     overview = overview,
                     maxLines = 5,
                     onClick = overviewOnClick,
                     textBoxHeight = Dp.Unspecified,
-                    modifier =
-                        Modifier.onFocusChanged {
-                            if (it.isFocused) {
-                                scope.launch(ExceptionHandler()) {
-                                    bringIntoViewRequester.bringIntoView()
-                                }
-                            }
-                        },
+                    modifier = focus.chain(focus.overview).then(bringIntoView),
                 )
             }
-            CreditsText(dto.people, Modifier.padding(start = HeaderUtils.startPadding), clickableDirectors = true)
+            CreditsText(
+                dto.people,
+                Modifier.padding(start = HeaderUtils.startPadding),
+                clickableDirectors = true,
+                directorModifier = focus.chain(focus.director).then(bringIntoView),
+            )
             CsfdTrivia(series, Modifier.padding(start = HeaderUtils.startPadding, top = 8.dp))
         }
     }

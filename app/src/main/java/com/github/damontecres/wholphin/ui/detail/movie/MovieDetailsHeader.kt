@@ -9,8 +9,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.Dp
@@ -31,6 +31,7 @@ import com.github.damontecres.wholphin.ui.components.PremiereDateText
 import com.github.damontecres.wholphin.ui.components.QuickDetails
 import com.github.damontecres.wholphin.ui.components.TitleOrLogo
 import com.github.damontecres.wholphin.ui.components.VideoStreamDetails
+import com.github.damontecres.wholphin.ui.detail.DetailHeaderFocus
 import com.github.damontecres.wholphin.ui.isNotNullOrBlank
 import com.github.damontecres.wholphin.ui.letNotEmpty
 import com.github.damontecres.wholphin.util.ExceptionHandler
@@ -44,11 +45,19 @@ fun MovieDetailsHeader(
     chosenStreams: ChosenStreams?,
     bringIntoViewRequester: BringIntoViewRequester,
     overviewOnClick: () -> Unit,
+    focus: DetailHeaderFocus,
     modifier: Modifier = Modifier,
 ) {
     val dto = movie.data
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val bringIntoView =
+        Modifier.onFocusChanged {
+            if (it.hasFocus) {
+                scope.launch(ExceptionHandler()) {
+                    bringIntoViewRequester.bringIntoView()
+                }
+            }
+        }
     Column(
         verticalArrangement = Arrangement.spacedBy(4.dp),
         modifier = modifier,
@@ -79,7 +88,14 @@ fun MovieDetailsHeader(
                 GenreText(it, Modifier.padding(start = HeaderUtils.startPadding))
             }
 
-            CsfdMyRating(movie, Modifier.padding(start = HeaderUtils.startPadding, top = 4.dp))
+            CsfdMyRating(
+                movie,
+                Modifier
+                    .padding(start = HeaderUtils.startPadding, top = 4.dp)
+                    .then(focus.chainGroup(focus.rating))
+                    .focusRequester(focus.rating)
+                    .then(bringIntoView),
+            )
 
             VideoStreamDetails(
                 chosenStreams = chosenStreams,
@@ -100,25 +116,23 @@ fun MovieDetailsHeader(
                 )
             }
 
-            // Description
+            // Description (upper half of the text), one line each of director & actors, then trivia (lower half)
             dto.overview?.let { overview ->
                 OverviewText(
                     overview = overview,
                     maxLines = 5,
                     onClick = overviewOnClick,
                     textBoxHeight = Dp.Unspecified,
-                    modifier =
-                        Modifier.onFocusChanged {
-                            if (it.isFocused) {
-                                scope.launch(ExceptionHandler()) {
-                                    bringIntoViewRequester.bringIntoView()
-                                }
-                            }
-                        },
+                    modifier = focus.chain(focus.overview).then(bringIntoView),
                 )
             }
 
-            CreditsText(movie.data.people, Modifier.padding(start = HeaderUtils.startPadding), clickableDirectors = true)
+            CreditsText(
+                movie.data.people,
+                Modifier.padding(start = HeaderUtils.startPadding),
+                clickableDirectors = true,
+                directorModifier = focus.chain(focus.director).then(bringIntoView),
+            )
             CsfdTrivia(movie, Modifier.padding(start = HeaderUtils.startPadding, top = 8.dp))
         }
     }
