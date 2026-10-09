@@ -6,7 +6,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.github.damontecres.wholphin.R
 import com.github.damontecres.wholphin.data.model.HomeRowViewOptions
 import com.github.damontecres.wholphin.preferences.UserPreferences
-import com.github.damontecres.wholphin.ui.SlimItemFields
+import com.github.damontecres.wholphin.ui.HeaderRowItemFields
 import com.github.damontecres.wholphin.ui.data.RowColumn
 import com.github.damontecres.wholphin.util.GetItemsRequestHandler
 import com.github.damontecres.wholphin.util.GetNextUpRequestHandler
@@ -30,7 +30,7 @@ private fun getRecommendedRows(
         request =
             GetResumeItemsRequest(
                 parentId = parentId,
-                fields = SlimItemFields,
+                fields = HeaderRowItemFields,
                 includeItemTypes = listOf(BaseItemKind.EPISODE),
                 enableUserData = true,
                 enableTotalRecordCount = false,
@@ -41,7 +41,7 @@ private fun getRecommendedRows(
         handler = GetNextUpRequestHandler,
         request =
             GetNextUpRequest(
-                fields = SlimItemFields,
+                fields = HeaderRowItemFields,
                 imageTypeLimit = 1,
                 parentId = parentId,
                 enableResumable = false,
@@ -55,7 +55,7 @@ private fun getRecommendedRows(
         request =
             GetItemsRequest(
                 parentId = parentId,
-                fields = SlimItemFields,
+                fields = HeaderRowItemFields,
                 includeItemTypes = listOf(BaseItemKind.EPISODE),
                 recursive = true,
                 enableUserData = true,
@@ -82,7 +82,7 @@ private fun getRecommendedRows(
         request =
             GetItemsRequest(
                 parentId = parentId,
-                fields = SlimItemFields,
+                fields = HeaderRowItemFields,
                 includeItemTypes = listOf(BaseItemKind.EPISODE),
                 recursive = true,
                 enableUserData = true,
@@ -97,7 +97,7 @@ private fun getRecommendedRows(
         request =
             GetItemsRequest(
                 parentId = parentId,
-                fields = SlimItemFields,
+                fields = HeaderRowItemFields,
                 includeItemTypes = listOf(BaseItemKind.SERIES),
                 recursive = true,
                 enableUserData = true,

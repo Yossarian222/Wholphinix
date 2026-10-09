@@ -6,7 +6,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.github.damontecres.wholphin.R
 import com.github.damontecres.wholphin.data.model.HomeRowViewOptions
 import com.github.damontecres.wholphin.preferences.UserPreferences
-import com.github.damontecres.wholphin.ui.SlimItemFields
+import com.github.damontecres.wholphin.ui.HeaderRowItemFields
 import com.github.damontecres.wholphin.ui.data.RowColumn
 import com.github.damontecres.wholphin.util.GetItemsRequestHandler
 import com.github.damontecres.wholphin.util.GetResumeItemsRequestHandler
@@ -26,7 +26,7 @@ private fun getRecommendedRows(parentId: UUID) =
             request =
                 GetResumeItemsRequest(
                     parentId = parentId,
-                    fields = SlimItemFields,
+                    fields = HeaderRowItemFields,
                     includeItemTypes = listOf(BaseItemKind.MOVIE),
                     enableUserData = true,
                     enableTotalRecordCount = false,
@@ -38,7 +38,7 @@ private fun getRecommendedRows(parentId: UUID) =
             request =
                 GetItemsRequest(
                     parentId = parentId,
-                    fields = SlimItemFields,
+                    fields = HeaderRowItemFields,
                     includeItemTypes = listOf(BaseItemKind.MOVIE),
                     recursive = true,
                     enableUserData = true,
@@ -62,7 +62,7 @@ private fun getRecommendedRows(parentId: UUID) =
             request =
                 GetItemsRequest(
                     parentId = parentId,
-                    fields = SlimItemFields,
+                    fields = HeaderRowItemFields,
                     includeItemTypes = listOf(BaseItemKind.MOVIE),
                     recursive = true,
                     enableUserData = true,
@@ -77,7 +77,7 @@ private fun getRecommendedRows(parentId: UUID) =
             request =
                 GetItemsRequest(
                     parentId = parentId,
-                    fields = SlimItemFields,
+                    fields = HeaderRowItemFields,
                     includeItemTypes = listOf(BaseItemKind.MOVIE),
                     recursive = true,
                     enableUserData = true,
