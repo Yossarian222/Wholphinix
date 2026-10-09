@@ -127,14 +127,40 @@ WhatsApp ──▶ Meta Cloud API ──webhook──▶ Tailscale Funnel ──
 | `CLAUDE_MODEL` | nie | predvolene `claude-sonnet-5-5` (dobrý pomer cena/výkon pre nástroje); lacnejšie `claude-haiku-5-5` |
 | `CLAUDE_EFFORT` | nie | `low` (predvolené, rýchle odpovede), `medium`, `high` |
 | `GRAPH_VERSION` | nie | verzia Graph API, predvolene `v23.0`; ak ju Meta označí za zastaranú, nastav novšiu (vidno ju v *API Setup* v ukážke `curl`) |
+| `STT_URL` | nie | endpoint na prepis hlasoviek (OpenAI-kompatibilné `/v1/audio/transcriptions`), predvolene `https://api.openai.com/v1/audio/transcriptions`; pre lokálny Whisper napr. `http://192.168.1.201:8000/v1/audio/transcriptions` |
+| `STT_API_KEY` | nie | API kľúč pre `STT_URL` (pri OpenAI povinný, lokálny server ho zvyčajne nepotrebuje) |
+| `STT_MODEL` | nie | model prepisu, predvolene `whisper-1` (OpenAI); lokálne napr. `Systran/faster-whisper-small` |
+| `STT_LANGUAGE` | nie | jazyk hlasoviek (ISO 639-1), predvolene `sk` |
 
-Kým nie je nastavených prvých šesť, endpoint `/whatsapp` vracia 404 a zvyšok servera beží ako doteraz.
+Kým nie je nastavených prvých šesť, endpoint `/whatsapp` vracia 404 a zvyšok servera beží ako doteraz. Hlasovky sú zapnuté, len keď je nastavený `STT_API_KEY` alebo vlastný `STT_URL`.
+
+### Hlasové správy
+Bot rozumie aj hlasovkám: stiahne ich cez Graph API (max. 16 MB), prepíše cez Whisper a spracuje rovnako ako text. Odpoveď začína riadkom „Rozumel som: „…““, aby si hneď videl, či ťa počul správne. Bez nastaveného prepisu odpovie, že hlasovky nemá zapnuté a nech napíšeš textom.
+
+- **OpenAI** (najjednoduchšie): na [platform.openai.com](https://platform.openai.com) → *API keys* vytvor kľúč → `STT_API_KEY`. Viac netreba (`whisper-1`, slovenčina). Cena je približne 0,006 $ za minútu zvuku.
+- **Lokálny Whisper** (zadarmo, zvuk neopustí NAS): spusti OpenAI-kompatibilný server, napr. [speaches](https://github.com/speaches-ai/speaches) (nástupca `fedirz/faster-whisper-server`), a nastav `STT_URL` (kľúč netreba):
+
+  ```yaml
+  services:
+    whisper:
+      image: ghcr.io/speaches-ai/speaches:latest-cpu   # alebo fedirz/faster-whisper-server:latest-cpu
+      container_name: whisper
+      ports:
+        - "8000:8000"
+      volumes:
+        - /volume1/docker/whisper/cache:/home/ubuntu/.cache/huggingface
+      restart: unless-stopped
+  ```
+
+  `STT_URL=http://192.168.1.201:8000/v1/audio/transcriptions`, `STT_MODEL=Systran/faster-whisper-small` (na slabšom CPU `…-base`, presnejšie `…-medium`; prvý prepis model stiahne, takže potrvá dlhšie). speaches môže vyžadovať model najprv stiahnuť: `curl -X POST http://192.168.1.201:8000/v1/models/Systran/faster-whisper-small`.
+
+Zvuk ani prepis sa nikam neukladajú a do logu ide len dĺžka prepisu.
 
 ### Ako sa správa
 - Odpovedá len na čísla z `WHATSAPP_ALLOWED_NUMBERS`, ostatné ticho ignoruje (v logu je len posledné trojčíslie).
 - Pamätá si posledných 10 výmen s každým číslom; po 30 minútach ticha začína odznova (pamäť je len v procese, reštart ju zmaže).
 - Prijatú správu označí ako prečítanú (modré fajky), Meta dostane odpoveď hneď a spracovanie beží na pozadí; opakované doručenie tej istej správy sa ignoruje.
-- **v1 rozumie len textu** – na hlasovku, obrázok či nálepku odpovie „Zatiaľ rozumiem len textu 🙂“.
+- Rozumie textu a hlasovkám (ak je zapnutý prepis, viď vyššie); na obrázok či nálepku odpovie „Zatiaľ rozumiem len textu 🙂“.
 - Pri chybe Clauda alebo Jellyfinu pošle krátke ospravedlnenie.
 
 ### Cena

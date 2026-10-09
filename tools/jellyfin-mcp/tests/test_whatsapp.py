@@ -264,9 +264,137 @@ def test_dedup(graph):
 
 def test_non_text_reply(graph):
     bot = make_bot(graph, [])
-    audio = {"from": ALLOWED, "id": "wamid.a", "type": "audio", "audio": {"id": "m1"}}
-    run(bot.handle_payload(payload(audio)))
+    image = {"from": ALLOWED, "id": "wamid.i", "type": "image", "image": {"id": "m1"}}
+    run(bot.handle_payload(payload(image)))
     assert graph.texts() == [whatsapp.TEXT_ONLY_REPLY] and bot.anthropic.requests == []
+
+
+# ---- voice notes ----
+
+MEDIA_URL = "https://lookaside.fbsbx.com/whatsapp_business/attachments/?mid=m1&ext=1&hash=abc"
+AUDIO = b"OggS" + b"\x00" * 1000
+
+
+def voice_msg(msg_id: str, media_id: str = "m1") -> dict:
+    return {"from": ALLOWED, "id": msg_id, "type": "audio",
+            "audio": {"id": media_id, "mime_type": "audio/ogg; codecs=opus", "voice": True}}
+
+
+class FakeVoice:
+    """Graph media lookup + media download + STT endpoint, behind one MockTransport."""
+
+    def __init__(self, graph: FakeGraph, audio: bytes = AUDIO, transcript: str = "pusti Pelíšky",
+                 stt_status: int = 200, file_size: int | None = None) -> None:
+        self.graph = graph
+        self.audio = audio
+        self.transcript = transcript
+        self.stt_status = stt_status
+        self.file_size = len(audio) if file_size is None else file_size
+        self.stt: list[httpx.Request] = []
+        self.media_auth: list[str] = []
+
+    def handler(self, request: httpx.Request) -> httpx.Response:
+        host, path = request.url.host, request.url.path
+        if host == "graph.facebook.com" and request.method == "GET":
+            assert path.endswith("/m1")
+            self.media_auth.append(request.headers.get("authorization", ""))
+            return httpx.Response(200, json={"url": MEDIA_URL, "mime_type": "audio/ogg; codecs=opus",
+                                             "file_size": self.file_size, "id": "m1"})
+        if host == "graph.facebook.com":
+            return self.graph.handler(request)
+        if host == "lookaside.fbsbx.com":
+            self.media_auth.append(request.headers.get("authorization", ""))
+            return httpx.Response(200, content=self.audio, headers={"content-type": "audio/ogg"})
+        self.stt.append(request)
+        if self.stt_status >= 400:
+            return httpx.Response(self.stt_status, json={"error": {"message": "boom"}})
+        return httpx.Response(200, json={"text": self.transcript})
+
+
+def make_voice_bot(graph: FakeGraph, voice: FakeVoice, responses: list, **cfg) -> whatsapp.WhatsAppBot:
+    cfg = {"stt_api_key": "sk-openai-test", **cfg}
+    transport = httpx.MockTransport(voice.handler)
+    return whatsapp.WhatsAppBot(
+        whatsapp.Config(**{**config().__dict__, **cfg}), server.mcp, "sys",
+        anthropic_client=FakeAnthropic(responses), graph_transport=transport, http_transport=transport,
+    )
+
+
+def test_voice_config(bot_env, monkeypatch):
+    assert not whatsapp.Config.from_env().voice_enabled
+    monkeypatch.setenv("STT_URL", "http://192.168.1.201:8000/v1/audio/transcriptions")
+    c = whatsapp.Config.from_env()
+    assert c.voice_enabled and c.stt_api_key == "" and c.stt_model == "whisper-1" and c.stt_language == "sk"
+    monkeypatch.delenv("STT_URL")
+    monkeypatch.setenv("STT_API_KEY", "sk-openai")
+    monkeypatch.setenv("STT_MODEL", "gpt-4o-mini-transcribe")
+    c = whatsapp.Config.from_env()
+    assert c.voice_enabled and c.stt_url == whatsapp.DEFAULT_STT_URL and c.stt_model == "gpt-4o-mini-transcribe"
+    assert "sk-openai" not in repr(c)
+
+
+def test_voice_transcribed_and_answered(graph, caplog):
+    voice = FakeVoice(graph)
+    bot = make_voice_bot(graph, voice, [resp("end_turn", text("Púšťam Pelíšky 🍿"))])
+    with caplog.at_level(logging.DEBUG, logger="jellyfin_mcp"):
+        run(bot.handle_payload(payload(voice_msg("wamid.v1"))))
+    assert graph.texts() == ["Rozumel som: „pusti Pelíšky“\n\nPúšťam Pelíšky 🍿"]
+    assert graph.read == ["wamid.v1"]
+    # Same Claude loop as text, with the transcript as the user message
+    assert bot.anthropic.requests[0]["messages"] == [{"role": "user", "content": "pusti Pelíšky"}]
+    assert list(bot.memory.get(ALLOWED).exchanges) == [("pusti Pelíšky", "Púšťam Pelíšky 🍿")]
+    # Media lookup and download both carry the WhatsApp token
+    assert voice.media_auth == [f"Bearer {TOKEN}", f"Bearer {TOKEN}"]
+    (stt,) = voice.stt
+    assert str(stt.url) == whatsapp.DEFAULT_STT_URL
+    assert stt.headers["authorization"] == "Bearer sk-openai-test"
+    body = stt.content
+    assert b'name="model"\r\n\r\nwhisper-1' in body and b'name="language"\r\n\r\nsk' in body
+    assert b'filename="voice.ogg"' in body and AUDIO in body
+    logs = " ".join(r.getMessage() for r in caplog.records)
+    assert "Pelíšky" not in logs and ALLOWED not in logs and TOKEN not in logs and "sk-openai-test" not in logs
+
+
+def test_voice_local_whisper_without_key(graph):
+    voice = FakeVoice(graph, transcript="  čo   beží  ")
+    url = "http://whisper:8000/v1/audio/transcriptions"
+    bot = make_voice_bot(graph, voice, [resp("end_turn", text("Nič."))], stt_api_key="", stt_url=url)
+    run(bot.handle_payload(payload(voice_msg("wamid.v2"))))
+    assert graph.texts() == ["Rozumel som: „čo beží“\n\nNič."]
+    assert str(voice.stt[0].url) == url and "authorization" not in voice.stt[0].headers
+
+
+def test_voice_disabled(graph):
+    voice = FakeVoice(graph)
+    bot = make_voice_bot(graph, voice, [], stt_api_key="")
+    run(bot.handle_payload(payload(voice_msg("wamid.v3"))))
+    assert graph.texts() == [whatsapp.VOICE_DISABLED_REPLY]
+    assert voice.media_auth == [] and voice.stt == [] and bot.anthropic.requests == []
+
+
+def test_voice_too_big(graph, monkeypatch):
+    # Declared size over the limit: nothing is downloaded
+    voice = FakeVoice(graph, file_size=whatsapp.MAX_MEDIA_BYTES + 1)
+    bot = make_voice_bot(graph, voice, [])
+    run(bot.handle_payload(payload(voice_msg("wamid.v4"))))
+    assert graph.texts() == [whatsapp.VOICE_TOO_BIG_REPLY] and len(voice.media_auth) == 1
+
+    # Size not declared, but the download itself exceeds the limit
+    monkeypatch.setattr(whatsapp, "MAX_MEDIA_BYTES", 500)
+    graph2 = FakeGraph()
+    voice2 = FakeVoice(graph2, file_size=0)
+    bot2 = make_voice_bot(graph2, voice2, [])
+    run(bot2.handle_payload(payload(voice_msg("wamid.v5"))))
+    assert graph2.texts() == [whatsapp.VOICE_TOO_BIG_REPLY]
+    assert voice2.stt == [] and bot2.anthropic.requests == []
+
+
+@pytest.mark.parametrize("stt_status,transcript", [(500, "x"), (401, "x"), (200, "   ")])
+def test_voice_transcription_failure(graph, stt_status, transcript):
+    voice = FakeVoice(graph, transcript=transcript, stt_status=stt_status)
+    bot = make_voice_bot(graph, voice, [])
+    run(bot.handle_payload(payload(voice_msg("wamid.v6"))))
+    assert graph.texts() == [whatsapp.VOICE_ERROR_REPLY] and bot.anthropic.requests == []
 
 
 def test_end_to_end_tool_use(graph, jf, caplog):

@@ -12,7 +12,13 @@ Each allowed text message goes to the Anthropic Messages API with the MCP tools 
 FastMCP.call_tool, i.e. exactly the code the MCP clients run. The reply is sent back through
 the Graph API.
 
-Logging: never tokens, full phone numbers or message text at INFO (only the last 3 digits).
+Voice notes (type "audio") are downloaded from the Graph API (media id -> url -> bytes, size
+capped), transcribed with an OpenAI-compatible /audio/transcriptions endpoint (OpenAI Whisper or
+a local faster-whisper-server/speaches) and then handled exactly like a text message; the reply
+starts with "Rozumel som: „…“". Enabled only when STT_API_KEY or a custom STT_URL is set.
+
+Logging: never tokens, full phone numbers, message text, transcripts or audio at INFO (only the
+last 3 digits of numbers).
 """
 
 from __future__ import annotations
@@ -44,6 +50,12 @@ MAX_WHATSAPP_CHARS = 4096
 HISTORY_EXCHANGES = 10
 HISTORY_TTL_SECONDS = 30 * 60
 DEDUP_SIZE = 500
+DEFAULT_STT_URL = "https://api.openai.com/v1/audio/transcriptions"
+DEFAULT_STT_MODEL = "whisper-1"
+DEFAULT_STT_LANGUAGE = "sk"
+MAX_MEDIA_BYTES = 16 * 1024 * 1024  # WhatsApp's own limit for audio
+MEDIA_TIMEOUT = httpx.Timeout(30.0, connect=10.0)
+STT_TIMEOUT = httpx.Timeout(120.0, connect=10.0)  # a local CPU Whisper can be slow
 # Server-side refusal fallback (Claude API, beta): only these models accept fallbacks="default"
 FALLBACK_MODELS = {"claude-sonnet-5-5", "claude-opus-5-5", "claude-opus-5", "claude-fable-5-1"}
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
@@ -52,6 +64,10 @@ TEXT_ONLY_REPLY = "Zatiaľ rozumiem len textu 🙂"
 ERROR_REPLY = "Prepáč, niečo sa pokazilo a nepodarilo sa mi to vybaviť 😕 Skús to o chvíľu znova."
 REFUSAL_REPLY = "Prepáč, s týmto ti nepomôžem."
 TOO_LONG_REPLY = "Prepáč, zamotal som sa v tom 😅 Skús to napísať inak alebo po kúskoch."
+VOICE_DISABLED_REPLY = "Hlasové správy zatiaľ nemám zapnuté 🙉 Napíš mi to, prosím, textom."
+VOICE_ERROR_REPLY = "Prepáč, hlasovku sa mi nepodarilo rozpoznať 😕 Skús to znova alebo mi to napíš."
+VOICE_TOO_BIG_REPLY = "Prepáč, tá hlasovka je na mňa pridlhá 😅 Skús kratšiu alebo mi to napíš."
+HEARD_PREFIX = "Rozumel som: „{}“"
 
 WHATSAPP_SYSTEM = """\
 Si domáci asistent v WhatsAppe. Ovládaš televízor v obývačke s aplikáciou Wholphinix \
@@ -93,6 +109,10 @@ class Config:
     model: str = DEFAULT_MODEL
     graph_version: str = DEFAULT_GRAPH_VERSION
     effort: str = DEFAULT_EFFORT
+    stt_url: str = DEFAULT_STT_URL
+    stt_api_key: str = ""
+    stt_model: str = DEFAULT_STT_MODEL
+    stt_language: str = DEFAULT_STT_LANGUAGE
 
     REQUIRED = (
         "WHATSAPP_TOKEN",
@@ -129,12 +149,21 @@ class Config:
             model=env("CLAUDE_MODEL", DEFAULT_MODEL),
             graph_version=version,
             effort=env("CLAUDE_EFFORT", DEFAULT_EFFORT),
+            stt_url=env("STT_URL", DEFAULT_STT_URL),
+            stt_api_key=env("STT_API_KEY"),
+            stt_model=env("STT_MODEL", DEFAULT_STT_MODEL),
+            stt_language=env("STT_LANGUAGE", DEFAULT_STT_LANGUAGE),
         )
+
+    @property
+    def voice_enabled(self) -> bool:
+        """Voice notes need a key (OpenAI) or an own endpoint (local Whisper, key optional)."""
+        return bool(self.stt_api_key) or self.stt_url != DEFAULT_STT_URL
 
     def __repr__(self) -> str:  # never leak secrets into logs/tracebacks
         return (
             f"Config(model={self.model!r}, graph_version={self.graph_version!r}, "
-            f"allowed_numbers={len(self.allowed_numbers)})"
+            f"allowed_numbers={len(self.allowed_numbers)}, voice={self.voice_enabled})"
         )
 
 
@@ -203,6 +232,14 @@ def _block_get(block: Any, name: str, default: Any = None) -> Any:
     return getattr(block, name, default)
 
 
+class VoiceError(Exception):
+    """A voice note could not be turned into text; `reply` is what the user gets."""
+
+    def __init__(self, reason: str, reply: str = VOICE_ERROR_REPLY) -> None:
+        super().__init__(reason)
+        self.reply = reply
+
+
 def tool_result_text(result: Any) -> str:
     """FastMCP.call_tool result -> text for a tool_result block."""
     if isinstance(result, tuple) and len(result) == 2 and result[1] is not None:
@@ -221,6 +258,7 @@ class WhatsAppBot:
         system_prompt: str,
         anthropic_client: Any | None = None,
         graph_transport: httpx.AsyncBaseTransport | None = None,
+        http_transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self.config = config
         self.mcp = mcp
@@ -235,6 +273,8 @@ class WhatsAppBot:
             timeout=20.0,
             transport=graph_transport,
         )
+        # Media downloads (lookaside.fbsbx.com URLs) and the speech-to-text endpoint
+        self.http = httpx.AsyncClient(timeout=MEDIA_TIMEOUT, transport=http_transport)
         self.dedup = Deduper()
         self.memory = Memory()
         self._tools: list[dict[str, Any]] | None = None
@@ -277,6 +317,9 @@ class WhatsAppBot:
             await self.mark_read(msg_id)
             if kind == "reaction":
                 return
+            if kind == "audio":
+                await self._handle_voice(number, msg.get("audio") or {})
+                return
             if kind != "text":
                 await self.send_text(number, TEXT_ONLY_REPLY)
                 return
@@ -287,6 +330,98 @@ class WhatsAppBot:
             await self.send_text(number, reply)
         except Exception:
             log.exception("WhatsApp: failed to handle a message")
+
+    async def _handle_voice(self, number: str, audio: dict[str, Any]) -> None:
+        if not self.config.voice_enabled:
+            await self.send_text(number, VOICE_DISABLED_REPLY)
+            return
+        try:
+            data = await self.download_media(str(audio.get("id") or ""))
+            text = await self.transcribe(data)
+        except VoiceError as ex:
+            log.warning("WhatsApp: voice note from %s failed: %s", mask_number(number), ex)
+            await self.send_text(number, ex.reply)
+            return
+        log.info("WhatsApp: voice note from %s transcribed (%d chars)", mask_number(number), len(text))
+        reply = await self.answer(number, text)
+        await self.send_text(number, HEARD_PREFIX.format(text) + "\n\n" + reply)
+
+    # ---- voice: media download + speech to text ----
+
+    async def download_media(self, media_id: str) -> bytes:
+        """Graph API: GET /<media_id> -> {"url", "file_size", ...}, then GET url (same Bearer)."""
+        if not re.fullmatch(r"[0-9A-Za-z_-]{1,128}", media_id):
+            raise VoiceError("invalid media id")
+        try:
+            r = await self.graph.get(f"/{media_id}", headers=self._headers())
+        except httpx.HTTPError as ex:
+            raise VoiceError(f"media lookup: {type(ex).__name__}") from None
+        if r.status_code >= 400:
+            raise VoiceError(f"media lookup: HTTP {r.status_code}")
+        try:
+            meta = r.json()
+        except ValueError:
+            raise VoiceError("media lookup: not JSON") from None
+        url = str(meta.get("url") or "") if isinstance(meta, dict) else ""
+        if not url.startswith("https://"):
+            raise VoiceError("media lookup: no https url")
+        try:
+            declared = int(meta.get("file_size") or 0)
+        except (TypeError, ValueError):
+            declared = 0
+        if declared > MAX_MEDIA_BYTES:
+            raise VoiceError(f"media too big ({declared} B)", VOICE_TOO_BIG_REPLY)
+
+        try:
+            async with self.http.stream("GET", url, headers=self._headers()) as resp:
+                if resp.status_code >= 400:
+                    raise VoiceError(f"media download: HTTP {resp.status_code}")
+                try:
+                    length = int(resp.headers.get("content-length") or 0)
+                except ValueError:
+                    length = 0
+                if length > MAX_MEDIA_BYTES:
+                    raise VoiceError(f"media too big ({length} B)", VOICE_TOO_BIG_REPLY)
+                buf = bytearray()
+                async for chunk in resp.aiter_bytes():
+                    buf += chunk
+                    if len(buf) > MAX_MEDIA_BYTES:
+                        raise VoiceError("media too big (stream)", VOICE_TOO_BIG_REPLY)
+        except httpx.HTTPError as ex:
+            raise VoiceError(f"media download: {type(ex).__name__}") from None
+        if not buf:
+            raise VoiceError("media download: empty")
+        return bytes(buf)
+
+    async def transcribe(self, data: bytes) -> str:
+        """OpenAI-compatible POST /v1/audio/transcriptions (OpenAI, faster-whisper-server, speaches)."""
+        c = self.config
+        headers = {"Authorization": f"Bearer {c.stt_api_key}"} if c.stt_api_key else {}
+        form = {"model": c.stt_model, "response_format": "json"}
+        if c.stt_language:
+            form["language"] = c.stt_language
+        try:
+            r = await self.http.post(
+                c.stt_url,
+                data=form,
+                files={"file": ("voice.ogg", data, "audio/ogg")},
+                headers=headers,
+                timeout=STT_TIMEOUT,
+            )
+        except httpx.HTTPError as ex:
+            raise VoiceError(f"transcription: {type(ex).__name__}") from None
+        if r.status_code >= 400:
+            # Error bodies are messages like "invalid api key", never the key or the audio
+            raise VoiceError(f"transcription: HTTP {r.status_code} {r.text[:200]}")
+        try:
+            body = r.json()
+            text = str(body.get("text") or "") if isinstance(body, dict) else ""
+        except ValueError:
+            text = r.text  # response_format=text servers
+        text = " ".join(text.split())
+        if not text:
+            raise VoiceError("transcription: empty")
+        return text
 
     # ---- Claude ----
 

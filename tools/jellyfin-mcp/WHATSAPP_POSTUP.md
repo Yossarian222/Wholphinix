@@ -56,4 +56,9 @@ Stručný postup krok za krokom. Podrobnosti sú v [README → WhatsApp](README.
 - [ ] Napísať botovi (testovacie číslo +1 555 650-7675) napr. „čo práve hrá?“
 - [ ] Ak nefunguje: screenshot (bez citlivých hodnôt) + posledné riadky logu kontajnera z Portainera
 
+### H) Hlasové správy (voliteľné)
+- [ ] Buď **OpenAI**: platform.openai.com → *API keys* → nový kľúč → v Portaineri `STT_API_KEY`
+- [ ] Alebo **lokálny Whisper** na NAS (speaches / faster-whisper-server, viď [README → Hlasové správy](README.md#hlasové-správy)) → `STT_URL=http://192.168.1.201:8000/v1/audio/transcriptions`, `STT_MODEL=Systran/faster-whisper-small`
+- [ ] **Pull and redeploy** a poslať botovi hlasovku – odpoveď začne „Rozumel som: „…““
+
 **Step 3 (Business verification) netreba** – testovacie číslo stačí pre max. 5 overených príjemcov.
