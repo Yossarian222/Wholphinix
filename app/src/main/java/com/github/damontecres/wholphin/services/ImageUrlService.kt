@@ -146,7 +146,11 @@ class ImageUrlService
                             fillWidth = fillWidth,
                             fillHeight = fillHeight,
                         )
-                    } else if (seriesId != null && itemType == BaseItemKind.SEASON && imageType !in imageTags) {
+                    } else if (seriesId != null &&
+                        (itemType == BaseItemKind.SEASON || itemType == BaseItemKind.EPISODE) &&
+                        imageType !in imageTags
+                    ) {
+                        // A season/episode without its own image shows the series one instead of an empty card
                         getItemImageUrl(
                             itemId = seriesId,
                             imageType = imageType,

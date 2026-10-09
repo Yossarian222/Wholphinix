@@ -245,7 +245,9 @@ data class HomeRowViewOptions(
     val aspectRatio: AspectRatio = AspectRatio.TALL,
     val imageType: ViewOptionImageType = ViewOptionImageType.PRIMARY,
     val showTitles: Boolean = false,
-    val useSeries: Boolean = true,
+    // Off by default: the season/episode image, the same as the Jellyfin web client shows. Defaults are not saved, so
+    // this also applies to rows saved before the change
+    val useSeries: Boolean = false,
     val episodeContentScale: PrefContentScale = PrefContentScale.FILL,
     val episodeAspectRatio: AspectRatio = AspectRatio.TALL,
     val episodeImageType: ViewOptionImageType = ViewOptionImageType.PRIMARY,

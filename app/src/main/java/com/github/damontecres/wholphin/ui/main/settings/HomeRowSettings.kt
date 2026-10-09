@@ -311,7 +311,7 @@ internal object Options {
     val ViewOptionsUseSeries =
         AppSwitchPreference<HomeRowViewOptions>(
             title = R.string.use_series,
-            defaultValue = true,
+            defaultValue = false,
             getter = { it.useSeries },
             setter = { vo, value -> vo.copy(useSeries = value) },
         )
