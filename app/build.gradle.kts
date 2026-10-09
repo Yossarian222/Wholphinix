@@ -52,7 +52,6 @@ val gitDescribe =
     providers
         .exec {
             commandLine("git", "describe", "--tags", "--long", "--match=v*")
-            // Forks often have no tags; don't fail the build, fall back to 0.0.0 below
             isIgnoreExitValue = true
         }.standardOutput.asText
         .getOrElse("v0.0.0")
@@ -86,6 +85,11 @@ configure<ApplicationExtension> {
     }
 
     signingConfigs {
+        // Same debug key on every machine and CI run, so a new debug APK installs as an update (keeps logins)
+        getByName("debug") {
+            val shared = rootProject.file("debug.keystore")
+            if (shared.exists()) storeFile = shared
+        }
         if (shouldSign.get()) {
             create("ci") {
                 file("ci.keystore").writeBytes(

@@ -64,3 +64,6 @@ app/src/main/jnilibs
 app/src/main/jnilibs/
 scripts/mpv/deps/
 scripts/mpv/prefix/
+
+# Shared debug signing key (not a secret) so debug builds install as updates
+!debug.keystore

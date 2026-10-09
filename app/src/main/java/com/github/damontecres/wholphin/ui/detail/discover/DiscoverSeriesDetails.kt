@@ -106,7 +106,13 @@ fun DiscoverSeriesDetails(
         }
 
         is DataLoadingState.Success<TvDetails> -> {
-            val item = st.data
+            val item =
+                st.data.let {
+                    it.copy(
+                        name = destination.item.csfdTitle ?: it.name,
+                        overview = destination.item.csfdOverview ?: it.overview,
+                    )
+                }
             val userConfig by viewModel.userConfig.collectAsState(null)
             DiscoverSeriesDetailsContent(
                 preferences = preferences,

@@ -2,6 +2,9 @@ name: PR
 
 on:
   pull_request:
+  push:
+    branches:
+      - 'ci/**'
 
 defaults:
   run:
@@ -39,12 +42,21 @@ jobs:
       - name: Build app
         id: buildapp
         run: |
-          ./gradlew clean assembleDefaultDebug testDefaultDebugUnitTest --no-daemon
+          set +e
+          ./gradlew clean assembleDefaultDebug testDefaultDebugUnitTest --no-daemon 2>&1 | tee build.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            # Surface compiler/test errors as an annotation (readable without access to the logs)
+            msg=$(grep -E '^e: |FAILED|What went wrong|Exception|expected:' -A2 build.log | head -60 | sed ':a;N;$!ba;s/%/%25/g;s/\n/%0A/g')
+            echo "::error title=Gradle build failed::$msg"
+            exit "$status"
+          fi
+          set -e
           apks=$(find app/build/outputs \( -name '*.apk' -or -name '*.aab' \) -print0 | tr '\0' ',' | sed 's/,$//')
           echo "apks=$apks" >> "$GITHUB_OUTPUT"
-      - name: Upload debug APK
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
         with:
           name: wholphinix-debug-apk
           path: app/build/outputs/apk/**/*.apk
-          retention-days: 14
+          retention-days: 7

@@ -19,6 +19,7 @@ import com.github.damontecres.wholphin.data.model.GetItemsFilter
 import com.github.damontecres.wholphin.preferences.UserPreferences
 import com.github.damontecres.wholphin.services.NavigationManager
 import com.github.damontecres.wholphin.ui.components.CollectionFolderView
+import com.github.damontecres.wholphin.ui.components.CsfdRankingGrid
 import com.github.damontecres.wholphin.ui.components.ErrorMessage
 import com.github.damontecres.wholphin.ui.components.GenreCardGrid
 import com.github.damontecres.wholphin.ui.components.RecommendedTvShow
@@ -54,6 +55,7 @@ fun CollectionFolderTv(
                 TabDetails(R.string.library),
                 TabDetails(R.string.genres),
                 TabDetails(R.string.studios),
+                TabDetails(R.string.csfd_rankings),
             )
         }
     val onClickItem =
@@ -135,6 +137,18 @@ fun CollectionFolderTv(
                 StudioCardGrid(
                     itemId = destination.itemId,
                     includeItemTypes = listOf(BaseItemKind.SERIES),
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .focusRequester(tabDetails.contentFocusRequester),
+                )
+            }
+
+            // Rebríčky (ČSFD)
+            tabs.lastIndex -> {
+                CsfdRankingGrid(
+                    parentId = destination.itemId,
+                    itemKind = BaseItemKind.SERIES,
                     modifier =
                         Modifier
                             .fillMaxSize()
