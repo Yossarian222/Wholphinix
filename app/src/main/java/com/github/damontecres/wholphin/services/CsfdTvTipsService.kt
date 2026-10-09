@@ -57,6 +57,8 @@ data class CsfdTvTip(
     val overview: String? = null,
     val genres: List<String> = listOf(),
     val durationMinutes: Int? = null,
+    /** Small poster from the ČSFD TV tips page, the last resort when neither Seerr nor the plugin has a poster */
+    val thumbnail: String? = null,
 )
 
 /**
@@ -214,7 +216,7 @@ class CsfdTvTipsService
                             communityRating = tip.ratingPercent?.div(10f),
                             providerIds = mapOf("Csfd" to tip.csfdId.toString()),
                         ),
-                    imageUrlOverride = discover.posterUrl ?: tip.poster,
+                    imageUrlOverride = discover.posterUrl ?: tip.poster ?: tip.thumbnail,
                     backdropUrlOverride = discover.backDropUrl ?: tip.photo,
                     destinationOverride = discover.destination,
                     // Seerr may know it from Jellyfin even though the plugin did not match it
@@ -371,8 +373,21 @@ class CsfdTvTipsService
                             overview = obj.string("Overview"),
                             genres = obj.strings("Genres"),
                             durationMinutes = obj.int("DurationMinutes"),
+                            thumbnail = obj.string("Thumbnail")?.let(::csfdImageUrl),
                         )
                     }
+
+            private val CSFD_RESIZED = Regex("/cache/resized/w\\d+(h\\d+)?/")
+
+            /**
+             * ČSFD image URL that can be loaded: protocol relative URLs (`//image.pmgstatic.com/...`) get https and the
+             * small resized thumbnails (eg `/cache/resized/w60h85/`) are asked for in the poster size (`w420`)
+             */
+            fun csfdImageUrl(url: String): String? {
+                val trimmed = url.trim().takeIf { it.isNotEmpty() } ?: return null
+                val absolute = if (trimmed.startsWith("//")) "https:$trimmed" else trimmed
+                return absolute.replace(CSFD_RESIZED, "/cache/resized/w420/")
+            }
 
             fun parseRanks(json: JsonElement): Map<Int, Int> =
                 (json as? JsonObject)

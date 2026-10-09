@@ -69,7 +69,10 @@ fun ItemCardImage(
     val imageUrlService = LocalImageUrlService.current
     val imageUrl =
         remember(item, imageType, fillWidth, fillHeight) {
-            if (item != null && (fillWidth.gt(0) || fillHeight.gt(0))) {
+            if (item?.imageUrlOverride != null && imageType == ImageType.PRIMARY) {
+                // Not on the server (eg a ČSFD TV tip found in Seerr)
+                item.imageUrlOverride
+            } else if (item != null && (fillWidth.gt(0) || fillHeight.gt(0))) {
                 imageUrlService.getItemImageUrl(
                     item,
                     imageType,
@@ -92,6 +95,17 @@ fun ItemCardImage(
         modifier = modifier,
         useFallbackText = useFallbackText,
         contentScale = contentScale,
+        fallback = {
+            if (item?.inLibrary == false) {
+                NotInLibraryPlaceholder(title = item.name, year = item.data.productionYear)
+            } else {
+                ItemCardImageFallback(
+                    name = name,
+                    useFallbackText = useFallbackText,
+                    modifier = Modifier,
+                )
+            }
+        },
     )
 }
 
