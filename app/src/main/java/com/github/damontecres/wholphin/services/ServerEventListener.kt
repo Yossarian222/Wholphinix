@@ -133,7 +133,14 @@ class ServerEventListener
                             api.webSocket
                                 .subscribe<PlayMessage>()
                                 .onEach { message ->
-                                    message.data?.let { handlePlayRequest(it) }
+                                    // Caught here, a failing request must not end the subscription
+                                    try {
+                                        message.data?.let { handlePlayRequest(it) }
+                                    } catch (ex: CancellationException) {
+                                        throw ex
+                                    } catch (ex: Exception) {
+                                        Timber.e(ex, "Error handling play request")
+                                    }
                                 }.catch { ex ->
                                     Timber.e(ex, "Error in play message websocket subscription")
                                 }.launchIn(this@coroutineScope)
@@ -175,7 +182,8 @@ class ServerEventListener
                     ?.inWholeMilliseconds
                     ?.coerceAtLeast(0L) ?: 0L
             onMain {
-                if (navigationManager.backStack.lastOrNull() is Destination.Playback) {
+                val top = navigationManager.backStack.lastOrNull()
+                if (top is Destination.Playback || top is Destination.PlaybackList) {
                     // Don't stack players on top of each other
                     navigationManager.goBack()
                 }

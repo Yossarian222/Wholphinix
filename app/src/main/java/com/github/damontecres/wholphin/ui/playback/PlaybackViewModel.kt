@@ -205,14 +205,15 @@ class PlaybackViewModel
         val initJob: Job
 
         init {
+            // No screensaver while the player is open, even when paused or buffering. Done here, before anything
+            // asynchronous, so the release in onCleared always comes after it.
+            screensaverService.acquireKeepScreenOn(this)
+            addCloseable { screensaverService.releaseKeepScreenOn(this@PlaybackViewModel) }
             initJob =
                 viewModelScope.launchIO {
                     addCloseable {
-                        screensaverService.keepScreenOn(false)
                         disconnectPlayer()
                     }
-                    // No screensaver while the player is open, even when paused or buffering
-                    screensaverService.keepScreenOn(true)
                     init()
                 }
         }
@@ -1447,7 +1448,12 @@ class PlaybackViewModel
                             api.webSocket
                                 .subscribe<GeneralCommandMessage>()
                                 .onEach { message ->
-                                    message.data?.let { handleGeneralCommand(it) }
+                                    // Caught here, a failing command must not end the subscription
+                                    try {
+                                        message.data?.let { handleGeneralCommand(it) }
+                                    } catch (ex: Exception) {
+                                        Timber.e(ex, "Error handling general command")
+                                    }
                                 }.catch { ex ->
                                     Timber.e(ex, "Error in general command websocket subscription")
                                 }.launchIn(this)
@@ -1469,15 +1475,32 @@ class PlaybackViewModel
          */
         private fun handleGeneralCommand(command: GeneralCommand) {
             val index = command.arguments["Index"]?.toIntOrNull()
+
+            // Only accept indexes of an existing stream of the right type, a wrong one would be saved for the item
+            fun isStream(type: MediaStreamType) =
+                state.value.currentPlayback
+                    ?.mediaSourceInfo
+                    ?.mediaStreams
+                    ?.any { it.index == index && it.type == type } == true
             when (command.name) {
                 GeneralCommandType.SET_AUDIO_STREAM_INDEX -> {
                     Timber.i("Remote audio stream change to %s", index)
-                    if (index != null && index >= 0) changeAudioStream(index)
+                    if (index != null && isStream(MediaStreamType.AUDIO)) changeAudioStream(index)
                 }
 
                 GeneralCommandType.SET_SUBTITLE_STREAM_INDEX -> {
                     Timber.i("Remote subtitle stream change to %s", index)
-                    if (index != null) changeSubtitleStream(if (index < 0) TrackIndex.DISABLED else index)
+                    when {
+                        index == null -> {}
+
+                        index < 0 -> {
+                            changeSubtitleStream(TrackIndex.DISABLED)
+                        }
+
+                        isStream(MediaStreamType.SUBTITLE) -> {
+                            changeSubtitleStream(index)
+                        }
+                    }
                 }
 
                 else -> {

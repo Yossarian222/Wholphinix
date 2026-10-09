@@ -1,5 +1,6 @@
 package com.github.damontecres.wholphin.ui.audiobookshelf
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,6 +31,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.tv.material3.Button
 import androidx.tv.material3.Card
 import androidx.tv.material3.MaterialTheme
@@ -54,6 +56,11 @@ fun AudiobookshelfPage(
 ) {
     LaunchedEffect(Unit) { viewModel.load() }
     val state by viewModel.state.collectAsState()
+    // No background audio: pause when the app goes to the background or another page (e.g. a remote "play") opens
+    LifecycleStartEffect(Unit) {
+        onStopOrDispose { viewModel.pause() }
+    }
+    BackHandler(enabled = state.selected != null) { viewModel.closePodcast() }
 
     Column(
         modifier = modifier.fillMaxSize().padding(vertical = 16.dp),

@@ -61,23 +61,29 @@ class ScreensaverService
         private var waitJob: Job? = null
         private var dimJob: Job? = null
 
+        /** Who currently needs the screen on (players, slideshow). Guarded by `this`. */
+        private val keepOnOwners = mutableSetOf<Any>()
+        private val requestedKeepOn get() = keepOnOwners.isNotEmpty()
+
         init {
             userPreferencesService.flow
                 .onEach { prefs ->
-                    _state.update {
+                    synchronized(this) {
                         val enabled =
                             prefs.appPreferences.interfacePreferences.screensaverPreference.enabled
                         // Preferences can change during playback (e.g. a saved subtitle delay), which must not let
                         // the OS or in-app screensaver start over the video
-                        keepScreenOnInternal(enabled || it.paused)
-                        ScreensaverState(
-                            enabled = enabled,
-                            enabledTemp = false,
-                            active = false,
-                            paused = it.paused,
-                            dimEnabled = prefs.appPreferences.interfacePreferences.screensaverPreference.dimEnabled,
-                            dimActive = false,
-                        )
+                        keepScreenOnInternal(enabled || requestedKeepOn)
+                        _state.update {
+                            ScreensaverState(
+                                enabled = enabled,
+                                enabledTemp = false,
+                                active = false,
+                                paused = requestedKeepOn,
+                                dimEnabled = prefs.appPreferences.interfacePreferences.screensaverPreference.dimEnabled,
+                                dimActive = false,
+                            )
+                        }
                     }
                 }.launchIn(scope)
         }
@@ -173,28 +179,48 @@ class ScreensaverService
          * Signal to the OS for keeping the screen on such as during playback or when the in-app screensaver is active
          */
         fun keepScreenOn(keep: Boolean) {
-            // Synchronous so that a closing player's "false" can't overtake the next player's "true"
+            if (keep) acquireKeepScreenOn(this) else releaseKeepScreenOn(this)
+        }
+
+        /**
+         * Keep the screen on until [owner] calls [releaseKeepScreenOn]. With several owners (e.g. a closing player and
+         * the next one) the screen stays on until the last one releases, whatever order they are cleared in.
+         */
+        fun acquireKeepScreenOn(owner: Any) {
             synchronized(this) {
-                val screensaverEnabled = state.value.enabled
-                val dimEnabled = state.value.dimEnabled
-                Timber.d("Keep screen on: %s, screensaverEnabled=%s", keep, screensaverEnabled)
-                if (screensaverEnabled || dimEnabled) {
-                    // Page is requesting to keep screen on, so we don't wait to show the screensaver
-                    _state.update {
-                        it.copy(
-                            active = false,
-                            dimActive = false,
-                            paused = keep,
-                        )
-                    }
-                    if (!keep) {
-                        pulse()
-                    }
+                keepOnOwners.add(owner)
+                applyKeepScreenOn(true)
+            }
+        }
+
+        fun releaseKeepScreenOn(owner: Any) {
+            synchronized(this) {
+                if (keepOnOwners.remove(owner) && !requestedKeepOn) {
+                    applyKeepScreenOn(false)
                 }
-                if (!screensaverEnabled) {
-                    // If in-app screensaver is not enabled, send keep screen on to the OS
-                    keepScreenOnInternal(keep)
+            }
+        }
+
+        private fun applyKeepScreenOn(keep: Boolean) {
+            val screensaverEnabled = state.value.enabled
+            val dimEnabled = state.value.dimEnabled
+            Timber.d("Keep screen on: %s, screensaverEnabled=%s", keep, screensaverEnabled)
+            if (screensaverEnabled || dimEnabled) {
+                // Page is requesting to keep screen on, so we don't wait to show the screensaver
+                _state.update {
+                    it.copy(
+                        active = false,
+                        dimActive = false,
+                        paused = keep,
+                    )
                 }
+                if (!keep) {
+                    pulse()
+                }
+            }
+            if (!screensaverEnabled) {
+                // If in-app screensaver is not enabled, send keep screen on to the OS
+                keepScreenOnInternal(keep)
             }
         }
 

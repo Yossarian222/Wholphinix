@@ -1,6 +1,7 @@
 package com.github.damontecres.wholphin.ui.audiobookshelf
 
 import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.AudioAttributes
@@ -225,11 +226,13 @@ class AudiobookshelfViewModel
                     val track =
                         sess.audioTracks.firstOrNull()
                             ?: throw IllegalStateException("Server returned no audio track")
-                    session = sess
-                    sessionConn = conn
-                    player.setMediaItem(MediaItem.fromUri(conn.baseUrl.trimEnd('/') + track.contentUrl))
+                    // Stop first so the listener's sync can't report the old position for the new session
+                    player.stop()
+                    player.setMediaItem(MediaItem.fromUri(streamUrl(conn, track.contentUrl)))
                     player.prepare()
                     player.seekTo((sess.currentTime * 1000).toLong())
+                    session = sess
+                    sessionConn = conn
                     player.play()
                     _state.update {
                         it.copy(
@@ -250,6 +253,29 @@ class AudiobookshelfViewModel
                     _state.update { it.copy(error = ex.message ?: "Prehrávanie zlyhalo") }
                 }
             }
+        }
+
+        fun pause() = player.pause()
+
+        /**
+         * The audio file URL. The file endpoints need authentication, which the player gets as the `token` query
+         * parameter (like the cover images). `contentUrl` already contains the server's base path, if any.
+         */
+        private fun streamUrl(
+            conn: AbsConnection,
+            contentUrl: String,
+        ): String {
+            val base = conn.baseUrl.trimEnd('/')
+            val uri = Uri.parse(base)
+            val basePath = uri.path.orEmpty().trimEnd('/')
+            val root =
+                if (basePath.isNotEmpty() && contentUrl.startsWith("$basePath/")) {
+                    base.removeSuffix(basePath)
+                } else {
+                    base
+                }
+            val separator = if ('?' in contentUrl) '&' else '?'
+            return "$root$contentUrl${separator}token=${Uri.encode(conn.token)}"
         }
 
         fun togglePlayPause() {
