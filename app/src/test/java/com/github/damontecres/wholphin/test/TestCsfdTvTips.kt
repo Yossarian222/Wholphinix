@@ -33,6 +33,36 @@ class TestCsfdTvTips {
     }
 
     @Test
+    fun `Parse optional thumbnail`() {
+        val json =
+            """
+            [
+              {"CsfdId":1,"Title":"With","Thumbnail":"//image.pmgstatic.com/cache/resized/w60h85/files/images/film/posters/a.jpg"},
+              {"CsfdId":2,"Title":"Without"},
+              {"CsfdId":3,"Title":"Blank","Thumbnail":" "}
+            ]
+            """.trimIndent()
+
+        val tips = CsfdTvTipsService.parseTips(json)
+
+        Assert.assertEquals(
+            "https://image.pmgstatic.com/cache/resized/w420/files/images/film/posters/a.jpg",
+            tips[0].thumbnail,
+        )
+        Assert.assertNull(tips[1].thumbnail)
+        Assert.assertNull(tips[2].thumbnail)
+    }
+
+    @Test
+    fun `ČSFD image URLs`() {
+        Assert.assertEquals("https://x/p.jpg", CsfdTvTipsService.csfdImageUrl("https://x/p.jpg"))
+        Assert.assertEquals(
+            "https://image.pmgstatic.com/cache/resized/w420/files/p.jpg",
+            CsfdTvTipsService.csfdImageUrl("https://image.pmgstatic.com/cache/resized/w140/files/p.jpg"),
+        )
+    }
+
+    @Test
     fun `Parse ranks`() {
         val ranks = CsfdTvTipsService.parseRanks(Json.parseToJsonElement("""{"2294":1,"9499":20,"x":3}"""))
 

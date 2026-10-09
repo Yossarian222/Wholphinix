@@ -37,6 +37,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.github.damontecres.wholphin.R
 import com.github.damontecres.wholphin.api.seerr.model.MovieDetails
+import com.github.damontecres.wholphin.data.model.BaseItem
 import com.github.damontecres.wholphin.data.model.DiscoverItem
 import com.github.damontecres.wholphin.data.model.DiscoverRating
 import com.github.damontecres.wholphin.data.model.LocalTrailer
@@ -146,6 +147,10 @@ fun DiscoverMovieDetails(
                 goToOnClick = {
                     viewModel.goTo(movie.mediaInfo, BaseItemKind.MOVIE)
                 },
+                libraryItem = state.libraryItem,
+                playOnClick = {
+                    state.libraryItem?.let { viewModel.navigateTo(it.destination()) }
+                },
                 moreOnClick = {},
                 onLongClickPerson = { index, person -> },
                 onLongClickSimilar = { index, similar ->
@@ -208,6 +213,8 @@ fun DiscoverMovieDetailsContent(
     onLongClickPerson: (Int, DiscoverItem) -> Unit,
     onLongClickSimilar: (Int, DiscoverItem) -> Unit,
     modifier: Modifier = Modifier,
+    libraryItem: BaseItem? = null,
+    playOnClick: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     var position by rememberInt(0)
@@ -261,6 +268,8 @@ fun DiscoverMovieDetailsContent(
                         },
                         canRequest = userConfig.hasPermission(SeerrPermission.REQUEST),
                         canCancel = canCancel,
+                        inLibrary = libraryItem != null,
+                        playOnClick = playOnClick,
                         trailers = trailers,
                         trailerOnClick = trailerOnClick,
                         modifier =

@@ -9,6 +9,7 @@ import com.github.damontecres.wholphin.api.seerr.model.MovieDetails
 import com.github.damontecres.wholphin.api.seerr.model.RelatedVideo
 import com.github.damontecres.wholphin.api.seerr.model.RequestPostRequest
 import com.github.damontecres.wholphin.data.ServerRepository
+import com.github.damontecres.wholphin.data.model.BaseItem
 import com.github.damontecres.wholphin.data.model.DiscoverItem
 import com.github.damontecres.wholphin.data.model.DiscoverRating
 import com.github.damontecres.wholphin.data.model.RemoteTrailer
@@ -104,6 +105,27 @@ class DiscoverMovieViewModel
 
                     updateCanCancel()
 
+                    viewModelScope.launchIO {
+                        val libraryItem =
+                            try {
+                                findInJellyfinLibrary(
+                                    api = api,
+                                    userId = serverRepository.currentUser?.id,
+                                    type = BaseItemKind.MOVIE,
+                                    tmdbId = movie.id ?: item.id,
+                                    imdbId = movie.imdbId ?: movie.externalIds?.imdbId,
+                                    titles = listOf(item.csfdTitle, movie.title, movie.originalTitle),
+                                    year = movie.releaseDate?.take(4)?.toIntOrNull(),
+                                )
+                            } catch (ex: CancellationException) {
+                                throw ex
+                            } catch (ex: Exception) {
+                                Timber.w(ex, "Error looking up movie %s in the library", item.id)
+                                null
+                            }
+                        Timber.d("Movie %s in library: %s", item.id, libraryItem?.id)
+                        _state.update { it.copy(libraryItem = libraryItem) }
+                    }
                     viewModelScope.launchIO {
                         val rating =
                             getDiscoverRating(item.id) {
@@ -285,4 +307,6 @@ data class DiscoverMovieState(
     val canCancelRequest: Boolean = false,
     val profileLoading: LoadingState = LoadingState.Pending,
     val requestData: SeerrRequestData = SeerrRequestData(),
+    /** The movie in the Jellyfin library, if it is there: it is played from there instead of being requested */
+    val libraryItem: BaseItem? = null,
 )

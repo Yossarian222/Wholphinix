@@ -134,6 +134,10 @@ fun DiscoverSeriesDetails(
                 goToOnClick = {
                     viewModel.goTo(item.mediaInfo, BaseItemKind.SERIES)
                 },
+                libraryItem = state.libraryItem,
+                playOnClick = {
+                    state.libraryItem?.let { viewModel.navigateTo(it.destination()) }
+                },
                 overviewOnClick = {
                     overviewDialog =
                         ItemDetailsDialogInfo(
@@ -235,6 +239,8 @@ fun DiscoverSeriesDetailsContent(
     onLongClickPerson: (Int, DiscoverItem) -> Unit,
     onLongClickSimilar: (Int, DiscoverItem) -> Unit,
     modifier: Modifier = Modifier,
+    libraryItem: BaseItem? = null,
+    playOnClick: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -298,6 +304,8 @@ fun DiscoverSeriesDetailsContent(
                             },
                             canRequest = userConfig.hasPermission(SeerrPermission.REQUEST),
                             canCancel = canCancel,
+                            inLibrary = libraryItem != null,
+                            playOnClick = playOnClick,
                             trailers = trailers,
                             trailerOnClick = trailerOnClick,
                             modifier =

@@ -108,6 +108,7 @@ fun BannerCard(
         onClick = { currentOnClick() },
         onLongClick = { currentOnLongClick() },
         interactionSource = interactionSource,
+        border = libraryCardBorder(item),
         colors =
             CardDefaults.colors(
 //                containerColor = Color.Transparent,
@@ -127,6 +128,8 @@ fun BannerCard(
                     onError = remember { { imageError = true } },
                     modifier = Modifier.fillMaxSize(),
                 )
+            } else if (item?.inLibrary == false) {
+                NotInLibraryPlaceholder(title = item.name, year = item.data.productionYear)
             } else {
                 Text(
                     text = name ?: "",

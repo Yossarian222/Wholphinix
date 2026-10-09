@@ -38,6 +38,8 @@ fun ExpandableDiscoverButtons(
     buttonOnFocusChanged: (FocusState) -> Unit,
     modifier: Modifier = Modifier,
     pendingOnClick: () -> Unit = {},
+    inLibrary: Boolean = false,
+    playOnClick: () -> Unit = {},
 ) {
     val firstFocus = remember { FocusRequester() }
     LazyRow(
@@ -83,46 +85,53 @@ fun ExpandableDiscoverButtons(
                 // TODO
                 SeerrAvailability.BLOCKLISTED -> R.string.fa_xmark
             }
+        // Already in the Jellyfin library: play it from there instead of requesting it. Same item, so the focus stays
+        // on it when the library lookup finishes.
         item("first") {
             ExpandableFaButton(
-                title = text,
-                iconStringRes = icon,
+                title = if (inLibrary) R.string.play else text,
+                iconStringRes = if (inLibrary) R.string.fa_play else icon,
                 enabled =
-                    when (availability) {
-                        SeerrAvailability.UNKNOWN -> canRequest
+                    inLibrary ||
+                        when (availability) {
+                            SeerrAvailability.UNKNOWN -> canRequest
 
-                        SeerrAvailability.PENDING,
-                        SeerrAvailability.PROCESSING,
-                        SeerrAvailability.PARTIALLY_AVAILABLE,
-                        SeerrAvailability.AVAILABLE,
-                        -> true
+                            SeerrAvailability.PENDING,
+                            SeerrAvailability.PROCESSING,
+                            SeerrAvailability.PARTIALLY_AVAILABLE,
+                            SeerrAvailability.AVAILABLE,
+                            -> true
 
-                        SeerrAvailability.BLOCKLISTED,
-                        SeerrAvailability.DELETED,
-                        -> false
-                    },
+                            SeerrAvailability.BLOCKLISTED,
+                            SeerrAvailability.DELETED,
+                            -> false
+                        },
                 onClick = {
-                    when (availability) {
-                        SeerrAvailability.UNKNOWN -> {
-                            requestOnClick.invoke()
-                        }
+                    if (inLibrary) {
+                        playOnClick.invoke()
+                    } else {
+                        when (availability) {
+                            SeerrAvailability.UNKNOWN -> {
+                                requestOnClick.invoke()
+                            }
 
-                        SeerrAvailability.PENDING,
-                        SeerrAvailability.PROCESSING,
-                        -> {
-                            pendingOnClick.invoke()
-                        }
+                            SeerrAvailability.PENDING,
+                            SeerrAvailability.PROCESSING,
+                            -> {
+                                pendingOnClick.invoke()
+                            }
 
-                        SeerrAvailability.PARTIALLY_AVAILABLE,
-                        SeerrAvailability.AVAILABLE,
-                        -> {
-                            goToOnClick.invoke()
-                        }
+                            SeerrAvailability.PARTIALLY_AVAILABLE,
+                            SeerrAvailability.AVAILABLE,
+                            -> {
+                                goToOnClick.invoke()
+                            }
 
-                        SeerrAvailability.DELETED,
-                        SeerrAvailability.BLOCKLISTED,
-                        -> {
-                            // TODO
+                            SeerrAvailability.DELETED,
+                            SeerrAvailability.BLOCKLISTED,
+                            -> {
+                                // TODO
+                            }
                         }
                     }
                 },
@@ -132,7 +141,7 @@ fun ExpandableDiscoverButtons(
                         .onFocusChanged(buttonOnFocusChanged),
             )
         }
-        if (availability == SeerrAvailability.PARTIALLY_AVAILABLE) {
+        if (!inLibrary && availability == SeerrAvailability.PARTIALLY_AVAILABLE) {
             item("request_partial") {
                 ExpandableFaButton(
                     title = R.string.request,

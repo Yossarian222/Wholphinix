@@ -108,33 +108,40 @@ class CsfdRankingViewModel
                     // positions are added when they arrive
                     val ranks = async { csfdTvTipsService.getRanks() }
                     // The ČSFD plugin stores the ČSFD rating as the community rating, so this is the library's own chart
-                    val items =
-                        GetItemsRequestHandler
-                            .execute(
-                                api,
-                                GetItemsRequest(
-                                    userId = serverRepository.currentUser?.id,
-                                    parentId = parentId,
-                                    includeItemTypes = listOf(itemKind),
-                                    recursive = true,
-                                    fields = SlimItemFields + ItemFields.GENRES,
-                                    sortBy = listOf(ItemSortBy.COMMUNITY_RATING, ItemSortBy.SORT_NAME),
-                                    sortOrder = listOf(SortOrder.DESCENDING, SortOrder.ASCENDING),
-                                    // Items without a ČSFD id carry a TMDb/IMDb rating; fetch extra and drop them
-                                    limit = RANKING_SIZE * 3,
-                                    enableTotalRecordCount = false,
-                                ),
-                            ).toBaseItems(true)
-                            .mapNotNull { item ->
-                                val csfdId =
-                                    item.data.providerIds
-                                        ?.entries
-                                        ?.firstOrNull { it.key.equals("Csfd", ignoreCase = true) }
-                                        ?.value
-                                        ?.toIntOrNull()
-                                        ?: return@mapNotNull null
-                                csfdId to item
-                            }.take(RANKING_SIZE)
+                    val items = mutableListOf<Pair<Int, BaseItem>>()
+                    var skipped = 0
+                    var startIndex = 0
+                    // Items without a ČSFD id carry a TMDb/IMDb rating and items with incomplete ČSFD metadata have no
+                    // rating at all; fetch extra and drop them, page by page until the ranking is full
+                    val pageSize = RANKING_SIZE * 3
+                    var pages = 0
+                    while (pages++ < MAX_PAGES) {
+                        val pageItems =
+                            GetItemsRequestHandler
+                                .execute(
+                                    api,
+                                    GetItemsRequest(
+                                        userId = serverRepository.currentUser?.id,
+                                        parentId = parentId,
+                                        includeItemTypes = listOf(itemKind),
+                                        recursive = true,
+                                        fields = SlimItemFields + ItemFields.GENRES,
+                                        sortBy = listOf(ItemSortBy.COMMUNITY_RATING, ItemSortBy.SORT_NAME),
+                                        sortOrder = listOf(SortOrder.DESCENDING, SortOrder.ASCENDING),
+                                        startIndex = startIndex,
+                                        limit = pageSize,
+                                        enableTotalRecordCount = false,
+                                    ),
+                                ).toBaseItems(true)
+                        val selected = selectRanked(pageItems, RANKING_SIZE - items.size)
+                        items.addAll(selected.items)
+                        skipped += selected.skippedWithoutRating
+                        if (items.size >= RANKING_SIZE || pageItems.size < pageSize) break
+                        startIndex += pageSize
+                    }
+                    if (skipped > 0) {
+                        Timber.i("ČSFD ranking: skipped %d items with a ČSFD id but no ČSFD rating", skipped)
+                    }
                     val csfdRanks = if (ranks.isCompleted) ranks.await() else null
                     _state.update {
                         DataLoadingState.Success(items.map { (csfdId, item) -> RankedItem(item, csfdRanks?.get(csfdId)) })
@@ -156,8 +163,48 @@ class CsfdRankingViewModel
 
         companion object {
             const val RANKING_SIZE = 250
+
+            /** At most this many pages of [RANKING_SIZE] * 3 items are fetched to fill the ranking */
+            private const val MAX_PAGES = 4
+
+            /**
+             * Picks up to [limit] items for the ranking from [items] (sorted by rating): only items with a ČSFD id and a
+             * ČSFD rating (community rating). Items with a ČSFD id but no rating have incomplete metadata and are counted
+             * in [RankingSelection.skippedWithoutRating].
+             */
+            fun selectRanked(
+                items: List<BaseItem>,
+                limit: Int,
+            ): RankingSelection {
+                val selected = mutableListOf<Pair<Int, BaseItem>>()
+                var skipped = 0
+                for (item in items) {
+                    if (selected.size >= limit) break
+                    val csfdId =
+                        item.data.providerIds
+                            ?.entries
+                            ?.firstOrNull { it.key.equals("Csfd", ignoreCase = true) }
+                            ?.value
+                            ?.toIntOrNull()
+                            ?: continue
+                    if (item.data.communityRating == null) {
+                        skipped++
+                        continue
+                    }
+                    selected.add(csfdId to item)
+                }
+                return RankingSelection(selected, skipped)
+            }
         }
     }
+
+/**
+ * Result of [CsfdRankingViewModel.selectRanked]: ČSFD id and item pairs, and how many were left out for missing a rating
+ */
+data class RankingSelection(
+    val items: List<Pair<Int, BaseItem>>,
+    val skippedWithoutRating: Int,
+)
 
 /**
  * The "Rebríčky" tab of a library: best rated items first, each with its position in the ČSFD rankings

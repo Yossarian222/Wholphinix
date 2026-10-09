@@ -50,6 +50,11 @@ data class BaseItem(
     val destinationOverride: Destination? = null,
     /** Backdrop for items that are not on the server (eg ČSFD TV tips found in Seerr) */
     val backdropUrlOverride: String? = null,
+    /**
+     * False for items that are not in the Jellyfin library (eg ČSFD TV tips found in Seerr): their cards get a ČSFD red
+     * frame and a title placeholder instead of the generic icon when there is no poster
+     */
+    val inLibrary: Boolean = true,
 ) : CardGridItem {
     val id get() = data.id
 
