@@ -17,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -104,10 +105,12 @@ fun VideoStreamDetails(
             StreamLabel(
                 text = it,
                 count = numberOfVersions,
+                containerColor = CsfdDarkRed,
+                contentColor = Color.White,
             )
         }
         videoStream?.codec?.uppercase()?.let {
-            StreamLabel(it)
+            StreamLabel(it, containerColor = CsfdDarkRed, contentColor = Color.White)
         }
 
         val audioCount = remember(source) { source?.audioStreamCount ?: 0 }
@@ -128,6 +131,8 @@ fun VideoStreamDetails(
             count = audioCount,
             icon = R.string.fa_volume_high,
             modifier = Modifier.widthIn(max = 200.dp),
+            containerColor = CsfdDarkRed,
+            contentColor = Color.White,
         )
 
         val subtitleCount =
@@ -158,6 +163,8 @@ fun VideoStreamDetails(
                 icon = R.string.fa_closed_captioning,
                 modifier = Modifier.widthIn(max = 160.dp),
                 disabled = disabled,
+                containerColor = CsfdDarkRed,
+                contentColor = Color.White,
             )
         }
     }
@@ -170,6 +177,8 @@ fun StreamLabel(
     @StringRes icon: Int? = null,
     count: Int = 0,
     disabled: Boolean = false,
+    containerColor: Color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = .5f),
+    contentColor: Color = MaterialTheme.colorScheme.onSurface,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -177,14 +186,13 @@ fun StreamLabel(
         modifier =
             modifier
                 .background(
-                    MaterialTheme.colorScheme.secondaryContainer.copy(alpha = .5f),
-//                    MaterialTheme.colorScheme.surfaceVariant,
+                    containerColor,
                     shape = RoundedCornerShape(4.dp),
                 ).padding(vertical = 4.dp, horizontal = 6.dp),
     ) {
         ProvideTextStyle(
             TextStyle(
-                color = MaterialTheme.colorScheme.onSurface,
+                color = contentColor,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
             ),
