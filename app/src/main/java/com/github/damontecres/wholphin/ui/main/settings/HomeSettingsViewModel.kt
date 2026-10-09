@@ -258,6 +258,14 @@ class HomeSettingsViewModel
                             )
                         }
 
+                        MetaRowType.CSFD_WATCHLIST -> {
+                            HomeRowConfigDisplay(
+                                id = id,
+                                title = ResStringProvider(R.string.csfd_watchlist),
+                                config = HomeRowConfig.CsfdWatchlist(),
+                            )
+                        }
+
                         MetaRowType.FAVORITES,
                         MetaRowType.COLLECTION,
                         MetaRowType.PLAYLIST,
@@ -755,8 +763,10 @@ class HomeSettingsViewModel
                                     it.config.updateViewOptions(preset.liveTv)
                                 }
 
-                                is HomeRowConfig.CsfdTvTips -> {
-                                    // Keep tips small regardless of the preset
+                                is HomeRowConfig.CsfdTvTips,
+                                is HomeRowConfig.CsfdWatchlist,
+                                -> {
+                                    // Keep ČSFD rows small regardless of the preset
                                     it.config
                                 }
                             }

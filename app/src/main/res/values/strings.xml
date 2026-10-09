@@ -976,4 +976,6 @@
         <item quantity="other">%1$d Episodes</item>
     </plurals>
     <string name="audiobookshelf">Audiobookshelf</string>
+    <!-- ČSFD watchlist -->
+    <string name="csfd_watchlist">Want to see (ČSFD)</string>
 </resources>

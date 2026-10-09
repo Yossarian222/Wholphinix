@@ -326,6 +326,11 @@ class HomeSettingsService
                         title = ResStringProvider(R.string.csfd_tv_tips),
                         config = HomeRowConfig.CsfdTvTips(),
                     ),
+                    HomeRowConfigDisplay(
+                        id = includedIds.size + 3,
+                        title = ResStringProvider(R.string.csfd_watchlist),
+                        config = HomeRowConfig.CsfdWatchlist(),
+                    ),
                 )
             val rowConfig = csfdTipsRow + continueWatchingRow + includedIds
             return HomePageResolvedSettings(userId, rowConfig)
@@ -568,6 +573,14 @@ class HomeSettingsService
                     HomeRowConfigDisplay(
                         id = id,
                         title = ResStringProvider(R.string.csfd_tv_tips),
+                        config,
+                    )
+                }
+
+                is HomeRowConfig.CsfdWatchlist -> {
+                    HomeRowConfigDisplay(
+                        id = id,
+                        title = ResStringProvider(R.string.csfd_watchlist),
                         config,
                     )
                 }
@@ -1194,6 +1207,16 @@ class HomeSettingsService
                             .dayOfWeek
                             .getDisplayName(TextStyle.FULL_STANDALONE, Locale.getDefault())
                     Success(ResArgStringProvider(R.string.csfd_tv_tips_day, day), items, row.viewOptions, rowType = row)
+                }
+
+                is HomeRowConfig.CsfdWatchlist -> {
+                    val items =
+                        csfdTvTipsService.getWatchlistRowItems(
+                            userId = userDto.id,
+                            useSeries = row.viewOptions.useSeries,
+                            limit = limit.coerceAtMost(20),
+                        )
+                    Success(ResStringProvider(R.string.csfd_watchlist), items, row.viewOptions, rowType = row)
                 }
 
                 is HomeRowConfig.Suggestions -> {

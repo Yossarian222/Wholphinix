@@ -172,6 +172,18 @@ sealed interface HomeRowConfig {
     }
 
     /**
+     * The user's ČSFD watchlist ("Chcem vidieť"): titles in the library first, then missing ones to request in Seerr.
+     * Needs the Jellyfin ČSFD plugin (endpoint `/Csfd/Watchlist`) with the ČSFD profile set.
+     */
+    @Serializable
+    @SerialName("CsfdWatchlist")
+    data class CsfdWatchlist(
+        override val viewOptions: HomeRowViewOptions = HomeRowViewOptions.csfdTipsDefault,
+    ) : HomeRowConfig {
+        override fun updateViewOptions(viewOptions: HomeRowViewOptions): CsfdWatchlist = this.copy(viewOptions = viewOptions)
+    }
+
+    /**
      * Fetch by parent ID such as a library, collection, or playlist with optional simple sorting
      */
     @Serializable

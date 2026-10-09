@@ -60,7 +60,8 @@ data class CsfdTvTip(
 )
 
 /**
- * Talks to the Jellyfin ČSFD plugin: "TV tipy dňa" (`/Csfd/TvTips`) and the ČSFD best-of rankings (`/Csfd/Ranks`).
+ * Talks to the Jellyfin ČSFD plugin: "TV tipy dňa" (`/Csfd/TvTips`), the user's watchlist "Chcem vidieť" (`/Csfd/Watchlist`)
+ * and the ČSFD best-of rankings (`/Csfd/Ranks`).
  *
  * The plugin returns the tips in the user's library (best rated first) followed by the best rated ones that are missing.
  */
@@ -120,19 +121,36 @@ class CsfdTvTipsService
             useSeries: Boolean,
             limit: Int,
             missing: Int = 7,
+        ): List<BaseItem> = rowItems("TV tips", userId, useSeries) { getTips(limit, missing) }
+
+        /**
+         * Items for the "Chcem vidieť (ČSFD)" home row: the user's ČSFD watchlist titles in the library (playable, in the
+         * ČSFD order) followed by missing ones found in Seerr. Same timeout as [getRowItems]; empty if the plugin has no
+         * `/Csfd/Watchlist` endpoint yet (404).
+         */
+        suspend fun getWatchlistRowItems(
+            userId: UUID,
+            useSeries: Boolean,
+            limit: Int,
+            missing: Int = 10,
+        ): List<BaseItem> = rowItems("watchlist", userId, useSeries) { getWatchlist(limit, missing) }
+
+        private suspend fun rowItems(
+            name: String,
+            userId: UUID,
+            useSeries: Boolean,
+            fetch: suspend () -> List<CsfdTvTip>,
         ): List<BaseItem> {
-            val load = scope.async { loadRowItems(userId, useSeries, limit, missing) }
+            val load = scope.async { loadRowItems(userId, useSeries, fetch()) }
             return withTimeoutOrNull(ROW_TIMEOUT) { load.await() }
-                ?: listOf<BaseItem>().also { Timber.i("ČSFD TV tips took too long, showing an empty row") }
+                ?: listOf<BaseItem>().also { Timber.i("ČSFD %s took too long, showing an empty row", name) }
         }
 
         private suspend fun loadRowItems(
             userId: UUID,
             useSeries: Boolean,
-            limit: Int,
-            missing: Int,
+            tips: List<CsfdTvTip>,
         ): List<BaseItem> {
-            val tips = getTips(limit, missing)
             val ids = tips.mapNotNull { it.itemId }
             val library =
                 if (ids.isEmpty()) {
@@ -201,7 +219,7 @@ class CsfdTvTipsService
                     destinationOverride = discover.destination,
                 )
             }
-            Timber.i("ČSFD TV tip %s not found in Seerr", tip.title)
+            Timber.i("ČSFD title %s not found in Seerr", tip.title)
             return null
         }
 
@@ -213,6 +231,15 @@ class CsfdTvTipsService
             missing: Int,
             // The first call of the day fetches the missing tips' details from ČSFD, which takes a while
         ): List<CsfdTvTip> = get("Csfd/TvTips?limit=$limit&missing=$missing", slowClient)?.let(::parseTips).orEmpty()
+
+        /**
+         * The user's ČSFD watchlist ("Chcem vidieť") from the profile set in the plugin, same format as [getTips]:
+         * titles in the library first, then up to [missing] missing ones. Empty if the plugin is missing/too old.
+         */
+        suspend fun getWatchlist(
+            limit: Int,
+            missing: Int,
+        ): List<CsfdTvTip> = get("Csfd/Watchlist?limit=$limit&missing=$missing", slowClient)?.let(::parseTips).orEmpty()
 
         /**
          * ČSFD id → position in the ČSFD best films/series rankings (top 1000 each); empty if the plugin is missing
