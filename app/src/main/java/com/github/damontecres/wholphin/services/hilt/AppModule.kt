@@ -16,6 +16,7 @@ import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import org.jellyfin.sdk.Jellyfin
 import org.jellyfin.sdk.android.androidDevice
@@ -108,8 +109,15 @@ object AppModule {
         .newBuilder()
         .addInterceptor {
             val request = it.request()
+            val current = serverRepository.current.value
+            // Only send the token to the current Jellyfin server, not to image CDNs etc. (Coil uses this client too)
+            val serverUrl = current?.server?.url?.toHttpUrlOrNull()
+            val isJellyfinServer =
+                serverUrl != null &&
+                    serverUrl.host.equals(request.url.host, ignoreCase = true) &&
+                    serverUrl.port == request.url.port
             val newRequest =
-                serverRepository.current.value?.user?.accessToken?.let { token ->
+                current?.user?.accessToken?.takeIf { isJellyfinServer }?.let { token ->
                     request
                         .newBuilder()
                         .addHeader(
