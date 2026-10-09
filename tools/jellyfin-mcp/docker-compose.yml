@@ -23,6 +23,8 @@ services:
   mcp:
     build: .
     image: jellyfin-mcp:local
+    # Local image: never pull it from a registry, always rebuild from the repo on (re)deploy
+    pull_policy: build
     container_name: jellyfin-mcp
     # Shares the tailscale container's network: Funnel proxies to 127.0.0.1:8765
     network_mode: service:ts
