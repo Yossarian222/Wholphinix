@@ -976,4 +976,33 @@
         <item quantity="other">%1$d Episodes</item>
     </plurals>
     <string name="audiobookshelf">Audiobookshelf</string>
+    <!-- Claude -->
+    <string name="claude" translatable="false">Claude</string>
+    <string name="claude_settings">Claude</string>
+    <string name="claude_settings_summary">Claude on the couch: fun facts and tips on the TV</string>
+    <string name="claude_companion">Claude companion</string>
+    <string name="claude_companion_summary">Short remarks during films and a tip for tonight on the home page</string>
+    <string name="claude_api_key">Anthropic API key</string>
+    <string name="claude_api_key_not_set">Not set – nothing is sent without a key</string>
+    <string name="claude_api_key_set">Set (…%1$s)</string>
+    <string name="claude_frequency">How often</string>
+    <string name="claude_frequency_never">Never</string>
+    <string name="claude_frequency_sometimes">Sometimes</string>
+    <string name="claude_frequency_often">Often</string>
+    <string-array name="claude_frequency_options">
+        <item>@string/claude_frequency_never</item>
+        <item>@string/claude_frequency_sometimes</item>
+        <item>@string/claude_frequency_often</item>
+    </string-array>
+    <string name="claude_model">Model</string>
+    <string-array name="claude_model_options" translatable="false">
+        <item>Claude Haiku 5.5</item>
+        <item>Claude Sonnet 5.5</item>
+    </string-array>
+    <string name="claude_model_haiku_subtitle">Fast and cheap (recommended)</string>
+    <string name="claude_model_sonnet_subtitle">Smarter, more expensive</string>
+    <string-array name="claude_model_options_subtitles">
+        <item>@string/claude_model_haiku_subtitle</item>
+        <item>@string/claude_model_sonnet_subtitle</item>
+    </string-array>
 </resources>

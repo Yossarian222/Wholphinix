@@ -35,6 +35,7 @@ import com.github.damontecres.wholphin.preferences.AppPreferences
 import com.github.damontecres.wholphin.preferences.PlayerBackend
 import com.github.damontecres.wholphin.services.AppUpgradeHandler
 import com.github.damontecres.wholphin.services.BackdropService
+import com.github.damontecres.wholphin.services.ClaudeCompanionService
 import com.github.damontecres.wholphin.services.DatePlayedInvalidationService
 import com.github.damontecres.wholphin.services.DeviceProfileService
 import com.github.damontecres.wholphin.services.ImageUrlService
@@ -49,6 +50,7 @@ import com.github.damontecres.wholphin.services.ServerEventListener
 import com.github.damontecres.wholphin.services.SetupDestination
 import com.github.damontecres.wholphin.services.SetupNavigationManager
 import com.github.damontecres.wholphin.services.SuggestionsSchedulerService
+import com.github.damontecres.wholphin.services.TvMessageService
 import com.github.damontecres.wholphin.services.UpdateChecker
 import com.github.damontecres.wholphin.services.UserPreferencesService
 import com.github.damontecres.wholphin.services.UserSwitchListener
@@ -150,6 +152,13 @@ class MainActivity : AppCompatActivity() {
 
     @Inject
     lateinit var intentService: IntentService
+
+    @Inject
+    lateinit var tvMessageService: TvMessageService
+
+    // Injected so it starts watching for idle time on the home page
+    @Inject
+    lateinit var claudeCompanionService: ClaudeCompanionService
 
     private var signInAuto = true
     private var playerBackend: PlayerBackend? = null
@@ -275,6 +284,7 @@ class MainActivity : AppCompatActivity() {
                                             userPreferences = userPreferences,
                                             backdropService = backdropService,
                                             screensaverService = screensaverService,
+                                            tvMessageService = tvMessageService,
                                             modifier = Modifier.fillMaxSize(),
                                         )
                                     }
@@ -288,6 +298,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        claudeCompanionService.onUserActivity()
         if (screensaverService.state.value.run { show || showDim }) {
             screensaverService.stop(false)
             screensaverService.pulse()
@@ -305,6 +316,7 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launchDefault {
             screensaverService.pulse()
         }
+        claudeCompanionService.onUserActivity()
     }
 
     override fun onRestart() {
@@ -326,6 +338,7 @@ class MainActivity : AppCompatActivity() {
         Timber.d("onStop")
         screensaverService.stop(true)
         tvProviderSchedulerService.launchOneTimeRefresh()
+        claudeCompanionService.onAppHidden()
     }
 
     override fun onPause() {

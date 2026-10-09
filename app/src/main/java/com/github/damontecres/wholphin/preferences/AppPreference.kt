@@ -1171,6 +1171,7 @@ val basicPreferences =
                     if (BuildConfig.DISCOVER_ENABLED) {
                         add(AppPreference.SeerrIntegration)
                     }
+                    add(ClaudePreference.Settings)
                     add(AppPreference.AdvancedSettings)
                 },
         ),

@@ -129,6 +129,7 @@ class PlaybackViewModelTests {
             imageUrlService = mockImageUrlService,
             screensaverService = mockScreensaverService,
             musicService = mockMusicService,
+            claudeCompanionService = mockk(relaxed = true),
             destination = destination,
         )
 
