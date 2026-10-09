@@ -78,7 +78,10 @@ import org.jellyfin.sdk.model.api.request.GetRecordingsRequest
 import org.jellyfin.sdk.model.api.request.GetStudiosRequest
 import timber.log.Timber
 import java.io.File
+import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.format.TextStyle
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -98,6 +101,7 @@ class HomeSettingsService
         private val imageUrlService: ImageUrlService,
         private val suggestionService: SuggestionService,
         private val displayPreferencesService: DisplayPreferencesService,
+        private val csfdTvTipsService: CsfdTvTipsService,
     ) {
         @OptIn(ExperimentalSerializationApi::class)
         val jsonParser =
@@ -315,7 +319,15 @@ class HomeSettingsService
                         config = HomeRowConfig.ContinueWatchingCombined(),
                     ),
                 )
-            val rowConfig = continueWatchingRow + includedIds
+            val csfdTipsRow =
+                listOf(
+                    HomeRowConfigDisplay(
+                        id = includedIds.size + 2,
+                        title = ResStringProvider(R.string.csfd_tv_tips),
+                        config = HomeRowConfig.CsfdTvTips(),
+                    ),
+                )
+            val rowConfig = csfdTipsRow + continueWatchingRow + includedIds
             return HomePageResolvedSettings(userId, rowConfig)
         }
 
@@ -548,6 +560,14 @@ class HomeSettingsService
                     HomeRowConfigDisplay(
                         id = id,
                         title = ResStringProvider(R.string.channels),
+                        config,
+                    )
+                }
+
+                is HomeRowConfig.CsfdTvTips -> {
+                    HomeRowConfigDisplay(
+                        id = id,
+                        title = ResStringProvider(R.string.csfd_tv_tips),
                         config,
                     )
                 }
@@ -1159,6 +1179,21 @@ class HomeSettingsService
                             showViewMore = it.size >= limit,
                         )
                     }
+                }
+
+                is HomeRowConfig.CsfdTvTips -> {
+                    val items =
+                        csfdTvTipsService.getRowItems(
+                            userId = userDto.id,
+                            useSeries = row.viewOptions.useSeries,
+                            limit = limit.coerceAtMost(10),
+                        )
+                    val day =
+                        LocalDate
+                            .now()
+                            .dayOfWeek
+                            .getDisplayName(TextStyle.FULL_STANDALONE, Locale.getDefault())
+                    Success(ResArgStringProvider(R.string.csfd_tv_tips_day, day), items, row.viewOptions, rowType = row)
                 }
 
                 is HomeRowConfig.Suggestions -> {

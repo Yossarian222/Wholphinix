@@ -84,53 +84,68 @@ fun QuickDetailsText(
 @Composable
 fun rememberQuickDetailsContentMap(textStyle: TextStyle = MaterialTheme.typography.titleSmall) =
     remember(textStyle) {
-        mapOf(
-            "star" to
-                InlineTextContent(
-                    Placeholder(
-                        textStyle.fontSize,
-                        textStyle.fontSize,
-                        PlaceholderVerticalAlign.TextCenter,
-                    ),
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Star,
-                        tint = FilledStarColor,
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                },
-            "rotten" to
-                InlineTextContent(
-                    Placeholder(
-                        textStyle.fontSize,
-                        textStyle.fontSize,
-                        PlaceholderVerticalAlign.TextCenter,
-                    ),
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_rotten_tomatoes_rotten),
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        tint = Color.Unspecified,
-                    )
-                },
-            "fresh" to
-                InlineTextContent(
-                    Placeholder(
-                        textStyle.fontSize,
-                        textStyle.fontSize,
-                        PlaceholderVerticalAlign.TextCenter,
-                    ),
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_rotten_tomatoes_fresh),
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        tint = Color.Unspecified,
-                    )
-                },
-        )
+        // One entry per possible ČSFD percentage, the id is built by csfdInlineContentId()
+        val csfd =
+            (0..100).associate { percent ->
+                csfdInlineContentId(percent) to
+                    InlineTextContent(
+                        Placeholder(
+                            textStyle.fontSize * 3.2f,
+                            textStyle.fontSize * 1.3f,
+                            PlaceholderVerticalAlign.TextCenter,
+                        ),
+                    ) {
+                        CsfdRating(percent, Modifier.fillMaxSize())
+                    }
+            }
+        csfd +
+            mapOf(
+                "star" to
+                    InlineTextContent(
+                        Placeholder(
+                            textStyle.fontSize,
+                            textStyle.fontSize,
+                            PlaceholderVerticalAlign.TextCenter,
+                        ),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Star,
+                            tint = FilledStarColor,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    },
+                "rotten" to
+                    InlineTextContent(
+                        Placeholder(
+                            textStyle.fontSize,
+                            textStyle.fontSize,
+                            PlaceholderVerticalAlign.TextCenter,
+                        ),
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_rotten_tomatoes_rotten),
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            tint = Color.Unspecified,
+                        )
+                    },
+                "fresh" to
+                    InlineTextContent(
+                        Placeholder(
+                            textStyle.fontSize,
+                            textStyle.fontSize,
+                            PlaceholderVerticalAlign.TextCenter,
+                        ),
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_rotten_tomatoes_fresh),
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            tint = Color.Unspecified,
+                        )
+                    },
+            )
     }
 
 @Composable

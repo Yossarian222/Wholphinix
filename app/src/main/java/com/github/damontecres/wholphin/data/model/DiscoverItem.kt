@@ -105,6 +105,10 @@ data class DiscoverItem(
     val backDropUrl: String?,
     val logoUrl: String?,
     val jellyfinItemId: UUID?,
+    /** Slovak title from ČSFD, shown instead of the Seerr/TMDB one */
+    val csfdTitle: String? = null,
+    /** Plot from ČSFD, shown instead of the Seerr/TMDB one */
+    val csfdOverview: String? = null,
 ) : CardGridItem {
     override val gridId: String get() = id.toString()
     override val playable: Boolean = false
