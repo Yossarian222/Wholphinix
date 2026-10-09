@@ -14,7 +14,7 @@ Stručný postup krok za krokom. Podrobnosti sú v [README → WhatsApp](README.
 
 ## Zostáva
 
-> 📍 **Stav:** body A–D hotové, kľúče a tokeny sú bezpečne uložené u používateľa. **Pokračujeme doma bodom E (Portainer)** – Portainer sa dá upravovať len z domácej siete.
+> 📍 **Stav:** body A–E hotové (stack beží z `refs/heads/main`, test verify URL vrátil `12345`). **Ďalej bod F – webhook v Mete.**
 
 ### A) Druhý mobil
 - [x] Step 1 → *Send a test message* → pole **To / Add recipient** → pridať druhé číslo a zadať overovací kód z WhatsAppu (max. 5 čísel)
@@ -32,7 +32,7 @@ Stručný postup krok za krokom. Podrobnosti sú v [README → WhatsApp](README.
 - [x] console.anthropic.com → **API Keys → Create key** → `ANTHROPIC_API_KEY`
 
 ### E) Portainer – stack `jellyfin-mcp`
-- [ ] Doplniť premenné:
+- [x] Doplniť premenné:
 
 | Premenná | Hodnota |
 |---|---|
@@ -43,7 +43,7 @@ Stručný postup krok za krokom. Podrobnosti sú v [README → WhatsApp](README.
 | `WHATSAPP_ALLOWED_NUMBERS` | obe čísla bez `+` a medzier, čiarkou: `421905123456,421911222333` |
 | `ANTHROPIC_API_KEY` | kľúč z bodu D |
 
-- [ ] **Pull and redeploy** (aby sa stiahol aktuálny kód z `main`)
+- [x] **Pull and redeploy** (aby sa stiahol aktuálny kód z `main`)
 
 ### F) Webhook (až po redeployi – Meta overuje, či server odpovedá)
 - [ ] developers.facebook.com → **Step 2. Production setup → Webhooks** (resp. *WhatsApp → Configuration*)
