@@ -81,6 +81,12 @@ fun SwitchColors(): SwitchColors {
         AppThemeColors.OLED_BLACK,
         AppThemeColors.RED,
         AppThemeColors.BROWN,
+        AppThemeColors.CINEMA,
+        AppThemeColors.GOLD,
+        AppThemeColors.MIDNIGHT,
+        AppThemeColors.TEAL,
+        AppThemeColors.NEON,
+        AppThemeColors.GRAPHITE,
         -> {
             SwitchDefaults.colors(
                 checkedThumbColor = MaterialTheme.colorScheme.onPrimary,

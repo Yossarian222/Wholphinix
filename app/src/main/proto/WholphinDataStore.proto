@@ -123,6 +123,12 @@ enum AppThemeColors {
   OLED_BLACK = 5;
   RED = 6;
   BROWN = 7;
+  CINEMA = 8;
+  GOLD = 9;
+  MIDNIGHT = 10;
+  TEAL = 11;
+  NEON = 12;
+  GRAPHITE = 13;
 }
 
 enum EdgeStyle{
