@@ -33,6 +33,9 @@ class ImageUrlService
             backdropTags: List<String>,
             parentThumbId: UUID? = null,
             parentBackdropId: UUID? = null,
+            seriesPrimaryTag: String? = null,
+            parentThumbTag: String? = null,
+            parentBackdropTag: String? = null,
             fillWidth: Int? = null,
             fillHeight: Int? = null,
         ): String? =
@@ -42,6 +45,7 @@ class ImageUrlService
                         getItemImageUrl(
                             itemId = seriesId,
                             imageType = imageType,
+                            tag = seriesPrimaryTag.takeIf { imageType == ImageType.PRIMARY },
                             fillWidth = fillWidth,
                             fillHeight = fillHeight,
                         )
@@ -49,6 +53,7 @@ class ImageUrlService
                         getItemImageUrl(
                             itemId = itemId,
                             imageType = imageType,
+                            tag = ownImageTag(imageType, imageTags, backdropTags),
                             fillWidth = fillWidth,
                             fillHeight = fillHeight,
                         )
@@ -61,6 +66,7 @@ class ImageUrlService
                         getItemImageUrl(
                             itemId = seriesId,
                             imageType = imageType,
+                            tag = seriesPrimaryTag.takeIf { imageType == ImageType.PRIMARY },
                             fillWidth = fillWidth,
                             fillHeight = fillHeight,
                         )
@@ -68,6 +74,7 @@ class ImageUrlService
                         getItemImageUrl(
                             itemId = itemId,
                             imageType = imageType,
+                            tag = ownImageTag(imageType, imageTags, backdropTags),
                             fillWidth = fillWidth,
                             fillHeight = fillHeight,
                         )
@@ -84,6 +91,7 @@ class ImageUrlService
                         getItemImageUrl(
                             itemId = parentThumbId,
                             imageType = imageType,
+                            tag = parentThumbTag,
                             fillWidth = fillWidth,
                             fillHeight = fillHeight,
                         )
@@ -94,6 +102,7 @@ class ImageUrlService
                         getItemImageUrl(
                             itemId = parentBackdropId,
                             imageType = ImageType.BACKDROP,
+                            tag = parentBackdropTag,
                             fillWidth = fillWidth,
                             fillHeight = fillHeight,
                         )
@@ -101,6 +110,7 @@ class ImageUrlService
                         getItemImageUrl(
                             itemId = parentThumbId,
                             imageType = imageType,
+                            tag = parentThumbTag,
                             fillWidth = fillWidth,
                             fillHeight = fillHeight,
                         )
@@ -113,6 +123,7 @@ class ImageUrlService
                         getItemImageUrl(
                             itemId = itemId,
                             imageType = ImageType.PRIMARY,
+                            tag = ownImageTag(ImageType.PRIMARY, imageTags, backdropTags),
                             fillWidth = fillWidth,
                             fillHeight = fillHeight,
                         )
@@ -121,6 +132,7 @@ class ImageUrlService
                         getItemImageUrl(
                             itemId = itemId,
                             imageType = ImageType.BACKDROP,
+                            tag = ownImageTag(ImageType.BACKDROP, imageTags, backdropTags),
                             fillWidth = fillWidth,
                             fillHeight = fillHeight,
                         )
@@ -128,6 +140,7 @@ class ImageUrlService
                         getItemImageUrl(
                             itemId = itemId,
                             imageType = imageType,
+                            tag = ownImageTag(imageType, imageTags, backdropTags),
                             fillWidth = fillWidth,
                             fillHeight = fillHeight,
                         )
@@ -143,6 +156,7 @@ class ImageUrlService
                         getItemImageUrl(
                             itemId = seriesId,
                             imageType = imageType,
+                            tag = seriesPrimaryTag.takeIf { imageType == ImageType.PRIMARY },
                             fillWidth = fillWidth,
                             fillHeight = fillHeight,
                         )
@@ -154,6 +168,7 @@ class ImageUrlService
                         getItemImageUrl(
                             itemId = seriesId,
                             imageType = imageType,
+                            tag = seriesPrimaryTag.takeIf { imageType == ImageType.PRIMARY },
                             fillWidth = fillWidth,
                             fillHeight = fillHeight,
                         )
@@ -161,6 +176,7 @@ class ImageUrlService
                         getItemImageUrl(
                             itemId = itemId,
                             imageType = imageType,
+                            tag = ownImageTag(imageType, imageTags, backdropTags),
                             fillWidth = fillWidth,
                             fillHeight = fillHeight,
                         )
@@ -171,11 +187,19 @@ class ImageUrlService
                     getItemImageUrl(
                         itemId = itemId,
                         imageType = imageType,
+                        tag = ownImageTag(imageType, imageTags, backdropTags),
                         fillWidth = fillWidth,
                         fillHeight = fillHeight,
                     )
                 }
             }
+
+        /** The tag of the item's own image: it changes with the image, so a new image is never served from the cache */
+        private fun ownImageTag(
+            type: ImageType,
+            imageTags: Map<ImageType, String?>,
+            backdropTags: List<String>,
+        ): String? = if (type == ImageType.BACKDROP) backdropTags.firstOrNull() else imageTags[type]
 
         fun getItemImageUrl(
             item: BaseItem?,
@@ -194,6 +218,9 @@ class ImageUrlService
                     imageType = imageType,
                     parentThumbId = item.data.parentThumbItemId,
                     parentBackdropId = item.data.parentBackdropItemId,
+                    seriesPrimaryTag = item.data.seriesPrimaryImageTag,
+                    parentThumbTag = item.data.parentThumbImageTag,
+                    parentBackdropTag = item.data.parentBackdropImageTags?.firstOrNull(),
                     backdropTags = item.data.backdropImageTags.orEmpty(),
                     fillWidth = fillWidth,
                     fillHeight = fillHeight,
