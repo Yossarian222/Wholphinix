@@ -19,6 +19,8 @@ import com.github.damontecres.wholphin.data.model.JellyfinUser
 import com.github.damontecres.wholphin.preferences.UserPreferences
 import com.github.damontecres.wholphin.services.BackdropService
 import com.github.damontecres.wholphin.services.NavigationManager
+import com.github.damontecres.wholphin.ui.components.CsfdRatingPrompt
+import com.github.damontecres.wholphin.ui.components.CsfdRatingPromptViewModel
 import com.github.damontecres.wholphin.ui.components.ErrorMessage
 import com.github.damontecres.wholphin.ui.launchIO
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -53,6 +55,7 @@ fun ApplicationContent(
     modifier: Modifier = Modifier,
     enableTopScrim: Boolean = true,
     viewModel: ApplicationContentViewModel = hiltViewModel(),
+    ratingPromptViewModel: CsfdRatingPromptViewModel = hiltViewModel(),
 ) {
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     Box(
@@ -101,6 +104,12 @@ fun ApplicationContent(
                     }
                 }
             },
+        )
+        // Asks for a ČSFD rating of a finished movie, only once the player is gone
+        val topDestination = navigationManager.backStack.lastOrNull()
+        CsfdRatingPrompt(
+            show = topDestination !is Destination.Playback && topDestination !is Destination.PlaybackList,
+            viewModel = ratingPromptViewModel,
         )
     }
 }

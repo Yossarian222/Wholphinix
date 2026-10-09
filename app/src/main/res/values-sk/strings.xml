@@ -610,7 +610,7 @@
     <string name="seerr_local_user">Lokálny používateľ</string>
     <string name="search_and_download_subtitles"><![CDATA[Vyhľadať a stiahnuť titulky]]></string>
     <string name="no_subtitles_found">Nenašli sa žiadne vzdialené titulky</string>
-    <string name="series_continueing">Prebieha</string>
+    <string name="series_continueing">vysiela sa</string>
     <string name="in_app_screensaver">Použiť šetrič obrazovky v aplikácii</string>
     <string name="delete_item">Naozaj chcete odstrániť túto položku?</string>
     <string name="show_media_management">Zobraziť možnosti správy médií</string>
@@ -790,4 +790,10 @@
     <string name="season_episode_number_padded_range">S%1$02dE%2$02d-E%3$02d</string>
     <string name="episode_number_short">E%1$d</string>
     <string name="season_number">Séria %1$d</string>
+
+    <!-- Detail & rating prompt -->
+    <string name="premiere_date">Premiéra: %1$s</string>
+    <string name="csfd_rating_prompt_title">Ako sa ti páčil %1$s?</string>
+    <string name="csfd_rating_prompt_not_now">Teraz nie</string>
+    <string name="csfd_rating_prompt_sent">Hodnotenie odoslané na ČSFD</string>
 </resources>

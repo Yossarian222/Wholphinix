@@ -47,6 +47,7 @@ import com.github.damontecres.wholphin.services.DeviceProfileService
 import com.github.damontecres.wholphin.services.ImageUrlService
 import com.github.damontecres.wholphin.services.MusicService
 import com.github.damontecres.wholphin.services.NavigationManager
+import com.github.damontecres.wholphin.services.PendingRatingService
 import com.github.damontecres.wholphin.services.PlayerFactory
 import com.github.damontecres.wholphin.services.PlaylistCreationResult
 import com.github.damontecres.wholphin.services.PlaylistCreator
@@ -158,6 +159,7 @@ class PlaybackViewModel
         private val imageUrlService: ImageUrlService,
         private val screensaverService: ScreensaverService,
         private val musicService: MusicService,
+        private val pendingRatingService: PendingRatingService,
         @Assisted private val destination: Destination,
     ) : ViewModel(),
         Player.Listener,
@@ -1443,8 +1445,37 @@ class PlaybackViewModel
 
         fun release() {
             Timber.v("release")
+            reportLeftForRating()
             disconnectPlayer()
             activityListener = null
+        }
+
+        private var ratingReported = false
+
+        /**
+         * Offers the ČSFD rating prompt for a movie that ended or was left after most of it was watched.
+         * Not for playlists or when another item follows, so autoplay is never interrupted.
+         */
+        private fun reportLeftForRating() {
+            if (ratingReported || isPlaylist) return
+            if (!this::player.isInitialized || !this::currentItem.isInitialized) return
+            val media = currentItem as? PlaylistItem.Media ?: return
+            if (state.value.nextItem() is PlaylistItem.Media) return
+            ratingReported = true
+            try {
+                val p = player
+                val duration = p.duration
+                val watched =
+                    p.playbackState == Player.STATE_ENDED ||
+                        (
+                            duration != C.TIME_UNSET &&
+                                duration > 0 &&
+                                p.currentPosition >= duration * PendingRatingService.WATCHED_FRACTION
+                        )
+                pendingRatingService.onPlaybackLeft(media.item, watched)
+            } catch (ex: Exception) {
+                Timber.w(ex, "Could not check playback progress for the rating prompt")
+            }
         }
 
         fun subscribeToWebSocket() {
