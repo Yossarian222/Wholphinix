@@ -84,6 +84,24 @@ data class BaseItem(
         }
     }
 
+    /**
+     * Title for cards in rows and grids which mix series, seasons and episodes (eg recently added): like Jellyfin web,
+     * a season shows its series name (and year) with the season name below in [cardSubtitle], an episode its series
+     * name with "S3 E4 - name" below. Elsewhere (eg the seasons of a series) [title] stays the season name.
+     */
+    val cardTitle: String? by lazy {
+        if (type == BaseItemKind.SEASON && !data.seriesName.isNullOrBlank()) {
+            listOfNotNull(data.seriesName, data.productionYear?.let { "($it)" }).joinToString(" ")
+        } else {
+            title
+        }
+    }
+
+    /** Subtitle that goes with [cardTitle] */
+    val cardSubtitle: String? by lazy {
+        if (type == BaseItemKind.SEASON && !data.seriesName.isNullOrBlank()) name else subtitle
+    }
+
     val subtitleLong: String? by lazy {
         if (type == BaseItemKind.EPISODE) {
             buildList {

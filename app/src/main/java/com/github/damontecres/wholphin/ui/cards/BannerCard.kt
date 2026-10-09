@@ -47,6 +47,7 @@ import com.github.damontecres.wholphin.ui.Cards
 import com.github.damontecres.wholphin.ui.FontAwesome
 import com.github.damontecres.wholphin.ui.LocalImageUrlService
 import com.github.damontecres.wholphin.ui.enableMarquee
+import org.jellyfin.sdk.model.api.BaseItemKind
 import org.jellyfin.sdk.model.api.ImageType
 
 /**
@@ -72,6 +73,12 @@ fun BannerCard(
 ) {
     val imageUrlService = LocalImageUrlService.current
     val density = LocalDensity.current
+    val widerImageRatio =
+        remember(item, aspectRatio, imageType, useSeriesForPrimary) {
+            widerOwnPrimaryRatio(item, aspectRatio, imageType, useSeriesForPrimary)
+        }
+    val cardRatio = widerImageRatio ?: aspectRatio
+    val contentScale = if (widerImageRatio != null) ContentScale.Fit else imageContentScale
     val fillHeight =
         remember(cardHeight, density) {
             if (cardHeight.isSpecified) {
@@ -104,7 +111,7 @@ fun BannerCard(
     val currentOnLongClick by rememberUpdatedState(onLongClick)
 
     Card(
-        modifier = modifier.size(cardHeight * aspectRatio, cardHeight),
+        modifier = modifier.size(cardHeight * cardRatio, cardHeight),
         onClick = { currentOnClick() },
         onLongClick = { currentOnLongClick() },
         interactionSource = interactionSource,
@@ -124,7 +131,7 @@ fun BannerCard(
                 AsyncImage(
                     model = imageUrl,
                     contentDescription = null,
-                    contentScale = imageContentScale,
+                    contentScale = contentScale,
                     onError = remember { { imageError = true } },
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -222,14 +229,20 @@ fun BannerCardWithTitle(
 ) {
     val focused by interactionSource.collectIsFocusedAsState()
     val focusedAfterDelay by rememberFocusedAfterDelay(interactionSource)
-    val aspectRationToUse = aspectRatio.coerceAtLeast(AspectRatios.MIN)
+    val widerImageRatio =
+        remember(item, aspectRatio, imageType, useSeriesForPrimary) {
+            widerOwnPrimaryRatio(item, aspectRatio, imageType, useSeriesForPrimary)
+        }
+    val cardRatio = widerImageRatio ?: aspectRatio
+    val aspectRationToUse = cardRatio.coerceAtLeast(AspectRatios.MIN)
     val width = cardHeight * aspectRationToUse
     Column(
         verticalArrangement = Arrangement.spacedBy(4.dp),
         modifier = modifier.width(width),
     ) {
         BannerCard(
-            name = null,
+            // Shown when there is no image: the series of a season/episode rather than an empty card
+            name = item?.data?.seriesName ?: item?.name,
             item = item,
             onClick = onClick,
             onLongClick = onLongClick,
@@ -239,10 +252,10 @@ fun BannerCardWithTitle(
             favorite = favorite,
             playPercent = playPercent,
             cardHeight = cardHeight,
-            aspectRatio = aspectRatio,
+            aspectRatio = cardRatio,
             interactionSource = interactionSource,
             imageType = imageType,
-            imageContentScale = imageContentScale,
+            imageContentScale = if (widerImageRatio != null) ContentScale.Fit else imageContentScale,
             useSeriesForPrimary = useSeriesForPrimary,
         )
         SlidingCardText(focused) {
@@ -272,4 +285,33 @@ fun BannerCardWithTitle(
             )
         }
     }
+}
+
+/** How much wider than the card an item's own primary image must be to show it whole in a wider card */
+private const val WIDER_IMAGE_THRESHOLD = 1.2f
+
+/**
+ * The aspect ratio of the item's own primary image (from [BaseItem.aspectRatio], ie `primaryImageAspectRatio`) when
+ * it is clearly wider than [cardRatio], eg a 16:9 image of a series in a row of 2:3 posters. The card then keeps its
+ * height, gets this width and shows the image whole (ContentScale.Fit) instead of cropping it. Null otherwise, so the
+ * row's aspect ratio and content scale settings apply as before.
+ */
+fun widerOwnPrimaryRatio(
+    item: BaseItem?,
+    cardRatio: Float,
+    imageType: ImageType,
+    useSeriesForPrimary: Boolean,
+): Float? {
+    if (item == null || imageType != ImageType.PRIMARY || item.imageUrlOverride != null) return null
+    if (useSeriesForPrimary && (item.type == BaseItemKind.EPISODE || item.type == BaseItemKind.SEASON)) return null
+    // Only the item's own image has this aspect ratio, a series poster shown for a season does not
+    if (item.data.imageTags
+            ?.get(ImageType.PRIMARY)
+            .isNullOrBlank()
+    ) {
+        return null
+    }
+    val ratio = item.aspectRatio ?: return null
+    if (ratio <= cardRatio * WIDER_IMAGE_THRESHOLD) return null
+    return ratio.coerceAtMost(maxOf(cardRatio, AspectRatios.WIDE))
 }

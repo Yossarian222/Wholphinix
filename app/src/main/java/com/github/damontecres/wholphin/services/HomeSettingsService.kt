@@ -820,7 +820,10 @@ class HomeSettingsService
                     val request =
                         GetLatestMediaRequest(
                             fields = library.itemFields,
+                            // Like Jellyfin web, so a season's own poster comes back in its image tags
+                            enableImages = true,
                             imageTypeLimit = 1,
+                            enableImageTypes = listOf(ImageType.PRIMARY, ImageType.THUMB, ImageType.BACKDROP),
                             parentId = row.parentId,
                             groupItems = true,
                             limit = limit,

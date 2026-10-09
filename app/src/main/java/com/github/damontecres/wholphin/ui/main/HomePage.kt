@@ -709,8 +709,8 @@ fun HomePageCardContent(
                 }
             if (viewOptions.showTitles) {
                 BannerCardWithTitle(
-                    title = item?.title,
-                    subtitle = item?.subtitle,
+                    title = item?.cardTitle,
+                    subtitle = item?.cardSubtitle,
                     item = item,
                     aspectRatio = ratio,
                     imageType = imageType,
