@@ -217,6 +217,10 @@ message InterfacePreferences {
   bool show_logos = 13;
   SearchPreferences search_preferences = 14;
   repeated DisplayToggle display_toggles = 15;
+  // App wide font size scale in percent, 0 means default (100)
+  int32 font_scale_percent = 16;
+  // Navigation panel (side drawer & top tabs) size scale in percent, 0 means default (100)
+  int32 nav_scale_percent = 17;
 }
 
 message AdvancedPreferences {

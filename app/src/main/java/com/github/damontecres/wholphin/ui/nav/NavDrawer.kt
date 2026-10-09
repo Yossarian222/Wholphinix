@@ -85,6 +85,7 @@ import com.github.damontecres.wholphin.ui.launchDefault
 import com.github.damontecres.wholphin.ui.preferences.PreferenceScreenOption
 import com.github.damontecres.wholphin.ui.setup.UserIconCardImage
 import com.github.damontecres.wholphin.ui.spacedByWithFooter
+import com.github.damontecres.wholphin.ui.theme.LocalNavScale
 import com.github.damontecres.wholphin.ui.theme.LocalTheme
 import com.github.damontecres.wholphin.ui.toServerString
 import com.github.damontecres.wholphin.ui.tryRequestFocus
@@ -323,8 +324,10 @@ fun NavDrawer(
         viewModel.setShowMore(false)
     }
 
-    val closedDrawerWidth = CollapsedDrawerItemWidth
-    val openDrawerWidth = ExpandedDrawerItemWidth
+    // The drawer itself is scaled by the nav panel size preference, see DrawerSheet
+    val navScale = LocalNavScale.current
+    val closedDrawerWidth = CollapsedDrawerItemWidth * navScale
+    val openDrawerWidth = ExpandedDrawerItemWidth * navScale
     val offset by animateIntOffsetAsState(
         targetValue =
             IntOffset(

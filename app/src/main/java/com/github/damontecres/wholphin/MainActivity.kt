@@ -64,6 +64,7 @@ import com.github.damontecres.wholphin.ui.launchDefault
 import com.github.damontecres.wholphin.ui.nav.Destination
 import com.github.damontecres.wholphin.ui.playback.PlayExternalViewModel
 import com.github.damontecres.wholphin.ui.showToast
+import com.github.damontecres.wholphin.ui.theme.ProvideUiScale
 import com.github.damontecres.wholphin.ui.theme.WholphinTheme
 import com.github.damontecres.wholphin.ui.theme.colors.PurpleThemeColors
 import com.github.damontecres.wholphin.ui.util.ProvideLocalClock
@@ -277,16 +278,21 @@ class MainActivity : AppCompatActivity() {
                                     true,
                                     appThemeColors = appPreferences.interfacePreferences.appThemeColors,
                                 ) {
-                                    ProvideLocalClock {
-                                        MainContent(
-                                            backStack = setupNavigationManager.backStack,
-                                            navigationManager = navigationManager,
-                                            userPreferences = userPreferences,
-                                            backdropService = backdropService,
-                                            screensaverService = screensaverService,
-                                            tvMessageService = tvMessageService,
-                                            modifier = Modifier.fillMaxSize(),
-                                        )
+                                    ProvideUiScale(
+                                        fontScalePercent = appPreferences.interfacePreferences.fontScalePercent,
+                                        navScalePercent = appPreferences.interfacePreferences.navScalePercent,
+                                    ) {
+                                        ProvideLocalClock {
+                                            MainContent(
+                                                backStack = setupNavigationManager.backStack,
+                                                navigationManager = navigationManager,
+                                                userPreferences = userPreferences,
+                                                backdropService = backdropService,
+                                                screensaverService = screensaverService,
+                                                tvMessageService = tvMessageService,
+                                                modifier = Modifier.fillMaxSize(),
+                                            )
+                                        }
                                     }
                                 }
                             }

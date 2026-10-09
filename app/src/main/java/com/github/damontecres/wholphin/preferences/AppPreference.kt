@@ -822,6 +822,32 @@ sealed interface AppPreference<Pref, T> {
                 valueToIndex = { it.number },
             )
 
+        val FontScalePref =
+            AppChoicePreference<AppPreferences, Int>(
+                title = R.string.font_size_scale,
+                defaultValue = DEFAULT_UI_SCALE_PERCENT,
+                getter = { it.interfacePreferences.fontScalePercent.toUiScalePercent() },
+                setter = { prefs, value ->
+                    prefs.updateInterfacePreferences { fontScalePercent = value }
+                },
+                displayValues = R.array.ui_scale_options,
+                indexToValue = { UI_SCALE_PERCENTS.getOrElse(it) { DEFAULT_UI_SCALE_PERCENT } },
+                valueToIndex = { UI_SCALE_PERCENTS.indexOf(it.toUiScalePercent()) },
+            )
+
+        val NavScalePref =
+            AppChoicePreference<AppPreferences, Int>(
+                title = R.string.nav_panel_scale,
+                defaultValue = DEFAULT_UI_SCALE_PERCENT,
+                getter = { it.interfacePreferences.navScalePercent.toUiScalePercent() },
+                setter = { prefs, value ->
+                    prefs.updateInterfacePreferences { navScalePercent = value }
+                },
+                displayValues = R.array.ui_scale_options,
+                indexToValue = { UI_SCALE_PERCENTS.getOrElse(it) { DEFAULT_UI_SCALE_PERCENT } },
+                valueToIndex = { UI_SCALE_PERCENTS.indexOf(it.toUiScalePercent()) },
+            )
+
         val ManageMedia =
             AppSwitchPreference<AppPreferences>(
                 title = R.string.show_media_management,
@@ -1121,6 +1147,8 @@ val basicPreferences =
                     AppPreference.PlayThemeMusic,
                     AppPreference.SubtitleStyle,
                     AppPreference.ThemeColors,
+                    AppPreference.FontScalePref,
+                    AppPreference.NavScalePref,
                     AppPreference.ScreensaverSettings,
                 ),
         ),
@@ -1477,3 +1505,15 @@ class AppSliderPreference<Pref>(
             ?: summary?.let { context.getString(it) }
             ?: value?.toString()
 }
+
+/**
+ * The selectable UI scales in percent for [AppPreference.FontScalePref] & [AppPreference.NavScalePref]
+ */
+val UI_SCALE_PERCENTS = listOf(85, 100, 115, 130)
+
+const val DEFAULT_UI_SCALE_PERCENT = 100
+
+/**
+ * Converts a stored scale percentage to a supported one; unset (0) or unknown values become [DEFAULT_UI_SCALE_PERCENT]
+ */
+fun Int.toUiScalePercent(): Int = if (this in UI_SCALE_PERCENTS) this else DEFAULT_UI_SCALE_PERCENT

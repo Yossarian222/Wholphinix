@@ -200,6 +200,8 @@
     <string name="play_with_transcoding">Prehrávať s prekódovaním</string>
     <string name="media_information">Informácie o médiu</string>
     <string name="show_clock">Zobraziť hodiny</string>
+    <string name="font_size_scale">Veľkosť písma</string>
+    <string name="nav_panel_scale">Veľkosť navigačného panelu</string>
     <string name="aired_episode_order">Poradie odvysielaných epizód</string>
     <string name="create_playlist">Vytvoriť nový playlist</string>
     <string name="add_to_playlist">Pridať do playlistu</string>
