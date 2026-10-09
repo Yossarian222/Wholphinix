@@ -87,6 +87,10 @@ fun SwitchColors(): SwitchColors {
         AppThemeColors.TEAL,
         AppThemeColors.NEON,
         AppThemeColors.GRAPHITE,
+        AppThemeColors.DAYLIGHT,
+        AppThemeColors.DUSK,
+        AppThemeColors.NIGHT,
+        AppThemeColors.AUTO_TIME_OF_DAY,
         -> {
             SwitchDefaults.colors(
                 checkedThumbColor = MaterialTheme.colorScheme.onPrimary,

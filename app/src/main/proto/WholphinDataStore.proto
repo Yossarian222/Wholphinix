@@ -129,6 +129,11 @@ enum AppThemeColors {
   TEAL = 11;
   NEON = 12;
   GRAPHITE = 13;
+  DAYLIGHT = 14;
+  DUSK = 15;
+  NIGHT = 16;
+  // Switches between DAYLIGHT, DUSK and NIGHT based on local time
+  AUTO_TIME_OF_DAY = 17;
 }
 
 enum EdgeStyle{

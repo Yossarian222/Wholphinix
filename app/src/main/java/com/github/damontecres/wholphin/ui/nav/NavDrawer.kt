@@ -799,6 +799,10 @@ fun navItemColor(
                     AppThemeColors.TEAL,
                     AppThemeColors.NEON,
                     AppThemeColors.GRAPHITE,
+                    AppThemeColors.DAYLIGHT,
+                    AppThemeColors.DUSK,
+                    AppThemeColors.NIGHT,
+                    AppThemeColors.AUTO_TIME_OF_DAY,
                     -> MaterialTheme.colorScheme.border
 
                     AppThemeColors.BOLD_BLUE,

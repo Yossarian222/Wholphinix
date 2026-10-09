@@ -770,6 +770,10 @@
     <string name="theme_teal">Tyrkys</string>
     <string name="theme_neon">Neón</string>
     <string name="theme_graphite">Grafit</string>
+    <string name="theme_daylight">Deň</string>
+    <string name="theme_dusk">Súmrak</string>
+    <string name="theme_night">Noc</string>
+    <string name="theme_auto_time_of_day">Podľa dennej doby</string>
     <string name="dpad_seek_mode_minimal">Minimálne</string>
     <string name="dpad_seek_mode_minimal_summary">Malý panel pretáčania v dolnej časti obrazovky (predvolené)</string>
     <string name="dpad_seek_mode_trickplay_summary">Panel pretáčania s náhľadmi Trickplay</string>

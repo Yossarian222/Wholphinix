@@ -629,6 +629,10 @@
     <string name="theme_teal">Teal</string>
     <string name="theme_neon">Neon</string>
     <string name="theme_graphite">Graphite</string>
+    <string name="theme_daylight">Daylight</string>
+    <string name="theme_dusk">Dusk</string>
+    <string name="theme_night">Night</string>
+    <string name="theme_auto_time_of_day">By time of day</string>
     <string-array name="app_theme_colors">
         <item>@string/purple</item>
         <item>@string/blue</item>
@@ -644,6 +648,10 @@
         <item>@string/theme_teal</item>
         <item>@string/theme_neon</item>
         <item>@string/theme_graphite</item>
+        <item>@string/theme_daylight</item>
+        <item>@string/theme_dusk</item>
+        <item>@string/theme_night</item>
+        <item>@string/theme_auto_time_of_day</item>
     </string-array>
 
     <string name="skip_ignore">Ignore</string>

@@ -154,6 +154,10 @@ fun sliderActiveColor(focused: Boolean): Color {
         AppThemeColors.TEAL,
         AppThemeColors.NEON,
         AppThemeColors.GRAPHITE,
+        AppThemeColors.DAYLIGHT,
+        AppThemeColors.DUSK,
+        AppThemeColors.NIGHT,
+        AppThemeColors.AUTO_TIME_OF_DAY,
         -> {
             MaterialTheme.colorScheme.border
         }
@@ -204,6 +208,10 @@ fun sliderInactiveColor(focused: Boolean): Color {
         AppThemeColors.TEAL,
         AppThemeColors.NEON,
         AppThemeColors.GRAPHITE,
+        AppThemeColors.DAYLIGHT,
+        AppThemeColors.DUSK,
+        AppThemeColors.NIGHT,
+        AppThemeColors.AUTO_TIME_OF_DAY,
         -> {
             MaterialTheme.colorScheme.secondaryContainer.copy(alpha = .66f)
         }
