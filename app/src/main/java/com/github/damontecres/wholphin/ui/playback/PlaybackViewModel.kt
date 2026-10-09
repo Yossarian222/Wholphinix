@@ -1460,7 +1460,7 @@ class PlaybackViewModel
         private var ratingReported = false
 
         /**
-         * Offers the ČSFD rating prompt for a movie that ended or was left after most of it was watched.
+         * Offers the ČSFD rating prompt for a movie (or the last episode of a series) that ended or was left after most of it was watched.
          * Not for playlists or when another item follows, so autoplay is never interrupted.
          */
         private fun reportLeftForRating() {

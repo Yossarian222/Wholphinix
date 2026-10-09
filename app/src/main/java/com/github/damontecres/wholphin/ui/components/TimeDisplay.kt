@@ -89,7 +89,8 @@ fun BoxScope.TopRightHeader(
     val dateString = remember(date, locale) { formatHeaderDate(date, locale) }
     Column(
         horizontalAlignment = Alignment.End,
-        verticalArrangement = Arrangement.spacedBy(0.dp),
+        // Room under the date so the focused (enlarged) search circle does not overlap it
+        verticalArrangement = Arrangement.spacedBy(6.dp),
         modifier =
             modifier
                 .align(Alignment.TopEnd)

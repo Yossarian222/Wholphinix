@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.jellyfin.sdk.api.client.ApiClient
+import org.jellyfin.sdk.api.client.extensions.tvShowsApi
 import org.jellyfin.sdk.api.client.extensions.userLibraryApi
 import org.jellyfin.sdk.model.api.BaseItemKind
 import timber.log.Timber
@@ -20,7 +21,7 @@ import javax.inject.Singleton
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * A finished movie waiting for its ČSFD rating
+ * A finished movie (or series) waiting for its ČSFD rating
  */
 data class PendingRating(
     val itemId: UUID,
@@ -29,7 +30,7 @@ data class PendingRating(
 )
 
 /**
- * Asks for a ČSFD rating after a movie has been watched to the end.
+ * Asks for a ČSFD rating after a movie or the last episode of a series has been watched to the end.
  *
  * The player reports the movie when it is left, the root composable shows the prompt once the player is gone.
  */
@@ -57,8 +58,33 @@ class PendingRatingService
             item: BaseItem,
             watched: Boolean,
         ) {
-            if (item.type != BaseItemKind.MOVIE || item.id in handled) return
-            val csfdId = item.csfdId ?: return
+            when (item.type) {
+                BaseItemKind.MOVIE -> {
+                    val csfdId = item.csfdId ?: return
+                    ask(item, watched) { PendingRating(item.id, csfdId, item.name ?: "") }
+                }
+
+                // After the last episode of a series, ask about the whole series
+                BaseItemKind.EPISODE -> {
+                    val seriesId = item.data.seriesId ?: return
+                    ask(item, watched, seriesId) { seriesRating(seriesId, item.id) }
+                }
+
+                else -> {}
+            }
+        }
+
+        /**
+         * @param key the item the rating is for, asked about at most once per app session
+         * @param rating builds the prompt or returns null if there is nothing to ask
+         */
+        private fun ask(
+            item: BaseItem,
+            watched: Boolean,
+            key: UUID = item.id,
+            rating: suspend () -> PendingRating?,
+        ) {
+            if (key in handled) return
             val wasPlayed = item.played
             scope.launch(ExceptionHandler()) {
                 val finished =
@@ -67,14 +93,33 @@ class PendingRatingService
                         // give the stop report a moment to arrive first
                         (!wasPlayed && playedOnServer(item.id))
                 if (!finished) return@launch
+                val pending = rating() ?: return@launch
                 // An empty map means the plugin has no ČSFD profile to read, so nothing could be rated
                 val myRatings = csfdTvTipsService.getMyRatings()
-                if (myRatings.isEmpty() || myRatings.containsKey(csfdId)) return@launch
-                if (handled.add(item.id)) {
-                    Timber.i("Asking for a ČSFD rating of %s (%s)", item.id, csfdId)
-                    _pending.update { PendingRating(item.id, csfdId, item.name ?: "") }
+                if (myRatings.isEmpty() || myRatings.containsKey(pending.csfdId)) return@launch
+                if (handled.add(key)) {
+                    Timber.i("Asking for a ČSFD rating of %s (%s)", pending.itemId, pending.csfdId)
+                    _pending.update { pending }
                 }
             }
+        }
+
+        /** The series to rate if [episodeId] is its last episode and the series has a ČSFD id */
+        private suspend fun seriesRating(
+            seriesId: UUID,
+            episodeId: UUID,
+        ): PendingRating? {
+            val laterEpisodes =
+                api.tvShowsApi
+                    .getEpisodes(
+                        seriesId = seriesId,
+                        startItemId = episodeId,
+                        limit = 2,
+                    ).content.items
+            if (laterEpisodes.size > 1) return null
+            val series = api.userLibraryApi.getItem(seriesId).content
+            val csfdId = series.providerIds.csfdId() ?: return null
+            return PendingRating(seriesId, csfdId, series.name ?: "")
         }
 
         /** The prompt was answered or dismissed */
@@ -102,9 +147,11 @@ class PendingRatingService
 
 /** The ČSFD id from the ČSFD metadata plugin, if any */
 val BaseItem.csfdId: Int?
-    get() =
-        data.providerIds
-            ?.entries
-            ?.firstOrNull { it.key.equals("Csfd", ignoreCase = true) }
-            ?.value
-            ?.toIntOrNull()
+    get() = data.providerIds.csfdId()
+
+private fun Map<String, String?>?.csfdId(): Int? =
+    this
+        ?.entries
+        ?.firstOrNull { it.key.equals("Csfd", ignoreCase = true) }
+        ?.value
+        ?.toIntOrNull()

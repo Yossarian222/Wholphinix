@@ -36,7 +36,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.tv.material3.ListItem
 import androidx.tv.material3.MaterialTheme
-import androidx.tv.material3.Switch
 import androidx.tv.material3.Text
 import com.github.damontecres.wholphin.R
 import com.github.damontecres.wholphin.data.ServerPreferencesDao
@@ -127,13 +126,8 @@ fun NavDrawerPreference(
                 viewModel.save()
                 showDialog = false
             },
-            onClick = { index ->
-                val newItems =
-                    items.toMutableList().apply {
-                        set(index, items[index].let { it.copy(pinned = !it.pinned) })
-                    }
-                viewModel.update(newItems)
-            },
+            // All items are always shown, only the order can be changed
+            onClick = {},
             onMoveUp = { index ->
                 viewModel.update(items.move(MoveDirection.UP, index))
             },
@@ -234,14 +228,6 @@ fun NavDrawerPreferenceListItem(
                 headlineContent = {
                     Text(
                         text = title,
-                    )
-                },
-                trailingContent = {
-                    Switch(
-                        checked = pinned,
-                        onCheckedChange = {
-                            onClick.invoke()
-                        },
                     )
                 },
                 onClick = onClick,
@@ -359,7 +345,7 @@ class NavDrawerPreferencesViewModel
                                     NavDrawerPinnedItem(
                                         user.rowId,
                                         item.id,
-                                        if (item.pinned) NavPinType.PINNED else NavPinType.UNPINNED,
+                                        NavPinType.PINNED,
                                         index,
                                     )
                                 }

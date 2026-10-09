@@ -81,7 +81,7 @@ class CsfdRatingPromptViewModel
     }
 
 /**
- * "How did you like it?" asked after a movie with a ČSFD id was watched to the end and is not rated yet.
+ * "How did you like it?" asked after a movie (or the last episode of a series) with a ČSFD id was watched to the end and is not rated yet.
  *
  * @param show false while the prompt must wait, e.g. the player is still on screen
  */

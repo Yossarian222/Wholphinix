@@ -839,13 +839,13 @@ sealed interface AppPreference<Pref, T> {
             AppChoicePreference<AppPreferences, Int>(
                 title = R.string.nav_panel_scale,
                 defaultValue = DEFAULT_UI_SCALE_PERCENT,
-                getter = { it.interfacePreferences.navScalePercent.toUiScalePercent() },
+                getter = { it.interfacePreferences.navScalePercent.toNavScalePercent() },
                 setter = { prefs, value ->
                     prefs.updateInterfacePreferences { navScalePercent = value }
                 },
-                displayValues = R.array.ui_scale_options,
-                indexToValue = { UI_SCALE_PERCENTS.getOrElse(it) { DEFAULT_UI_SCALE_PERCENT } },
-                valueToIndex = { UI_SCALE_PERCENTS.indexOf(it.toUiScalePercent()) },
+                displayValues = R.array.nav_scale_options,
+                indexToValue = { NAV_SCALE_PERCENTS.getOrElse(it) { DEFAULT_UI_SCALE_PERCENT } },
+                valueToIndex = { NAV_SCALE_PERCENTS.indexOf(it.toNavScalePercent()) },
             )
 
         val ManageMedia =
@@ -1507,9 +1507,14 @@ class AppSliderPreference<Pref>(
 }
 
 /**
- * The selectable UI scales in percent for [AppPreference.FontScalePref] & [AppPreference.NavScalePref]
+ * The selectable font scales in percent for [AppPreference.FontScalePref]
  */
 val UI_SCALE_PERCENTS = listOf(85, 100, 115, 130)
+
+/**
+ * The selectable nav panel scales in percent for [AppPreference.NavScalePref]: 70 % to 150 % in steps of 5 %
+ */
+val NAV_SCALE_PERCENTS = (70..150 step 5).toList()
 
 const val DEFAULT_UI_SCALE_PERCENT = 100
 
@@ -1517,3 +1522,8 @@ const val DEFAULT_UI_SCALE_PERCENT = 100
  * Converts a stored scale percentage to a supported one; unset (0) or unknown values become [DEFAULT_UI_SCALE_PERCENT]
  */
 fun Int.toUiScalePercent(): Int = if (this in UI_SCALE_PERCENTS) this else DEFAULT_UI_SCALE_PERCENT
+
+/**
+ * Converts a stored nav panel scale percentage to a supported one; unset (0) or unknown values become [DEFAULT_UI_SCALE_PERCENT]
+ */
+fun Int.toNavScalePercent(): Int = if (this in NAV_SCALE_PERCENTS) this else DEFAULT_UI_SCALE_PERCENT

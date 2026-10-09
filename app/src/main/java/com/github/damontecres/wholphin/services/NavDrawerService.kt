@@ -234,27 +234,18 @@ class NavDrawerService
                     serverPreferencesDao.getNavDrawerPinnedItems(user).associateBy { it.itemId }
                 }
 
-            val items = mutableListOf<NavDrawerItem>()
-            val moreItems = mutableListOf<NavDrawerItem>()
-            allItems
-                // Sort by order if non-default, existing items before customize will have -1 value
-                // New items from the server will get Int.MAX_VALUE
-                // Items the user doesn't have access to anymore will be skipped
-                .sortedBy { navDrawerPins[it.id]?.order?.takeIf { it >= 0 } ?: Int.MAX_VALUE }
-                .forEach {
-                    // Assume pinned if unknown
-                    val pinned = navDrawerPins[it.id]?.type ?: NavPinType.PINNED
-                    if (pinned == NavPinType.PINNED) {
-                        items.add(it)
-                    } else {
-                        moreItems.add(it)
-                    }
-                }
+            // All items are always shown (no "More" entry), only the order is customizable
+            val items =
+                allItems
+                    // Sort by order if non-default, existing items before customize will have -1 value
+                    // New items from the server will get Int.MAX_VALUE
+                    // Items the user doesn't have access to anymore will be skipped
+                    .sortedBy { navDrawerPins[it.id]?.order?.takeIf { it >= 0 } ?: Int.MAX_VALUE }
 
             _state.update {
                 it.copy(
                     items = items,
-                    moreItems = moreItems,
+                    moreItems = emptyList(),
                     allLibraries = allLibraries,
                 )
             }

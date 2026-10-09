@@ -6,6 +6,7 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
+import com.github.damontecres.wholphin.preferences.toNavScalePercent
 import com.github.damontecres.wholphin.preferences.toUiScalePercent
 
 /**
@@ -31,7 +32,7 @@ fun ProvideUiScale(
 ) {
     val density = LocalDensity.current
     val fontScale = fontScalePercent.toUiScalePercent() / 100f
-    val navScale = navScalePercent.toUiScalePercent() / 100f
+    val navScale = navScalePercent.toNavScalePercent() / 100f
     val scaledDensity =
         remember(density, fontScale) {
             Density(density = density.density, fontScale = density.fontScale * fontScale)

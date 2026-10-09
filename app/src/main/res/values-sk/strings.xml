@@ -799,7 +799,7 @@
 
     <!-- Detail & rating prompt -->
     <string name="premiere_date">Premiéra: %1$s</string>
-    <string name="csfd_rating_prompt_title">Ako sa ti páčil %1$s?</string>
+    <string name="csfd_rating_prompt_title">Ako hodnotíš „%1$s“?</string>
     <string name="csfd_rating_prompt_not_now">Teraz nie</string>
     <string name="csfd_rating_prompt_sent">Hodnotenie odoslané na ČSFD</string>
     <!-- ČSFD watchlist -->

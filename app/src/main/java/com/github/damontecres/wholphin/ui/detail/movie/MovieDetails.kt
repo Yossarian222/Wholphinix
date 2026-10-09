@@ -345,7 +345,7 @@ fun MovieDetailsContent(
 
     Box(modifier = modifier) {
         LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(bottom = 8.dp),
             modifier = Modifier.fillMaxSize(),
         ) {
@@ -367,7 +367,8 @@ fun MovieDetailsContent(
                         modifier =
                             Modifier
                                 .fillMaxWidth()
-                                .padding(top = HeaderUtils.topPadding, bottom = 16.dp),
+                                // Compact, so the cast photos below fit on screen whole
+                                .padding(top = HeaderUtils.topPadding * 2 / 3, bottom = 4.dp),
                     )
                     ExpandablePlayButtons(
                         title = movie.title ?: "",
@@ -407,7 +408,7 @@ fun MovieDetailsContent(
                         modifier =
                             Modifier
                                 .fillMaxWidth()
-                                .padding(bottom = 16.dp)
+                                .padding(bottom = 4.dp)
                                 .focusRequester(focusRequesters[HEADER_ROW])
                                 .then(headerFocus.chainGroup(focusRequesters[HEADER_ROW])),
                     )
