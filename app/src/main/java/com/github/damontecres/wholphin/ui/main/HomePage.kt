@@ -538,7 +538,8 @@ fun HomePageContent(
                 Box(
                     modifier =
                         Modifier
-                            .padding(if (showClock) 40.dp else 20.dp)
+                            // Below the top right header (date, search button & clock)
+                            .padding(top = if (showClock) 72.dp else 52.dp, end = 20.dp)
                             .size(40.dp)
                             .align(Alignment.TopEnd),
                 ) {

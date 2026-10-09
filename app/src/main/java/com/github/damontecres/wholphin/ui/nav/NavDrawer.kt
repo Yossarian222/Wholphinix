@@ -28,7 +28,6 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -79,7 +78,7 @@ import com.github.damontecres.wholphin.services.NavigationManager
 import com.github.damontecres.wholphin.services.SetupDestination
 import com.github.damontecres.wholphin.services.SetupNavigationManager
 import com.github.damontecres.wholphin.ui.FontAwesome
-import com.github.damontecres.wholphin.ui.components.TimeDisplay
+import com.github.damontecres.wholphin.ui.components.TopRightHeader
 import com.github.damontecres.wholphin.ui.ifElse
 import com.github.damontecres.wholphin.ui.launchDefault
 import com.github.damontecres.wholphin.ui.preferences.PreferenceScreenOption
@@ -350,6 +349,7 @@ fun NavDrawer(
         drawerContent = { drawerValue ->
             val isOpen = drawerValue.isOpen
             val spacedBy = 4.dp
+            // The first item in the list (Home), focused when entering the list from above
             val searchFocusRequester = remember { FocusRequester() }
 
             ProvideTextStyle(MaterialTheme.typography.labelMedium) {
@@ -411,33 +411,14 @@ fun NavDrawer(
                                     onEnter = {
                                         if (requestedFocusDirection == FocusDirection.Down) {
                                             searchFocusRequester.tryRequestFocus()
-                                        } else {
-                                            focusRequester.tryRequestFocus()
+                                        } else if (!focusRequester.tryRequestFocus()) {
+                                            // eg on the search page there is no selected drawer item
+                                            searchFocusRequester.tryRequestFocus()
                                         }
                                     }
                                 }.fillMaxHeight(),
                     ) {
-                        item {
-                            val interactionSource = remember { MutableInteractionSource() }
-                            IconNavItem(
-                                text = stringResource(R.string.search),
-                                icon = Icons.Default.Search,
-                                selected = selectedIndex == SEARCH_INDEX,
-                                drawerOpen = isOpen,
-                                interactionSource = interactionSource,
-                                onClick = {
-                                    viewModel.setIndex(SEARCH_INDEX)
-                                    viewModel.navigationManager.navigateToFromDrawer(Destination.Search())
-                                },
-                                modifier =
-                                    Modifier
-                                        .focusRequester(searchFocusRequester)
-                                        .ifElse(
-                                            selectedIndex == SEARCH_INDEX,
-                                            Modifier.focusRequester(focusRequester),
-                                        ),
-                            )
-                        }
+                        // Search is in the top right corner (magnifier next to the clock), not in the drawer
                         item {
                             val interactionSource = remember { MutableInteractionSource() }
                             IconNavItem(
@@ -457,6 +438,7 @@ fun NavDrawer(
                                 },
                                 modifier =
                                     Modifier
+                                        .focusRequester(searchFocusRequester)
                                         .ifElse(
                                             selectedIndex == HOME_INDEX,
                                             Modifier.focusRequester(focusRequester),
@@ -574,9 +556,13 @@ fun NavDrawer(
                             offset
                         }.padding(start = closedDrawerWidth + 8.dp, end = 16.dp),
             )
-            if (preferences.appPreferences.interfacePreferences.showClock) {
-                TimeDisplay()
-            }
+            TopRightHeader(
+                showClock = preferences.appPreferences.interfacePreferences.showClock,
+                onSearchClick = {
+                    viewModel.setIndex(SEARCH_INDEX)
+                    viewModel.navigationManager.navigateToFromDrawer(Destination.Search())
+                },
+            )
         }
     }
 }

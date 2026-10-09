@@ -15,9 +15,10 @@ import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -153,14 +154,7 @@ fun TabbedPage(
     showTabs: Boolean = true,
     tabContent: @Composable (Int, TabDetails) -> Unit,
 ) {
-    val endPadding =
-        remember(isShowClock) {
-            if (isShowClock) {
-                184.dp
-            } else {
-                0.dp
-            }
-        }
+    val endPadding = tabRowEndPadding(isShowClock)
     Column(
         modifier = modifier,
     ) {
@@ -198,14 +192,7 @@ fun <T> KeyedTabbedPage(
     showTabs: Boolean = true,
     tabContent: @Composable (T, TabDetails) -> Unit,
 ) {
-    val endPadding =
-        remember(isShowClock) {
-            if (isShowClock) {
-                184.dp
-            } else {
-                0.dp
-            }
-        }
+    val endPadding = tabRowEndPadding(isShowClock)
     Column(
         modifier = modifier,
     ) {
@@ -237,5 +224,18 @@ fun <T> KeyedTabbedPage(
                 DelayedLoadingPage(focusEnabled = false)
             }
         }
+    }
+}
+
+/**
+ * End padding for the tab row so it doesn't overlap the [TopRightHeader] (date, search button & clock)
+ */
+@Composable
+private fun tabRowEndPadding(isShowClock: Boolean): Dp {
+    val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
+    return if (isShowClock) {
+        184.dp * fontScale
+    } else {
+        64.dp * fontScale
     }
 }

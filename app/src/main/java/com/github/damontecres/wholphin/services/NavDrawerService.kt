@@ -196,13 +196,13 @@ class NavDrawerService
         suspend fun updateNavDrawer(
             user: JellyfinUser,
             userDto: ServerUserConfig,
-            discoverActive: Boolean,
+            @Suppress("UNUSED_PARAMETER") discoverActive: Boolean,
             absActive: Boolean? = null,
         ) {
             val builtins =
                 buildList {
                     add(NavDrawerItem.Favorites)
-                    if (discoverActive) add(NavDrawerItem.Discover)
+                    // Discover is no longer reachable from the nav drawer, search is in the top right corner instead
                     // Shown only once Audiobookshelf is configured in its settings
                     if (absActive ?: audiobookshelfService.active.first()) add(NavDrawerItem.Audiobookshelf)
                 }
