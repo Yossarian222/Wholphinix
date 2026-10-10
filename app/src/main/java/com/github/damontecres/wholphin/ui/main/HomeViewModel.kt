@@ -6,9 +6,11 @@ import androidx.lifecycle.viewModelScope
 import com.github.damontecres.wholphin.data.ServerRepository
 import com.github.damontecres.wholphin.data.model.BaseItem
 import com.github.damontecres.wholphin.data.model.HomeRowConfig
+import com.github.damontecres.wholphin.data.model.HomeRowViewOptions
 import com.github.damontecres.wholphin.data.model.ServerUserConfig
 import com.github.damontecres.wholphin.preferences.AppPreferences
 import com.github.damontecres.wholphin.services.BackdropService
+import com.github.damontecres.wholphin.services.CsfdTvTipsService
 import com.github.damontecres.wholphin.services.DatePlayedService
 import com.github.damontecres.wholphin.services.FavoriteWatchManager
 import com.github.damontecres.wholphin.services.HomePageResolvedSettings
@@ -25,8 +27,12 @@ import com.github.damontecres.wholphin.ui.combinePair
 import com.github.damontecres.wholphin.ui.data.RowColumn
 import com.github.damontecres.wholphin.ui.launchDefault
 import com.github.damontecres.wholphin.ui.launchIO
+import com.github.damontecres.wholphin.ui.seasonal.Holiday
+import com.github.damontecres.wholphin.ui.seasonal.activeHoliday
+import com.github.damontecres.wholphin.ui.seasonal.rowTitle
 import com.github.damontecres.wholphin.ui.showToast
 import com.github.damontecres.wholphin.ui.util.EmptyStringProvider
+import com.github.damontecres.wholphin.ui.util.ResStringProvider
 import com.github.damontecres.wholphin.util.ExceptionHandler
 import com.github.damontecres.wholphin.util.HomeRowLoadingState
 import com.github.damontecres.wholphin.util.LoadingState
@@ -34,6 +40,7 @@ import com.github.damontecres.wholphin.util.WholphinDispatchers
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -49,6 +56,7 @@ import kotlinx.coroutines.withContext
 import org.jellyfin.sdk.api.client.exception.InvalidStatusException
 import org.jellyfin.sdk.model.api.BaseItemKind
 import timber.log.Timber
+import java.time.LocalDate
 import java.util.UUID
 import javax.inject.Inject
 
@@ -68,6 +76,7 @@ class HomeViewModel
         private val userPreferencesService: UserPreferencesService,
         private val mediaManagementService: MediaManagementService,
         private val latestNextUpService: LatestNextUpService,
+        private val csfdTvTipsService: CsfdTvTipsService,
     ) : ViewModel() {
         private val _state = MutableStateFlow(HomeState.EMPTY)
         val state: StateFlow<HomeState> = _state
@@ -146,6 +155,10 @@ class HomeViewModel
             try {
                 val preferences = userPreferencesService.getCurrent()
                 val prefs = preferences.appPreferences.homePagePreferences
+                // During a holiday period (or its preview) the seasonal recommendations are the first row, they are
+                // not one of the saved home rows
+                val seasonal = activeHoliday(preferences.appPreferences.interfacePreferences, LocalDate.now())
+                val rowCount = settings.rows.size + if (seasonal != null) 1 else 0
 
                 val libraries =
                     navDrawerService.getAllUserLibraries(userDto.id, userDto.tvAccess)
@@ -154,7 +167,7 @@ class HomeViewModel
 
                 // Refreshing if a load has already occurred and the rows haven't significantly changed
                 val refresh =
-                    state.loadingState == LoadingState.Success && state.settings == settings
+                    state.loadingState == LoadingState.Success && state.settings == settings && state.seasonal == seasonal
                 Timber.v(
                     "refresh=%s, state.loadingState=%s, %s rows",
                     refresh,
@@ -166,12 +179,17 @@ class HomeViewModel
                         loadingState = if (refresh) LoadingState.Success else LoadingState.Loading,
                         refreshState = LoadingState.Loading,
                         settings = settings,
+                        seasonal = seasonal,
                         homeRows =
                             if (refresh) {
                                 it.homeRows
                             } else {
-                                List(settings.rows.size) {
-                                    HomeRowLoadingState.Pending(EmptyStringProvider)
+                                List(rowCount) { index ->
+                                    if (seasonal != null && index == 0) {
+                                        HomeRowLoadingState.Pending(ResStringProvider(seasonal.rowTitle))
+                                    } else {
+                                        HomeRowLoadingState.Pending(EmptyStringProvider)
+                                    }
                                 }
                             },
                     )
@@ -225,9 +243,15 @@ class HomeViewModel
                             }
                         }
 
+                val seasonalDeferred: Deferred<HomeRowLoadingState>? =
+                    seasonal?.let { holiday ->
+                        viewModelScope.async(WholphinDispatchers.IO) { loadSeasonalRow(holiday, userDto.id) }
+                    }
+                val allDeferred = listOfNotNull(seasonalDeferred) + deferred
+
                 if (refresh) {
                     // Replace rows as they complete
-                    val remaining = deferred.withIndex().toMutableList()
+                    val remaining = allDeferred.withIndex().toMutableList()
                     while (remaining.isNotEmpty()) {
                         val (rowIndex, rowData) =
                             select {
@@ -256,7 +280,7 @@ class HomeViewModel
                         )
                     }
                 } else {
-                    val rows = deferred.awaitAll()
+                    val rows = allDeferred.awaitAll()
                     Timber.v("Got all rows")
                     _state.update {
                         it.copy(
@@ -279,6 +303,31 @@ class HomeViewModel
                         it.copy(loadingState = LoadingState.Error(ex))
                     }
                 }
+            }
+        }
+
+        /**
+         * The seasonal recommendations row from the ČSFD plugin; empty (so not shown) if the plugin does not have them
+         */
+        private suspend fun loadSeasonalRow(
+            holiday: Holiday,
+            userId: UUID,
+        ): HomeRowLoadingState {
+            val title = ResStringProvider(holiday.rowTitle)
+            val viewOptions = HomeRowViewOptions.csfdTipsDefault
+            return try {
+                val items =
+                    csfdTvTipsService.getSeasonalRowItems(
+                        event = holiday.key,
+                        userId = userId,
+                        useSeries = viewOptions.useSeries,
+                    )
+                HomeRowLoadingState.Success(title, items, viewOptions, rowType = null, showViewMore = false)
+            } catch (ex: CancellationException) {
+                throw ex
+            } catch (ex: Exception) {
+                Timber.w(ex, "Seasonal row %s failed", holiday)
+                HomeRowLoadingState.Success(title, listOf(), viewOptions, rowType = null, showViewMore = false)
             }
         }
 
@@ -357,6 +406,8 @@ data class HomeState(
     val refreshState: LoadingState,
     val homeRows: List<HomeRowLoadingState>,
     val settings: HomePageResolvedSettings,
+    /** The holiday whose seasonal row is first in [homeRows], if any */
+    val seasonal: Holiday? = null,
 ) {
     companion object {
         val EMPTY =

@@ -15,6 +15,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -27,6 +29,13 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import com.github.damontecres.wholphin.R
+import com.github.damontecres.wholphin.ui.seasonal.Holiday
+import com.github.damontecres.wholphin.ui.seasonal.LocalSeasonalState
+import com.github.damontecres.wholphin.ui.seasonal.SeasonalClockDecoration
+import com.github.damontecres.wholphin.ui.seasonal.SeasonalHeaderLeading
+import com.github.damontecres.wholphin.ui.seasonal.SeasonalSearchIcon
+import com.github.damontecres.wholphin.ui.seasonal.replacesSearchIcon
+import com.github.damontecres.wholphin.ui.seasonal.seasonalIconSize
 import com.github.damontecres.wholphin.ui.util.LocalClock
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -87,6 +96,8 @@ fun BoxScope.TopRightHeader(
     val locale = ConfigurationCompat.getLocales(LocalConfiguration.current)[0] ?: Locale.getDefault()
     val date = now.toLocalDate()
     val dateString = remember(date, locale) { formatHeaderDate(date, locale) }
+    // Holiday decorations (only provided on pages with the nav drawer)
+    val seasonal = LocalSeasonalState.current
     Column(
         horizontalAlignment = Alignment.End,
         // Room under the date so the focused (enlarged) search circle does not overlap it
@@ -109,6 +120,9 @@ fun BoxScope.TopRightHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
+            if (seasonal != null) {
+                SeasonalHeaderLeading(seasonal, showClock, seasonalIconSize())
+            }
             Surface(
                 onClick = onSearchClick,
                 shape = ClickableSurfaceDefaults.shape(CircleShape),
@@ -122,14 +136,24 @@ fun BoxScope.TopRightHeader(
                     ),
                 modifier = Modifier.size(with(LocalDensity.current) { 34.sp.toDp() }),
             ) {
-                Icon(
-                    imageVector = Icons.Default.Search,
-                    contentDescription = stringResource(R.string.search),
-                    modifier =
-                        Modifier
-                            .align(Alignment.Center)
-                            .size(with(LocalDensity.current) { 22.sp.toDp() }),
-                )
+                if (seasonal != null && seasonal.holiday.replacesSearchIcon) {
+                    SeasonalSearchIcon(
+                        holiday = seasonal.holiday,
+                        modifier =
+                            Modifier
+                                .align(Alignment.Center)
+                                .size(with(LocalDensity.current) { 24.sp.toDp() }),
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = stringResource(R.string.search),
+                        modifier =
+                            Modifier
+                                .align(Alignment.Center)
+                                .size(with(LocalDensity.current) { 22.sp.toDp() }),
+                    )
+                }
             }
             if (showClock) {
                 Text(
@@ -138,7 +162,17 @@ fun BoxScope.TopRightHeader(
                     color = MaterialTheme.colorScheme.onSurface,
                     style = MaterialTheme.typography.bodyLarge,
                     maxLines = 1,
+                    modifier =
+                        if (seasonal != null && seasonal.holiday == Holiday.VALENTINE) {
+                            // Where Cupid's arrow sticks
+                            Modifier.onGloballyPositioned { seasonal.clockBounds.value = it.boundsInRoot() }
+                        } else {
+                            Modifier
+                        },
                 )
+                if (seasonal != null) {
+                    SeasonalClockDecoration(seasonal, seasonalIconSize())
+                }
             }
         }
     }

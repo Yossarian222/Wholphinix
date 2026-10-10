@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Seasonal (holiday) themes and recommendations -->
+    <string name="seasonal_themes">Seasonal themes</string>
+    <string name="seasonal_themes_summary_on">Holiday decorations and recommendations</string>
+    <string name="seasonal_theme_preview">Seasonal theme preview</string>
+    <string name="seasonal_preview_none">Off (by date)</string>
+    <string name="seasonal_new_year">New Year\'s Eve</string>
+    <string name="seasonal_valentine">Valentine\'s Day</string>
+    <string name="seasonal_easter">Easter</string>
+    <string name="seasonal_halloween">Halloween</string>
+    <string name="seasonal_nicholas">St. Nicholas Day</string>
+    <string name="seasonal_christmas">Christmas</string>
+    <string-array name="seasonal_theme_preview_options">
+        <item>@string/seasonal_preview_none</item>
+        <item>@string/seasonal_new_year</item>
+        <item>@string/seasonal_valentine</item>
+        <item>@string/seasonal_easter</item>
+        <item>@string/seasonal_halloween</item>
+        <item>@string/seasonal_nicholas</item>
+        <item>@string/seasonal_christmas</item>
+    </string-array>
+    <string name="seasonal_row_new_year">🎆 For New Year\'s Eve</string>
+    <string name="seasonal_row_valentine">💘 For Valentine\'s Day</string>
+    <string name="seasonal_row_easter">🐣 For Easter</string>
+    <string name="seasonal_row_halloween">🎃 For Halloween</string>
+    <string name="seasonal_row_nicholas">🥾 For St. Nicholas Day</string>
+    <string name="seasonal_row_christmas">🎄 For Christmas</string>
+    <string name="seasonal_countdown">%1$s to midnight</string>
+</resources>
