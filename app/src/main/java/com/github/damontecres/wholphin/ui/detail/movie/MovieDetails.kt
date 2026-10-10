@@ -346,7 +346,8 @@ fun MovieDetailsContent(
     Box(modifier = modifier) {
         LazyColumn(
             verticalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(bottom = 8.dp),
+            // Room under the last row (e.g. cast) so the focused card and the text under it are not cut off
+            contentPadding = PaddingValues(bottom = 32.dp),
             modifier = Modifier.fillMaxSize(),
         ) {
             item {
