@@ -6,6 +6,7 @@
 #   WHATSAPP_APP_SECRET, WHATSAPP_VERIFY_TOKEN, WHATSAPP_ALLOWED_NUMBERS, ANTHROPIC_API_KEY,
 #   CLAUDE_MODEL, CLAUDE_EFFORT, GRAPH_VERSION
 # Optional voice notes (README "Hlasové správy"): STT_URL, STT_API_KEY, STT_MODEL, STT_LANGUAGE
+# Phone app at /<MCP_SECRET>/app (README "Appka v mobile"): chat needs ANTHROPIC_API_KEY; PHONE_APP=0 turns it off
 services:
   ts:
     image: tailscale/tailscale:stable
@@ -56,4 +57,6 @@ services:
       - STT_API_KEY=${STT_API_KEY:-}
       - STT_MODEL=${STT_MODEL:-}
       - STT_LANGUAGE=${STT_LANGUAGE:-}
+      # Phone app (PWA) at /<MCP_SECRET>/app; on by default, 0 = off
+      - PHONE_APP=${PHONE_APP:-}
     restart: unless-stopped

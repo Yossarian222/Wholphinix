@@ -7,10 +7,8 @@ Meta (WhatsApp Business Cloud API) calls the webhook at /<MCP_SECRET>/whatsapp:
   We answer 200 right away and process in a background task, because Meta retries slow
   deliveries.
 
-Each allowed text message goes to the Anthropic Messages API with the MCP tools as Claude tools
-(a manual tool-use loop, max MAX_TOOL_ROUNDS model calls); tool calls go through
-FastMCP.call_tool, i.e. exactly the code the MCP clients run. The reply is sent back through
-the Graph API.
+Each allowed text message is answered by the shared Claude agent (agent.py: the MCP tools as
+Claude tools, history per number). The reply is sent back through the Graph API.
 
 Voice notes (type "audio") are downloaded from the Graph API (media id -> url -> bytes, size
 capped), transcribed with an OpenAI-compatible /audio/transcriptions endpoint (OpenAI Whisper or
@@ -30,25 +28,31 @@ import json
 import logging
 import os
 import re
-import time
-from collections import OrderedDict, deque
-from dataclasses import dataclass, field
+from collections import OrderedDict
+from dataclasses import dataclass
 from typing import Any
 
 import httpx
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse, Response
 
+from .agent import (  # noqa: F401  (re-exported: older imports and the tests use whatsapp.*)
+    DEFAULT_EFFORT,
+    DEFAULT_MODEL,
+    ERROR_REPLY,
+    FALLBACK_BETA,
+    MAX_TOOL_ROUNDS,
+    REFUSAL_REPLY,
+    TOO_LONG_REPLY,
+    ChatAgent,
+    Conversation,
+    Memory,
+)
+
 log = logging.getLogger("jellyfin_mcp.whatsapp")
 
-DEFAULT_MODEL = "claude-sonnet-5-5"
 DEFAULT_GRAPH_VERSION = "v23.0"
-DEFAULT_EFFORT = "low"  # chat with short tool sequences; raise via CLAUDE_EFFORT if needed
-MAX_TOOL_ROUNDS = 6
-MAX_TOKENS = 4096
 MAX_WHATSAPP_CHARS = 4096
-HISTORY_EXCHANGES = 10
-HISTORY_TTL_SECONDS = 30 * 60
 DEDUP_SIZE = 500
 DEFAULT_STT_URL = "https://api.openai.com/v1/audio/transcriptions"
 DEFAULT_STT_MODEL = "whisper-1"
@@ -56,14 +60,8 @@ DEFAULT_STT_LANGUAGE = "sk"
 MAX_MEDIA_BYTES = 16 * 1024 * 1024  # WhatsApp's own limit for audio
 MEDIA_TIMEOUT = httpx.Timeout(30.0, connect=10.0)
 STT_TIMEOUT = httpx.Timeout(120.0, connect=10.0)  # a local CPU Whisper can be slow
-# Server-side refusal fallback (Claude API, beta): only these models accept fallbacks="default"
-FALLBACK_MODELS = {"claude-sonnet-5-5", "claude-opus-5-5", "claude-opus-5", "claude-fable-5-1"}
-FALLBACK_BETA = "server-side-fallback-2026-07-01"
 
 TEXT_ONLY_REPLY = "Zatiaľ rozumiem len textu 🙂"
-ERROR_REPLY = "Prepáč, niečo sa pokazilo a nepodarilo sa mi to vybaviť 😕 Skús to o chvíľu znova."
-REFUSAL_REPLY = "Prepáč, s týmto ti nepomôžem."
-TOO_LONG_REPLY = "Prepáč, zamotal som sa v tom 😅 Skús to napísať inak alebo po kúskoch."
 VOICE_DISABLED_REPLY = "Hlasové správy zatiaľ nemám zapnuté 🙉 Napíš mi to, prosím, textom."
 VOICE_ERROR_REPLY = "Prepáč, hlasovku sa mi nepodarilo rozpoznať 😕 Skús to znova alebo mi to napíš."
 VOICE_TOO_BIG_REPLY = "Prepáč, tá hlasovka je na mňa pridlhá 😅 Skús kratšiu alebo mi to napíš."
@@ -193,45 +191,6 @@ class Deduper:
         return False
 
 
-@dataclass
-class Conversation:
-    exchanges: deque[tuple[str, str]] = field(default_factory=lambda: deque(maxlen=HISTORY_EXCHANGES))
-    last_active: float = 0.0
-    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
-
-
-class Memory:
-    """Per-number history of (user text, final assistant text), in process memory.
-
-    Only plain text is kept between turns (no tool calls / thinking blocks), so dropping the
-    oldest exchange never edits a replayed thinking block.
-    """
-
-    def __init__(self, ttl: float = HISTORY_TTL_SECONDS, clock=time.monotonic) -> None:
-        self.ttl = ttl
-        self.clock = clock
-        self._convs: dict[str, Conversation] = {}
-
-    def get(self, number: str) -> Conversation:
-        now = self.clock()
-        # Drop expired conversations (also of other numbers) so memory doesn't grow
-        for n in [n for n, c in self._convs.items() if now - c.last_active > self.ttl and not c.lock.locked()]:
-            del self._convs[n]
-        conv = self._convs.get(number)
-        if conv is None:
-            conv = self._convs[number] = Conversation(last_active=now)
-        return conv
-
-    def touch(self, conv: Conversation) -> None:
-        conv.last_active = self.clock()
-
-
-def _block_get(block: Any, name: str, default: Any = None) -> Any:
-    if isinstance(block, dict):
-        return block.get(name, default)
-    return getattr(block, name, default)
-
-
 class VoiceError(Exception):
     """A voice note could not be turned into text; `reply` is what the user gets."""
 
@@ -240,17 +199,9 @@ class VoiceError(Exception):
         self.reply = reply
 
 
-def tool_result_text(result: Any) -> str:
-    """FastMCP.call_tool result -> text for a tool_result block."""
-    if isinstance(result, tuple) and len(result) == 2 and result[1] is not None:
-        return json.dumps(result[1], ensure_ascii=False)
-    if isinstance(result, dict):
-        return json.dumps(result, ensure_ascii=False)
-    blocks = result[0] if isinstance(result, tuple) else result
-    return "\n".join(str(_block_get(b, "text", "")) for b in blocks or []) or "{}"
+class WhatsAppBot(ChatAgent):
+    label = "WhatsApp"
 
-
-class WhatsAppBot:
     def __init__(
         self,
         config: Config,
@@ -260,14 +211,15 @@ class WhatsAppBot:
         graph_transport: httpx.AsyncBaseTransport | None = None,
         http_transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
+        super().__init__(
+            mcp,
+            system_prompt,
+            api_key=config.anthropic_api_key,
+            model=config.model,
+            effort=config.effort,
+            anthropic_client=anthropic_client,
+        )
         self.config = config
-        self.mcp = mcp
-        self.system_prompt = system_prompt
-        if anthropic_client is None:
-            from anthropic import AsyncAnthropic
-
-            anthropic_client = AsyncAnthropic(api_key=config.anthropic_api_key)
-        self.anthropic = anthropic_client
         self.graph = httpx.AsyncClient(
             base_url=f"https://graph.facebook.com/{config.graph_version}",
             timeout=20.0,
@@ -276,8 +228,6 @@ class WhatsAppBot:
         # Media downloads (lookaside.fbsbx.com URLs) and the speech-to-text endpoint
         self.http = httpx.AsyncClient(timeout=MEDIA_TIMEOUT, transport=http_transport)
         self.dedup = Deduper()
-        self.memory = Memory()
-        self._tools: list[dict[str, Any]] | None = None
         self._tasks: set[asyncio.Task] = set()
 
     # ---- webhook entry points ----
@@ -432,109 +382,6 @@ class WhatsAppBot:
         if not text:
             raise VoiceError("transcription: empty")
         return text
-
-    # ---- Claude ----
-
-    async def tool_definitions(self) -> list[dict[str, Any]]:
-        """The MCP tools as Claude tool definitions (stable order, so the cached prefix stays the same)."""
-        if self._tools is None:
-            tools = sorted(await self.mcp.list_tools(), key=lambda t: t.name)
-            self._tools = [
-                {"name": t.name, "description": t.description or "", "input_schema": t.inputSchema}
-                for t in tools
-            ]
-        return self._tools
-
-    def _request_params(self, tools: list[dict[str, Any]], messages: list[dict[str, Any]]) -> dict[str, Any]:
-        params: dict[str, Any] = {
-            "model": self.config.model,
-            "max_tokens": MAX_TOKENS,
-            # Render order is tools -> system -> messages: the breakpoint on the system block
-            # caches tools + system; the top-level one caches the growing tool-loop messages.
-            "system": [{"type": "text", "text": self.system_prompt, "cache_control": {"type": "ephemeral"}}],
-            "tools": tools,
-            "messages": messages,
-            "cache_control": {"type": "ephemeral"},
-            "output_config": {"effort": self.config.effort},
-        }
-        if self.config.model in FALLBACK_MODELS:
-            params["betas"] = [FALLBACK_BETA]
-            params["fallbacks"] = "default"
-        return params
-
-    async def _run_tool(self, name: str, args: Any) -> tuple[str, bool]:
-        try:
-            result = await self.mcp.call_tool(name, args if isinstance(args, dict) else {})
-            return tool_result_text(result), False
-        except Exception as ex:  # tool errors go back to Claude, which explains them
-            log.info("WhatsApp: tool %s failed: %s", name, type(ex).__name__)
-            return f"Error: {ex}", True
-
-    async def run_agent(self, history: list[tuple[str, str]], text: str) -> str:
-        import anthropic
-
-        tools = await self.tool_definitions()
-        messages: list[dict[str, Any]] = []
-        for user_text, assistant_text in history:
-            messages.append({"role": "user", "content": user_text})
-            messages.append({"role": "assistant", "content": assistant_text})
-        messages.append({"role": "user", "content": text})
-
-        for _ in range(MAX_TOOL_ROUNDS):
-            try:
-                response = await self.anthropic.beta.messages.create(**self._request_params(tools, messages))
-            except anthropic.RateLimitError:
-                log.warning("WhatsApp: Claude rate limited")
-                return ERROR_REPLY
-            except anthropic.APIStatusError as ex:
-                # The API's message says what is wrong (no secrets in it), e.g. low credit or a bad parameter
-                log.error("WhatsApp: Claude API error %s: %s", ex.status_code, str(ex.message)[:300])
-                return ERROR_REPLY
-            except anthropic.APIConnectionError:
-                log.error("WhatsApp: cannot reach the Claude API")
-                return ERROR_REPLY
-
-            stop = response.stop_reason
-            if stop == "refusal":
-                return REFUSAL_REPLY
-            if stop in ("tool_use", "pause_turn"):
-                # Append the whole content unchanged (thinking blocks included): append-only
-                messages.append({"role": "assistant", "content": response.content})
-                if stop == "pause_turn":
-                    continue
-                results = []
-                # Sequentially: TV commands depend on order (play, then set_audio)
-                for block in response.content:
-                    if _block_get(block, "type") != "tool_use":
-                        continue
-                    name = _block_get(block, "name")
-                    log.info("WhatsApp: tool %s", name)
-                    content, is_error = await self._run_tool(name, _block_get(block, "input"))
-                    result = {"type": "tool_result", "tool_use_id": _block_get(block, "id"), "content": content}
-                    if is_error:
-                        result["is_error"] = True
-                    results.append(result)
-                messages.append({"role": "user", "content": results})
-                continue
-            reply = "\n".join(
-                _block_get(b, "text") for b in response.content if _block_get(b, "type") == "text"
-            ).strip()
-            return reply or "👍"
-        log.warning("WhatsApp: gave up after %d tool rounds", MAX_TOOL_ROUNDS)
-        return TOO_LONG_REPLY
-
-    async def answer(self, number: str, text: str) -> str:
-        conv = self.memory.get(number)
-        async with conv.lock:  # one turn at a time per number, in order
-            try:
-                reply = await self.run_agent(list(conv.exchanges), text)
-            except Exception:
-                log.exception("WhatsApp: agent failed")
-                return ERROR_REPLY
-            if reply not in (ERROR_REPLY, TOO_LONG_REPLY):
-                conv.exchanges.append((text, reply))
-            self.memory.touch(conv)
-            return reply
 
     # ---- Graph API ----
 

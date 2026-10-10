@@ -89,6 +89,24 @@ Server je obyčajný vzdialený MCP konektor, takže funguje aj v mobilnej Claud
 
 Wholphinix musí byť na TV otvorený a prihlásený, inak Claude odpovie, že TV nie je pripojená.
 
+## Appka v mobile („Telka“)
+
+Najjednoduchší spôsob bez Mety a bez Claude appky: server má vlastnú malú webovú appku (PWA), ktorú si pridáš na plochu telefónu ako normálnu aplikáciu.
+
+- **Chat s Claude** (rovnaké nástroje ako konektor), odpovede si môžeš nechať čítať nahlas 🔊
+- **Diktovanie** – tlačidlo mikrofónu (rozpoznávanie reči v Chrome, po slovensky)
+- **Čo beží** – názov, pozícia, pauza; obnovuje sa každých 10 s
+- **Diaľkové ovládanie** – ⏮ −30 s ⏯ +30 s ⏭ ⏹ (priamo, bez Clauda, takže okamžite a zadarmo)
+- rýchle tlačidlá („Čo dnes dávajú v TV?“, „Tip na večer“…) a „Nový rozhovor“ v menu ⋮
+
+Inštalácia:
+1. V Portaineri musí byť nastavený `ANTHROPIC_API_KEY` (rovnaký ako pre WhatsApp; voliteľne `CLAUDE_MODEL`, `CLAUDE_EFFORT`). Bez neho funguje len ovládanie a stav, chat povie, že kľúč chýba.
+2. Na telefóne otvor v **Chrome** `https://<ts-host>/<MCP_SECRET>/app` (u nás `https://jellyfin-mcp.platypus-vimba.ts.net/<MCP_SECRET>/app`).
+3. Menu ⋮ v Chrome → **Pridať na plochu / Inštalovať aplikáciu**. Na ploche pribudne ikona „Telka“, otvára sa na celú obrazovku.
+4. Pri prvom klepnutí na mikrofón povoľ prístup k mikrofónu.
+
+Rozhovor si server pamätá 30 minút (posledných 10 výmen), história správ ostáva aj v telefóne. Appku vypneš premennou `PHONE_APP=0`. Odkaz obsahuje `MCP_SECRET` – neposielaj ho nikomu; po zmene `MCP_SECRET` treba appku otvoriť z novej adresy a znovu pridať na plochu.
+
 ## WhatsApp
 
 Voliteľne môžeš TV ovládať aj správami na WhatsApp: napíšeš „pusti Pelíšky“ na číslo bota a odpovie ti Claude, ktorý použije tie isté nástroje ako MCP konektor. Používa oficiálne **WhatsApp Business Cloud API** od Mety a **Anthropic API** (platíš za tokeny podľa [cenníka](https://www.anthropic.com/pricing), bežný príkaz sú zlomky centa).
@@ -177,7 +195,8 @@ Zvuk ani prepis sa nikam neukladajú a do logu ide len dĺžka prepisu.
 - Id položiek od Clauda sa pred vložením do URL Jellyfin API overujú (musia to byť Jellyfin GUID), ostatné hodnoty idú ako query parametre.
 - Server ovláda len reláciu Wholphinixu prihláseného používateľa `JELLYFIN_USER`. TV ostatných členov domácnosti (iní Jellyfin používatelia) neovláda; ak taká relácia nie je, nástroj hlási, že Wholphinix nie je pripojený.
 - WhatsApp webhook prijme len požiadavky s platným podpisom Mety (`WHATSAPP_APP_SECRET`) a vykoná len správy z `WHATSAPP_ALLOWED_NUMBERS`. Tokeny, celé čísla ani text správ sa na úrovni INFO nelogujú.
-- Ak `MCP_SECRET` unikne, zmeň ho v Portaineri a uprav URL konektora v Claude (a Callback URL webhooku v Mete, ak používaš WhatsApp). Ak unikne API kľúč, zmaž ho v Jellyfine (*Dashboard → API Keys*) a vytvor nový.
+- Appka v mobile (`/<MCP_SECRET>/app`) je chránená tým istým tajným kľúčom v ceste; posiela `Referrer-Policy: no-referrer`, aby sa adresa nedostala ďalej, a text správ sa nezapisuje do logov.
+- Ak `MCP_SECRET` unikne, zmeň ho v Portaineri a uprav URL konektora v Claude (a Callback URL webhooku v Mete, ak používaš WhatsApp; appku v mobile pridaj na plochu z novej adresy). Ak unikne API kľúč, zmaž ho v Jellyfine (*Dashboard → API Keys*) a vytvor nový.
 
 ## Vývoj
 ```bash

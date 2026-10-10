@@ -481,7 +481,7 @@ def test_tool_round_limit(graph, jf):
 
 def test_refusal_and_no_fallback_for_haiku(graph):
     bot = make_bot(graph, [resp("refusal")])
-    bot.config = whatsapp.Config(**{**bot.config.__dict__, "model": "claude-haiku-5-5"})
+    bot.model = "claude-haiku-5-5"
     run(bot.handle_payload(payload(text_msg("wamid.r", "?"))))
     assert graph.texts() == [whatsapp.REFUSAL_REPLY]
     assert "fallbacks" not in bot.anthropic.requests[0]
