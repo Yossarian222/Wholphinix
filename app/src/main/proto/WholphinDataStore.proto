@@ -201,6 +201,16 @@ enum DisplayToggle{
   COMMUNITY_RATING = 2;
 }
 
+enum SeasonalThemePreview{
+  SEASONAL_PREVIEW_NONE = 0;
+  SEASONAL_PREVIEW_NEW_YEAR = 1;
+  SEASONAL_PREVIEW_VALENTINE = 2;
+  SEASONAL_PREVIEW_EASTER = 3;
+  SEASONAL_PREVIEW_HALLOWEEN = 4;
+  SEASONAL_PREVIEW_NICHOLAS = 5;
+  SEASONAL_PREVIEW_CHRISTMAS = 6;
+}
+
 message InterfacePreferences {
   ThemeSongVolume play_theme_songs = 1;
   bool remember_selected_tab = 2;
@@ -228,6 +238,10 @@ message InterfacePreferences {
   repeated string movie_library_tab_order = 31;
   // Order of the tabs in TV libraries (tab keys, unknown keys are ignored, missing tabs are appended)
   repeated string tv_library_tab_order = 32;
+  // Seasonal (holiday) themes & home row, stored inverted so they are on by default (also for existing users)
+  bool seasonal_themes_disabled = 40;
+  // Shows a holiday's theme even outside of its period, to try it out
+  SeasonalThemePreview seasonal_theme_preview = 41;
 }
 
 message AdvancedPreferences {

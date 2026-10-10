@@ -137,6 +137,29 @@ class CsfdTvTipsService
             missing: Int = 10,
         ): List<BaseItem> = rowItems("watchlist", userId, useSeries) { getWatchlist(limit, missing) }
 
+        /**
+         * Items for the seasonal home row (eg "🎃 Na Halloween"): the plugin's curated titles for the holiday [event]
+         * (`newyear`, `valentine`, `easter`, `halloween`, `nicholas`, `christmas`), the ones in the library first, then
+         * missing ones found in Seerr. Same timeout as [getRowItems]; empty if the plugin has no `/Csfd/Seasonal`
+         * endpoint yet (404).
+         */
+        suspend fun getSeasonalRowItems(
+            event: String,
+            userId: UUID,
+            useSeries: Boolean,
+            limit: Int = 20,
+            missing: Int = 20,
+        ): List<BaseItem> = rowItems("seasonal $event", userId, useSeries) { getSeasonal(event, limit, missing) }
+
+        /**
+         * The plugin's curated titles for a holiday, same format as [getTips]. Empty if the plugin is missing/too old.
+         */
+        suspend fun getSeasonal(
+            event: String,
+            limit: Int,
+            missing: Int,
+        ): List<CsfdTvTip> = get("Csfd/Seasonal?event=$event&limit=$limit&missing=$missing", slowClient)?.let(::parseTips).orEmpty()
+
         private suspend fun rowItems(
             name: String,
             userId: UUID,

@@ -877,6 +877,32 @@ sealed interface AppPreference<Pref, T> {
                 valueToIndex = { NAV_SCALE_PERCENTS.indexOf(it.toNavScalePercent()) },
             )
 
+        val SeasonalThemesPref =
+            AppSwitchPreference<AppPreferences>(
+                title = R.string.seasonal_themes,
+                defaultValue = true,
+                // Stored inverted so it is on by default
+                getter = { !it.interfacePreferences.seasonalThemesDisabled },
+                setter = { prefs, value ->
+                    prefs.updateInterfacePreferences { seasonalThemesDisabled = !value }
+                },
+                summaryOn = R.string.seasonal_themes_summary_on,
+                summaryOff = R.string.disabled,
+            )
+
+        val SeasonalThemePreviewPref =
+            AppChoicePreference<AppPreferences, SeasonalThemePreview>(
+                title = R.string.seasonal_theme_preview,
+                defaultValue = SeasonalThemePreview.SEASONAL_PREVIEW_NONE,
+                getter = { it.interfacePreferences.seasonalThemePreview },
+                setter = { prefs, value ->
+                    prefs.updateInterfacePreferences { seasonalThemePreview = value }
+                },
+                displayValues = R.array.seasonal_theme_preview_options,
+                indexToValue = { SeasonalThemePreview.forNumber(it) ?: SeasonalThemePreview.SEASONAL_PREVIEW_NONE },
+                valueToIndex = { if (it != SeasonalThemePreview.UNRECOGNIZED) it.number else 0 },
+            )
+
         val ManageMedia =
             AppSwitchPreference<AppPreferences>(
                 title = R.string.show_media_management,
@@ -1180,6 +1206,8 @@ val basicPreferences =
                     AppPreference.ThemeColors,
                     AppPreference.FontScalePref,
                     AppPreference.NavScalePref,
+                    AppPreference.SeasonalThemesPref,
+                    AppPreference.SeasonalThemePreviewPref,
                     AppPreference.ScreensaverSettings,
                 ),
         ),

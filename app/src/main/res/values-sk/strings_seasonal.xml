@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Sviatočné témy a odporúčania -->
+    <string name="seasonal_themes">Sviatočné témy</string>
+    <string name="seasonal_themes_summary_on">Sviatočné ozdoby a odporúčania</string>
+    <string name="seasonal_theme_preview">Náhľad sviatočnej témy</string>
+    <string name="seasonal_preview_none">Vypnutý (podľa dátumu)</string>
+    <string name="seasonal_new_year">Silvester a Nový rok</string>
+    <string name="seasonal_valentine">Valentín</string>
+    <string name="seasonal_easter">Veľká noc</string>
+    <string name="seasonal_halloween">Halloween</string>
+    <string name="seasonal_nicholas">Mikuláš</string>
+    <string name="seasonal_christmas">Vianoce</string>
+    <string name="seasonal_row_new_year">🎆 Na Silvester</string>
+    <string name="seasonal_row_valentine">💘 Na Valentína</string>
+    <string name="seasonal_row_easter">🐣 Na Veľkú noc</string>
+    <string name="seasonal_row_halloween">🎃 Na Halloween</string>
+    <string name="seasonal_row_nicholas">🥾 Na Mikuláša</string>
+    <string name="seasonal_row_christmas">🎄 Na Vianoce</string>
+    <string name="seasonal_countdown">%1$s do polnoci</string>
+</resources>

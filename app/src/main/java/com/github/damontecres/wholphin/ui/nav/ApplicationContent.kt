@@ -30,6 +30,9 @@ import com.github.damontecres.wholphin.ui.components.CsfdRatingPrompt
 import com.github.damontecres.wholphin.ui.components.CsfdRatingPromptViewModel
 import com.github.damontecres.wholphin.ui.components.ErrorMessage
 import com.github.damontecres.wholphin.ui.launchIO
+import com.github.damontecres.wholphin.ui.seasonal.SeasonalOverlay
+import com.github.damontecres.wholphin.ui.seasonal.SeasonalTheme
+import com.github.damontecres.wholphin.ui.seasonal.rememberSeasonalState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import org.jellyfin.sdk.model.api.BaseItemKind
@@ -143,6 +146,8 @@ fun ApplicationContent(
             dimAlpha = if (random != null) RANDOM_BACKDROP_DIM_ALPHA else 0f,
         )
         val navDrawerListState = rememberLazyListState()
+        // Holiday theme, only for the pages with the nav drawer (never the player)
+        val seasonalState = rememberSeasonalState(preferences.appPreferences.interfacePreferences)
         NavDisplay(
             backStack = navigationManager.backStack,
             onBack = { navigationManager.goBack() },
@@ -163,21 +168,30 @@ fun ApplicationContent(
                             modifier = Modifier.fillMaxSize(),
                         )
                     } else if (user != null && server != null) {
-                        NavDrawer(
-                            destination = key,
-                            preferences = preferences,
-                            user = user,
-                            server = server,
-                            drawerState = drawerState,
-                            navDrawerListState = navDrawerListState,
-                            onClearBackdrop = viewModel::clearBackdrop,
-                            modifier = Modifier.fillMaxSize(),
-                        )
+                        SeasonalTheme(seasonalState) {
+                            NavDrawer(
+                                destination = key,
+                                preferences = preferences,
+                                user = user,
+                                server = server,
+                                drawerState = drawerState,
+                                navDrawerListState = navDrawerListState,
+                                onClearBackdrop = viewModel::clearBackdrop,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
                     } else {
                         ErrorMessage("Trying to go to $key without a user logged in", null)
                     }
                 }
             },
+        )
+        // Holiday decorations above the menus, nothing on full screen pages like the player
+        SeasonalOverlay(
+            state = seasonalState,
+            topDestination = topDestination,
+            drawerOpen = drawerState.isOpen,
+            modifier = Modifier.fillMaxSize(),
         )
         // Asks for a ČSFD rating of a finished movie, only once the player is gone
         CsfdRatingPrompt(
