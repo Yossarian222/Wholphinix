@@ -105,6 +105,8 @@ Inštalácia:
 3. Menu ⋮ v Chrome → **Pridať na plochu / Inštalovať aplikáciu**. Na ploche pribudne ikona „Telka“, otvára sa na celú obrazovku.
 4. Pri prvom klepnutí na mikrofón povoľ prístup k mikrofónu.
 
+**iPhone:** otvor adresu v **Safari** → tlačidlo Zdieľať → **Pridať na plochu**. Ak tlačidlo mikrofónu v appke nefunguje alebo chýba, diktuj cez mikrofón na klávesnici iPhonu. Čítanie nahlas sa na iOS rozbehne po prvom ťuknutí (zapnutí 🔊 alebo odoslaní správy).
+
 Rozhovor si server pamätá 30 minút (posledných 10 výmen), história správ ostáva aj v telefóne. Appku vypneš premennou `PHONE_APP=0`. Odkaz obsahuje `MCP_SECRET` – neposielaj ho nikomu; po zmene `MCP_SECRET` treba appku otvoriť z novej adresy a znovu pridať na plochu.
 
 ## WhatsApp

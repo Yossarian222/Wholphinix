@@ -62,6 +62,7 @@
     if (!text || busy) return;
     busy = true;
     sendBtn.disabled = true;
+    unlockSpeech();
     input.value = "";
     autosize();
     bubble("me", text);
@@ -146,8 +147,16 @@
     store.set("speak", speakOn);
     speakUi();
     if (!speakOn) speechSynthesis.cancel();
+    else unlockSpeech();
     toast(speakOn ? "Odpovede budem čítať nahlas 🔊" : "Čítanie nahlas vypnuté");
   });
+  // iOS Safari speaks only after a first utterance started from a tap; the reply arrives later
+  var speechUnlocked = false;
+  function unlockSpeech() {
+    if (speechUnlocked || !speakOn || !("speechSynthesis" in window)) return;
+    speechUnlocked = true;
+    speechSynthesis.speak(new SpeechSynthesisUtterance(""));
+  }
   function slovakVoice() {
     var voices = speechSynthesis.getVoices();
     return voices.find(function (v) { return /^sk/i.test(v.lang); }) ||
