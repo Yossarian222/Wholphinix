@@ -213,6 +213,13 @@ class PlaybackViewModel
             // Acquired here, before anything asynchronous, so the release in onCleared always comes after it.
             screensaverService.acquireKeepScreenOn(this)
             addCloseable { screensaverService.releaseKeepScreenOn(this@PlaybackViewModel) }
+            // Asked before the system screensaver starts, in case a missed event released the screen while playing
+            screensaverService.registerPlaybackProbe(this) {
+                ::player.isInitialized &&
+                    player.playWhenReady &&
+                    (player.playbackState == Player.STATE_READY || player.playbackState == Player.STATE_BUFFERING)
+            }
+            addCloseable { screensaverService.unregisterPlaybackProbe(this@PlaybackViewModel) }
             addCloseable { claudeCompanionService.onPlaybackStopped() }
             initJob =
                 viewModelScope.launchIO {

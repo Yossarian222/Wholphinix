@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.libraryApi
 import org.jellyfin.sdk.model.api.BaseItemKind
@@ -75,6 +76,13 @@ class ScreensaverService
 
         /** Who currently needs the screen on (players, slideshow). Guarded by `this`. */
         private val keepOnOwners = mutableSetOf<Any>()
+
+        /**
+         * Players asked right before the system screensaver would start whether they are playing (on the main
+         * thread). A last line of defence when a player lost its [acquireKeepScreenOn] (e.g. a missed event): the
+         * owner is re-acquired and the screensaver does not start. Guarded by `this`.
+         */
+        private val playbackProbes = mutableMapOf<Any, () -> Boolean>()
         private val requestedKeepOn get() = keepOnOwners.isNotEmpty()
 
         init {
@@ -204,14 +212,25 @@ class ScreensaverService
         }
 
         /** The idle timer ran out: start the system screensaver unless something still needs the screen */
-        private fun onIdleTimeout() {
+        private suspend fun onIdleTimeout() {
             val owners = synchronized(this) { keepOnOwners.map { it::class.simpleName } }
+            if (owners.isNotEmpty()) {
+                // Releasing the last owner starts the timer again
+                Timber.i("Idle for %s, but the screen is kept on by %s: no screensaver", SYSTEM_SCREENSAVER_DELAY, owners)
+                return
+            }
+            val playing = playingProbeOwner()
+            if (playing != null) {
+                Timber.w(
+                    "Idle for %s, %s is playing but did not keep the screen on: re-acquiring, no screensaver",
+                    SYSTEM_SCREENSAVER_DELAY,
+                    playing::class.simpleName,
+                )
+                // Cancels this idle job; the player's next pause/stop releases and re-arms the timer
+                acquireKeepScreenOn(playing)
+                return
+            }
             when {
-                owners.isNotEmpty() -> {
-                    // Releasing the last owner starts the timer again
-                    Timber.i("Idle for %s, but the screen is kept on by %s: no screensaver", SYSTEM_SCREENSAVER_DELAY, owners)
-                }
-
                 playbackReportedRecently() -> {
                     Timber.i(
                         "Idle for %s, but the player reported playback recently: no screensaver, timer re-armed",
@@ -230,6 +249,35 @@ class ScreensaverService
                     startSystemScreensaver()
                 }
             }
+        }
+
+        /** The first registered player that says it is playing (or about to), asked on the main thread */
+        private suspend fun playingProbeOwner(): Any? {
+            val probes = synchronized(this) { playbackProbes.toMap() }
+            if (probes.isEmpty()) return null
+            return withContext(WholphinDispatchers.Main) {
+                probes.entries
+                    .firstOrNull { (owner, probe) ->
+                        try {
+                            probe()
+                        } catch (ex: Exception) {
+                            Timber.w(ex, "Playback probe of %s failed", owner::class.simpleName)
+                            false
+                        }
+                    }?.key
+            }
+        }
+
+        /** [isPlaying] is called on the main thread before the system screensaver starts, see [playbackProbes] */
+        fun registerPlaybackProbe(
+            owner: Any,
+            isPlaying: () -> Boolean,
+        ) {
+            synchronized(this) { playbackProbes[owner] = isPlaying }
+        }
+
+        fun unregisterPlaybackProbe(owner: Any) {
+            synchronized(this) { playbackProbes.remove(owner) }
         }
 
         /** Whether any app plays audio (a movie plays its sound on the music stream) */

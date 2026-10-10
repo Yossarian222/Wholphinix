@@ -396,6 +396,8 @@ class PlaybackViewModelTests {
             val viewModel = createViewModel(Destination.Playback(movie.id, 0L))
 
             verify { mockScreensaverService.acquireKeepScreenOn(viewModel) }
+            // Last line of defence before the system screensaver: the player is asked whether it plays
+            verify { mockScreensaverService.registerPlaybackProbe(viewModel, any()) }
         }
 
     private fun setupForPlaylist() {
