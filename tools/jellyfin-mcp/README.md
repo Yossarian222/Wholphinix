@@ -101,7 +101,7 @@ Najjednoduchší spôsob bez Claude appky: server má vlastnú malú webovú app
 - **Diktovanie** – tlačidlo mikrofónu (rozpoznávanie reči v Chrome, po slovensky)
 - **Čo beží** – názov, pozícia, pauza; obnovuje sa každých 10 s
 - **Diaľkové ovládanie** – ⏮ −30 s ⏯ +30 s ⏭ ⏹ (priamo, bez Clauda, takže okamžite a zadarmo)
-- rýchle tlačidlá („Čo dnes dávajú v TV?“, „Tip na večer“…) a „Nový rozhovor“ v menu ⋮
+- „Nový rozhovor“ v menu ⋮
 
 Inštalácia:
 1. V Portaineri musí byť nastavený `ANTHROPIC_API_KEY` (z [console.anthropic.com](https://console.anthropic.com); voliteľne `CLAUDE_MODEL`, `CLAUDE_EFFORT`). Bez neho funguje len ovládanie a stav, chat povie, že kľúč chýba.

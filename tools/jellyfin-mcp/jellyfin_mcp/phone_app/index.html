@@ -138,14 +138,6 @@
   .empty { margin: auto 0; text-align: center; color: var(--muted); padding: 20px 8px; }
   .empty b { display: block; color: var(--text); font-size: 18px; margin-bottom: 4px; }
 
-  .chips { display: flex; gap: 8px; overflow-x: auto; padding: 6px 16px; scrollbar-width: none; }
-  .chips::-webkit-scrollbar { display: none; }
-  .chips button {
-    flex: none; border: 1px solid var(--line); background: var(--surface);
-    border-radius: 999px; padding: 7px 13px; font-size: 14px;
-  }
-  .chips button:active { background: var(--surface-2); }
-
   form {
     display: flex; align-items: flex-end; gap: 8px;
     padding: 8px 12px calc(env(safe-area-inset-bottom) + 10px);
@@ -226,15 +218,6 @@
     Napíš alebo povedz, čo pustiť na telke.<br>Napr. „pusti Pelíšky s titulkami“.
   </div>
 </main>
-
-<div class="chips" id="chips">
-  <button>Čo dnes dávajú v TV?</button>
-  <button>Tip na večer</button>
-  <button>Pokračuj v rozpozeranom seriáli</button>
-  <button>Vypni titulky</button>
-  <button>Daj český dabing</button>
-  <button>Čo práve beží?</button>
-</div>
 
 <form id="composer" autocomplete="off">
   <textarea id="input" rows="1" placeholder="Napíš správu…" enterkeyhint="send" aria-label="Správa"></textarea>

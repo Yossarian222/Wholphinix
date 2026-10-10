@@ -104,9 +104,6 @@
   }
   input.addEventListener("input", autosize);
 
-  $("chips").addEventListener("click", function (e) {
-    if (e.target.tagName === "BUTTON") send(e.target.textContent);
-  });
 
   // ---- menu ----
   var menu = $("menu");
