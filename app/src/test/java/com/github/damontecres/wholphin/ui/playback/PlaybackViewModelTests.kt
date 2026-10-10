@@ -349,6 +349,55 @@ class PlaybackViewModelTests {
             }
         }
 
+    private suspend fun TestScope.leaveMovieAt(
+        positionMs: Long,
+        durationMs: Long,
+    ) {
+        val movie = movie()
+        setupPreferences {
+            cinemaMode = false
+        }
+        coEvery { mockUserLibraryApi.getItem(movie.id) } returns successResponse(movie)
+        every { mockPlayer.currentPosition } returns positionMs
+        every { mockPlayer.duration } returns durationMs
+
+        val viewModel = createViewModel(Destination.Playback(movie.id, 0L))
+        // Back, Stop or Home (the page's lifecycle stops)
+        viewModel.release()
+        // Reported only once, also when the page is disposed afterwards
+        viewModel.release()
+    }
+
+    @Test
+    fun `Leaving a movie after 90 percent asks for a rating`() =
+        runTest(testDispatcher) {
+            leaveMovieAt(positionMs = 95_000L, durationMs = 100_000L)
+
+            verify(exactly = 1) { mockPendingRatingService.onPlaybackLeft(any(), true) }
+        }
+
+    @Test
+    fun `Leaving a movie early does not count as watched`() =
+        runTest(testDispatcher) {
+            leaveMovieAt(positionMs = 50_000L, durationMs = 100_000L)
+
+            verify(exactly = 1) { mockPendingRatingService.onPlaybackLeft(any(), false) }
+        }
+
+    @Test
+    fun `Playing keeps the screen on`() =
+        runTest(testDispatcher) {
+            val movie = movie()
+            setupPreferences {
+                cinemaMode = false
+            }
+            coEvery { mockUserLibraryApi.getItem(movie.id) } returns successResponse(movie)
+
+            val viewModel = createViewModel(Destination.Playback(movie.id, 0L))
+
+            verify { mockScreensaverService.acquireKeepScreenOn(viewModel) }
+        }
+
     private fun setupForPlaylist() {
         coEvery { mockUserLibraryApi.getItem(playlist.id, any()) } returns
             successResponse(playlist)

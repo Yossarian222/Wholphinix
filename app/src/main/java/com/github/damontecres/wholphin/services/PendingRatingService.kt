@@ -60,17 +60,27 @@ class PendingRatingService
         ) {
             when (item.type) {
                 BaseItemKind.MOVIE -> {
-                    val csfdId = item.csfdId ?: return
+                    val csfdId =
+                        item.csfdId ?: run {
+                            Timber.i("No rating prompt for %s: no ČSFD id", item.id)
+                            return
+                        }
                     ask(item, watched) { PendingRating(item.id, csfdId, item.name ?: "") }
                 }
 
                 // After the last episode of a series, ask about the whole series
                 BaseItemKind.EPISODE -> {
-                    val seriesId = item.data.seriesId ?: return
+                    val seriesId =
+                        item.data.seriesId ?: run {
+                            Timber.i("No rating prompt for %s: episode without a series", item.id)
+                            return
+                        }
                     ask(item, watched, seriesId) { seriesRating(seriesId, item.id) }
                 }
 
-                else -> {}
+                else -> {
+                    Timber.i("No rating prompt for %s: %s is not rated", item.id, item.type)
+                }
             }
         }
 
@@ -84,7 +94,10 @@ class PendingRatingService
             key: UUID = item.id,
             rating: suspend () -> PendingRating?,
         ) {
-            if (key in handled) return
+            if (key in handled) {
+                Timber.i("No rating prompt for %s: already asked in this session", key)
+                return
+            }
             val wasPlayed = item.played
             scope.launch(ExceptionHandler()) {
                 val finished =
@@ -92,14 +105,29 @@ class PendingRatingService
                         // The server may use its own threshold for marking an item played,
                         // give the stop report a moment to arrive first
                         (!wasPlayed && playedOnServer(item.id))
-                if (!finished) return@launch
-                val pending = rating() ?: return@launch
-                // An empty map means the plugin has no ČSFD profile to read, so nothing could be rated
+                if (!finished) {
+                    Timber.i("No rating prompt for %s: not watched enough", item.id)
+                    return@launch
+                }
+                val pending =
+                    rating() ?: run {
+                        Timber.i("No rating prompt for %s: not the last episode or the series has no ČSFD id", item.id)
+                        return@launch
+                    }
+                // Only a known rating skips the prompt: an empty map may just mean the plugin could not read the
+                // ČSFD profile (or has none set), and then rating still works through the plugin's account or fails
+                // with a message
                 val myRatings = csfdTvTipsService.getMyRatings()
-                if (myRatings.isEmpty() || myRatings.containsKey(pending.csfdId)) return@launch
+                if (myRatings.containsKey(pending.csfdId)) {
+                    Timber.i("No rating prompt for %s: ČSFD %s already rated", pending.itemId, pending.csfdId)
+                    return@launch
+                }
+                if (myRatings.isEmpty()) Timber.i("ČSFD ratings unknown (empty or not readable), asking anyway")
                 if (handled.add(key)) {
                     Timber.i("Asking for a ČSFD rating of %s (%s)", pending.itemId, pending.csfdId)
                     _pending.update { pending }
+                } else {
+                    Timber.i("No rating prompt for %s: already asked in this session", key)
                 }
             }
         }

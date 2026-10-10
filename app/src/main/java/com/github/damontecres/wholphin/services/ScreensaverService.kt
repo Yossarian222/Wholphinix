@@ -2,6 +2,7 @@ package com.github.damontecres.wholphin.services
 
 import android.content.Context
 import android.content.Intent
+import android.media.AudioManager
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -41,6 +42,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 
 /**
  * Handles the queue of items to show on the screensaver, both in-app or OS
@@ -196,14 +199,73 @@ class ScreensaverService
             idleJob =
                 scope.launch(ExceptionHandler()) {
                     delay(SYSTEM_SCREENSAVER_DELAY)
-                    if (!synchronized(this@ScreensaverService) { requestedKeepOn }) {
-                        startSystemScreensaver()
-                    }
+                    onIdleTimeout()
                 }
         }
 
+        /** The idle timer ran out: start the system screensaver unless something still needs the screen */
+        private fun onIdleTimeout() {
+            val owners = synchronized(this) { keepOnOwners.map { it::class.simpleName } }
+            when {
+                owners.isNotEmpty() -> {
+                    // Releasing the last owner starts the timer again
+                    Timber.i("Idle for %s, but the screen is kept on by %s: no screensaver", SYSTEM_SCREENSAVER_DELAY, owners)
+                }
+
+                playbackReportedRecently() -> {
+                    Timber.i(
+                        "Idle for %s, but the player reported playback recently: no screensaver, timer re-armed",
+                        SYSTEM_SCREENSAVER_DELAY,
+                    )
+                    restartIdleTimer()
+                }
+
+                isAudioPlaying() -> {
+                    Timber.i("Idle for %s, but audio is playing: no screensaver, timer re-armed", SYSTEM_SCREENSAVER_DELAY)
+                    restartIdleTimer()
+                }
+
+                else -> {
+                    Timber.i("Idle for %s and nothing is playing, starting the system screensaver", SYSTEM_SCREENSAVER_DELAY)
+                    startSystemScreensaver()
+                }
+            }
+        }
+
+        /** Whether any app plays audio (a movie plays its sound on the music stream) */
+        private fun isAudioPlaying(): Boolean =
+            try {
+                context.getSystemService(AudioManager::class.java)?.isMusicActive == true
+            } catch (ex: Exception) {
+                Timber.w(ex, "Cannot check whether audio is playing")
+                false
+            }
+
+        @Volatile
+        private var lastPlaybackReport: TimeMark? = null
+
+        private fun playbackReportedRecently(): Boolean = lastPlaybackReport?.let { it.elapsedNow() < PLAYBACK_REPORT_INTERVAL * 2 } == true
+
+        /**
+         * Called by a player every [PLAYBACK_REPORT_INTERVAL] while it is playing: the idle timer does not start the
+         * screensaver for a while, and [owner] keeps the screen on even if a missed player event released it.
+         */
+        fun reportPlaybackActive(owner: Any) {
+            lastPlaybackReport = TimeSource.Monotonic.markNow()
+            synchronized(this) {
+                if (owner !in keepOnOwners) {
+                    Timber.w("%s is playing but did not keep the screen on, acquiring", owner::class.simpleName)
+                    acquireKeepScreenOn(owner)
+                }
+                if (!keepScreenOn.value) {
+                    Timber.w("Playing but the screen is not kept on (screensaver enabled=%s)", state.value.enabled)
+                    keepScreenOnInternal(true)
+                }
+            }
+            Timber.d("Playback active, keepScreenOn=%s", keepScreenOn.value)
+        }
+
         private fun startSystemScreensaver() {
-            Timber.i("Idle for %s, starting the system screensaver", SYSTEM_SCREENSAVER_DELAY)
             try {
                 // SystemUI's "start screensaver now" activity, it shows the screensaver selected in the TV settings
                 context.startActivity(
@@ -233,6 +295,12 @@ class ScreensaverService
          */
         fun acquireKeepScreenOn(owner: Any) {
             synchronized(this) {
+                // A transient release (e.g. a stream switch) armed the idle timer, which must not outlive the playback
+                idleJob?.let {
+                    if (it.isActive) Timber.d("Keep screen on by %s, cancelling the idle timer", owner::class.simpleName)
+                    it.cancel()
+                }
+                idleJob = null
                 keepOnOwners.add(owner)
                 applyKeepScreenOn(true)
             }
@@ -241,6 +309,7 @@ class ScreensaverService
         fun releaseKeepScreenOn(owner: Any) {
             synchronized(this) {
                 if (keepOnOwners.remove(owner) && !requestedKeepOn) {
+                    Timber.i("Screen no longer kept on (released by %s), idle timer started", owner::class.simpleName)
                     applyKeepScreenOn(false)
                     // e.g. a paused movie: the screensaver starts 15 minutes after the pause, not after the last key
                     restartIdleTimer()
@@ -374,6 +443,9 @@ class ScreensaverService
 
         companion object {
             val SYSTEM_SCREENSAVER_DELAY = 15.minutes
+
+            /** How often a playing player calls [reportPlaybackActive] */
+            val PLAYBACK_REPORT_INTERVAL = 5.minutes
 
             val enterAnimation = fadeIn(animationSpec = tween(durationMillis = 1000))
             val exitAnimation = fadeOut(animationSpec = tween(durationMillis = 500))

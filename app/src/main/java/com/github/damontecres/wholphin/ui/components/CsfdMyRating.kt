@@ -1,6 +1,10 @@
 package com.github.damontecres.wholphin.ui.components
 
-import android.widget.Toast
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
@@ -30,6 +34,7 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -43,6 +48,7 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import com.github.damontecres.wholphin.R
 import com.github.damontecres.wholphin.data.model.BaseItem
+import com.github.damontecres.wholphin.services.CsfdRatingSender
 import com.github.damontecres.wholphin.services.CsfdTvTipsService
 import com.github.damontecres.wholphin.ui.AppColors
 import com.github.damontecres.wholphin.ui.FontAwesome
@@ -52,33 +58,59 @@ import com.github.damontecres.wholphin.ui.playSoundOnFocus
 import com.github.damontecres.wholphin.ui.tryRequestFocus
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * My ČSFD rating of one title: null = not rated yet, 0 = "odpad", 1-5 stars
+ * My ČSFD rating of one title: null = not rated yet, 0 = "odpad", 1-5 stars.
+ *
+ * Sending is done by [CsfdRatingSender] in the application scope, so it finishes (and confirms with a toast) even
+ * when the page is left; this only mirrors its state.
  */
 @HiltViewModel
 class CsfdMyRatingViewModel
     @Inject
     constructor(
         private val csfdTvTipsService: CsfdTvTipsService,
+        private val ratingSender: CsfdRatingSender,
     ) : ViewModel() {
         private val _stars = MutableStateFlow<Int?>(null)
         val stars: StateFlow<Int?> = _stars
 
-        fun load(csfdId: Int) {
-            viewModelScope.launchIO {
-                _stars.update { csfdTvTipsService.getMyRatings()[csfdId] }
+        private val csfdId = MutableStateFlow<Int?>(null)
+
+        /** The rating is waiting to be sent or being sent */
+        val sending: StateFlow<Boolean> =
+            combine(csfdId, ratingSender.sending) { id, sending -> id != null && id in sending }
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), false)
+
+        init {
+            viewModelScope.launch {
+                ratingSender.results.collect { result ->
+                    // A failed rating goes back; the toast is shown by the sender
+                    if (result.csfdId == csfdId.value && result.error != null) {
+                        _stars.update { result.revertTo }
+                    }
+                }
             }
         }
 
-        /** Error from the last rating, shown once by the UI */
-        val error = MutableStateFlow<String?>(null)
+        fun load(csfdId: Int) {
+            this.csfdId.update { csfdId }
+            viewModelScope.launchIO {
+                val rated = csfdTvTipsService.getMyRatings()[csfdId]
+                // A choice still on its way to ČSFD wins over the old rating
+                _stars.update { ratingSender.pendingStars(csfdId) ?: rated }
+            }
+        }
 
         /**
-         * Sends the rating to ČSFD; if it fails the stars go back and [error] gets the message
+         * Shows [stars] right away and sends it to ČSFD; if it fails the stars go back
          */
         fun rate(
             csfdId: Int,
@@ -86,12 +118,7 @@ class CsfdMyRatingViewModel
         ) {
             val previous = _stars.value
             _stars.update { stars }
-            viewModelScope.launchIO {
-                csfdTvTipsService.rate(csfdId, stars)?.let { message ->
-                    _stars.update { previous }
-                    error.update { message }
-                }
-            }
+            ratingSender.rate(csfdId, stars, previous)
         }
     }
 
@@ -122,14 +149,21 @@ fun CsfdMyRating(
     val csfdId = remember(item.id) { item.csfdId } ?: return
     LaunchedEffect(csfdId) { viewModel.load(csfdId) }
     val stars by viewModel.stars.collectAsState()
-    val context = LocalContext.current
-    val error by viewModel.error.collectAsState()
-    LaunchedEffect(error) {
-        error?.let {
-            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
-            viewModel.error.update { null }
+    val sending by viewModel.sending.collectAsState()
+    // Pulses while the rating is on its way to ČSFD
+    val ratingAlpha =
+        if (sending) {
+            val transition = rememberInfiniteTransition(label = "csfd_rating_sending")
+            val pulse by transition.animateFloat(
+                initialValue = 1f,
+                targetValue = .35f,
+                animationSpec = infiniteRepeatable(tween(durationMillis = 500), repeatMode = RepeatMode.Reverse),
+                label = "csfd_rating_sending_alpha",
+            )
+            pulse
+        } else {
+            1f
         }
-    }
     // 0 = thumb ("odpad"), 1-5 = stars
     val focusRequesters = remember { List(6) { FocusRequester() } }
     // The choice under the cursor is previewed before it is chosen
@@ -144,6 +178,7 @@ fun CsfdMyRating(
                 .height(pillHeight)
                 .background(AppColors.TransparentBlack75, RoundedCornerShape(percent = 50))
                 .padding(horizontal = 4.dp)
+                .graphicsLayer { alpha = ratingAlpha }
                 .semantics { contentDescription = description }
                 .focusProperties {
                     onEnter = {
