@@ -60,8 +60,10 @@ class CsfdRatingSender
         private val _results = MutableSharedFlow<CsfdRatingResult>(extraBufferCapacity = 16)
         val results: SharedFlow<CsfdRatingResult> = _results
 
-        /** Shows the confirmation or error; replaceable in tests */
-        internal var showMessage: suspend (String) -> Unit = { showToast(context, it) }
+        /** Shows the error, or the confirmation when null; replaceable in tests (no Android resources there) */
+        internal var showMessage: suspend (String?) -> Unit = {
+            showToast(context, it ?: context.getString(R.string.csfd_rating_prompt_sent))
+        }
 
         private val lock = Any()
 
@@ -149,7 +151,7 @@ class CsfdRatingSender
                 Timber.w("ČSFD rating %s → %s failed: %s", csfdId, stars, result.error)
             }
             _results.emit(result)
-            showMessage(result.error ?: context.getString(R.string.csfd_rating_prompt_sent))
+            showMessage(result.error)
         }
 
         companion object {

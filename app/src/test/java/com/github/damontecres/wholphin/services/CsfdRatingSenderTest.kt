@@ -24,7 +24,7 @@ class CsfdRatingSenderTest {
         results: MutableList<CsfdRatingResult>,
     ): CsfdRatingSender {
         val sender = CsfdRatingSender(mockk<Context>(relaxed = true), tvTips, backgroundScope)
-        sender.showMessage = { messages.add(it) }
+        sender.showMessage = { messages.add(it ?: "OK") }
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { sender.results.toList(results) }
         return sender
     }
