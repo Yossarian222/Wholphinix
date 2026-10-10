@@ -166,7 +166,7 @@ class CsfdTvTipsService
             missing: Int = 7,
             throwIfUnavailable: Boolean = false,
         ): List<BaseItem> =
-            rowItems("TV tips", userId, useSeries, throwIfUnavailable) {
+            rowItems("TV tips $limit/$missing", userId, useSeries, throwIfUnavailable) {
                 get("Csfd/TvTips?limit=$limit&missing=$missing", slowClient)?.let(::parseTips)
             }
 
@@ -182,7 +182,7 @@ class CsfdTvTipsService
             missing: Int = 10,
             throwIfUnavailable: Boolean = false,
         ): List<BaseItem> =
-            rowItems("watchlist", userId, useSeries, throwIfUnavailable) {
+            rowItems("watchlist $limit/$missing", userId, useSeries, throwIfUnavailable) {
                 get("Csfd/Watchlist?limit=$limit&missing=$missing", slowClient)?.let(::parseTips)
             }
 
@@ -200,7 +200,7 @@ class CsfdTvTipsService
             missing: Int = 20,
             throwIfUnavailable: Boolean = false,
         ): List<BaseItem> =
-            rowItems("seasonal $event", userId, useSeries, throwIfUnavailable) {
+            rowItems("seasonal $event $limit/$missing", userId, useSeries, throwIfUnavailable) {
                 get("Csfd/Seasonal?event=$event&limit=$limit&missing=$missing", slowClient)?.let(::parseTips)
             }
 
