@@ -63,9 +63,9 @@ import com.github.damontecres.wholphin.ui.detail.CardGridItem
 import com.github.damontecres.wholphin.ui.enableMarquee
 import com.github.damontecres.wholphin.ui.playback.overlay.PlaybackButton
 import com.github.damontecres.wholphin.ui.tryRequestFocus
-import com.github.damontecres.wholphin.util.ResArgStringProvider
-import com.github.damontecres.wholphin.util.ResStringProvider
-import com.github.damontecres.wholphin.util.StringStringProvider
+import com.github.damontecres.wholphin.ui.util.ResArgStringProvider
+import com.github.damontecres.wholphin.ui.util.ResStringProvider
+import com.github.damontecres.wholphin.ui.util.StringStringProvider
 import kotlinx.coroutines.delay
 import org.jellyfin.sdk.model.api.ItemSortBy
 
