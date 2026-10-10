@@ -10,6 +10,8 @@ from __future__ import annotations
 import hmac
 import logging
 import os
+import re
+from datetime import datetime
 from typing import Any, Literal
 
 from mcp.server.fastmcp import FastMCP
@@ -28,6 +30,7 @@ from .jellyfin import (
     validate_id,
 )
 from . import phone
+from .agent import local_timezone
 from .seerr import MEDIA_STATUS, SeerrClient, SeerrNotConfigured, pick_result
 
 log = logging.getLogger("jellyfin_mcp")
@@ -53,6 +56,10 @@ Workflow:
 - "Čo si dnes pozrieť / niečo na večer / mám chuť na komédiu": recommend_tonight (mood = the
   user's words, max_minutes when they say how much time they have). Pick 1-3 of the
   candidates yourself and say briefly why; offer to play the one they choose.
+- Questions about the library: browse_library (filters by genre, years, actor/director,
+  watched, rating; `total` answers "koľko…"), item_details (plot, cast, rating, dubbing and
+  subtitle languages, 4K, seasons/episodes), watch_history ("čo som pozeral"), library_stats
+  (overall counts). Always look it up with a tool, never answer about the library from memory.
 - "Stiahni / chcem / objednaj film X" for something not in the library: request_on_seerr.
   Confirm the title and year first if it is ambiguous.
 - If a tool says Wholphinix is not connected, tell the user to open the app on the TV.
@@ -456,6 +463,261 @@ async def recommend_tonight(mood: str | None = None, max_minutes: int | None = N
     if not mood_matched:
         out["note"] = f"Nothing unwatched matches the mood '{mood}', these are the best rated ones"
     return out
+
+
+# ---- library: browsing, details, history, stats ----
+
+BROWSE_TYPES = {"movie": ["Movie"], "series": ["Series"], "episode": ["Episode"]}
+BROWSE_SORT = {
+    "rating": ("CommunityRating,SortName", "Descending,Ascending"),
+    "year": ("ProductionYear,SortName", "Descending,Ascending"),
+    "oldest": ("ProductionYear,SortName", "Ascending,Ascending"),
+    "newest_added": ("DateCreated,SortName", "Descending,Ascending"),
+    "name": ("SortName", "Ascending"),
+    "runtime": ("Runtime,SortName", "Ascending,Ascending"),
+    "random": ("Random", "Ascending"),
+}
+MAX_BROWSE = 50
+
+
+def _percent(rating: Any) -> int | None:
+    """CommunityRating 0-10 (the ČSFD plugin writes ČSFD % / 10) -> percent."""
+    return round(float(rating) * 10) if rating else None
+
+
+def _minutes(item: dict[str, Any]) -> int | None:
+    ticks = item.get("RunTimeTicks")
+    return round(ticks / TICKS_PER_SECOND / 60) if ticks else None
+
+
+def _local_time(iso: Any) -> str | None:
+    """Jellyfin UTC timestamp ('2026-10-08T19:30:00.1234567Z') -> local '8. 10. 2026 21:30'."""
+    if not iso:
+        return None
+    text = re.sub(r"(\.\d{6})\d+", r"\1", str(iso)).replace("Z", "+00:00")
+    try:
+        when = datetime.fromisoformat(text).astimezone(local_timezone())
+    except ValueError:
+        return None
+    return f"{when.day}. {when.month}. {when.year} {when:%H:%M}"
+
+
+def _list_item(item: dict[str, Any]) -> dict[str, Any]:
+    user_data = item.get("UserData") or {}
+    out: dict[str, Any] = {
+        "id": item["Id"],
+        "name": item.get("Name"),
+        "year": item.get("ProductionYear"),
+        "csfd_percent": _percent(item.get("CommunityRating")),
+        "genres": (item.get("Genres") or [])[:3],
+        "runtime_min": _minutes(item),
+    }
+    if item.get("Type") == "Series":
+        out["unwatched_episodes"] = user_data.get("UnplayedItemCount")
+    elif item.get("Type") == "Episode":
+        out.update(series=item.get("SeriesName"), season=item.get("ParentIndexNumber"),
+                   episode=item.get("IndexNumber"))
+    if user_data.get("Played"):
+        out["watched"] = True
+    return {k: v for k, v in out.items() if v not in (None, [])}
+
+
+@mcp.tool()
+async def browse_library(
+    kind: Literal["movie", "series", "episode"] = "movie",
+    genre: str | None = None,
+    year_from: int | None = None,
+    year_to: int | None = None,
+    person: str | None = None,
+    watched: bool | None = None,
+    min_csfd_percent: int | None = None,
+    sort: Literal["rating", "year", "oldest", "newest_added", "name", "runtime", "random"] = "rating",
+    limit: int = 15,
+) -> dict[str, Any]:
+    """Browse/filter the library and count matches: by genre, years, actor/director, watched state, rating.
+
+    Answers questions like "koľko mám hororov", "filmy s Tomom Hanksom", "čo mám od Nolana",
+    "komédie z 90. rokov", "najlepšie nepozreté filmy", "čo pribudlo naposledy" (sort=newest_added).
+    genre: the user's word in any language ("horor", "komédia", "sci-fi"), matched to the
+    library's genre names. person: actor or director name (partial is fine). watched: True only
+    watched, False only unwatched. `total` is the number of ALL matches, `items` the first `limit`
+    (max 50) of them in the chosen order.
+    """
+    c = client()
+    types = BROWSE_TYPES[kind]
+    note: list[str] = []
+    filters: dict[str, Any] = {}
+
+    if genre:
+        names = await c.genres(types)
+        fragments = mood_genres(genre)
+        matched = [n for n in names if any(f in _fold(n) for f in fragments)]
+        if not matched:
+            return {"total": 0, "items": [], "note": f"No genre matching '{genre}'", "available_genres": names}
+        filters["genres"] = matched
+
+    if year_from or year_to:
+        start = year_from or 1900
+        end = year_to or datetime.now().year + 1
+        if end < start:
+            start, end = end, start
+        filters["years"] = list(range(start, min(end, start + 150) + 1))
+
+    if person:
+        found = await c.persons(person)
+        if not found:
+            return {"total": 0, "items": [], "note": f"Nobody called '{person}' in the library"}
+        exact = [p for p in found if _fold(p.get("Name") or "") == _fold(person)]
+        chosen = (exact or found)[0]
+        filters["person_ids"] = [chosen["Id"]]
+        if not exact and len(found) > 1:
+            note.append(f"'{person}' matched {chosen.get('Name')}; others: "
+                        + ", ".join(p.get("Name") or "?" for p in found[1:]))
+        filters["person"] = chosen.get("Name")
+
+    sort_by, sort_order = BROWSE_SORT[sort]
+    items, total = await c.browse(
+        types,
+        genres=filters.get("genres"),
+        years=filters.get("years"),
+        person_ids=filters.get("person_ids"),
+        is_played=watched,
+        min_rating=min_csfd_percent / 10 if min_csfd_percent else None,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        limit=max(1, min(limit, MAX_BROWSE)),
+    )
+    out: dict[str, Any] = {"total": total, "items": [_list_item(i) for i in items]}
+    if filters.get("genres"):
+        out["genres_used"] = filters["genres"]
+    if filters.get("person"):
+        out["person"] = filters["person"]
+    if note:
+        out["note"] = "; ".join(note)
+    return out
+
+
+def _streams_summary(item: dict[str, Any]) -> dict[str, Any]:
+    sources = item.get("MediaSources") or []
+    if not sources:
+        return {}
+    streams = sources[0].get("MediaStreams") or []
+    video = next((s for s in streams if s.get("Type") == "Video"), None)
+    out: dict[str, Any] = {}
+    if video and video.get("Height"):
+        h, w = video.get("Height") or 0, video.get("Width") or 0
+        out["video"] = "4K" if w >= 3200 or h >= 2000 else f"{h}p"
+        if video.get("VideoRangeType") and video["VideoRangeType"] != "SDR":
+            out["video"] += " " + str(video["VideoRangeType"])
+    out["audio"] = [s.get("DisplayTitle") or s.get("Language") for s in streams if s.get("Type") == "Audio"]
+    out["subtitles"] = sorted({s.get("Language") or s.get("DisplayTitle") or "?"
+                               for s in streams if s.get("Type") == "Subtitle"})
+    if len(sources) > 1:
+        out["versions"] = [s.get("Name") for s in sources]
+    return {k: v for k, v in out.items() if v}
+
+
+@mcp.tool()
+async def item_details(item_id: str) -> dict[str, Any]:
+    """Everything about one movie/series/episode: plot, cast, director, ČSFD rating, runtime,
+    age rating, dubbing and subtitle languages, video quality (4K…), watched state; for a series
+    also seasons with episode counts and what is next.
+
+    Use after search_library/browse_library for "o čom je…", "kto tam hrá", "má to český
+    dabing", "je to v 4K", "koľko má sérií/epizód", "dokedy som to pozeral".
+    """
+    c = client()
+    item = await c.item(item_id)
+    user_data = item.get("UserData") or {}
+    people = item.get("People") or []
+
+    def names(kind: str, n: int = 3) -> list[str]:
+        return [p["Name"] for p in people if p.get("Type") == kind and p.get("Name")][:n]
+
+    out: dict[str, Any] = {
+        "id": item.get("Id"),
+        "name": item.get("Name"),
+        "original_title": item.get("OriginalTitle") if item.get("OriginalTitle") != item.get("Name") else None,
+        "type": item.get("Type"),
+        "year": item.get("ProductionYear"),
+        "csfd_percent": _percent(item.get("CommunityRating")),
+        "csfd_votes": (item.get("ProviderIds") or {}).get("CsfdVotes"),
+        "critic_percent": item.get("CriticRating"),
+        "age_rating": item.get("OfficialRating"),
+        "runtime_min": _minutes(item),
+        "genres": item.get("Genres"),
+        "countries": item.get("ProductionLocations"),
+        "studios": [s.get("Name") for s in (item.get("Studios") or [])][:3],
+        "tagline": (item.get("Taglines") or [None])[0],
+        "overview": _short(item.get("Overview"), 700),
+        "directors": names("Director"),
+        "writers": names("Writer"),
+        "cast": [f"{p['Name']} ({p['Role']})" if p.get("Role") else p["Name"]
+                 for p in people if p.get("Type") == "Actor" and p.get("Name")][:10],
+        "watched": bool(user_data.get("Played")),
+        "play_count": user_data.get("PlayCount") or None,
+        "last_played": _local_time(user_data.get("LastPlayedDate")),
+    }
+    if user_data.get("PlaybackPositionTicks"):
+        out["resume_at_min"] = round(user_data["PlaybackPositionTicks"] / TICKS_PER_SECOND / 60, 1)
+    if item.get("Type") == "Episode":
+        out.update(series=item.get("SeriesName"), series_id=item.get("SeriesId"),
+                   season=item.get("ParentIndexNumber"), episode=item.get("IndexNumber"))
+    if item.get("Type") == "Series":
+        out["status"] = item.get("Status")
+        episodes = await c.episodes(item["Id"])
+        seasons: dict[Any, dict[str, int]] = {}
+        for e in episodes:
+            s = seasons.setdefault(e.get("ParentIndexNumber"), {"episodes": 0, "watched": 0})
+            s["episodes"] += 1
+            s["watched"] += 1 if (e.get("UserData") or {}).get("Played") else 0
+        out["seasons"] = [{"season": k, **v} for k, v in sorted(seasons.items(), key=lambda kv: (kv[0] is None, kv[0] or 0))]
+        out["episodes_total"] = len(episodes)
+        nxt = await c.next_up(item["Id"])
+        if nxt:
+            n = nxt[0]
+            out["next_episode"] = {"season": n.get("ParentIndexNumber"), "episode": n.get("IndexNumber"),
+                                   "name": n.get("Name"), "id": n.get("Id")}
+    else:
+        out.update(_streams_summary(item))
+    return {k: v for k, v in out.items() if v not in (None, [], "")}
+
+
+@mcp.tool()
+async def watch_history(limit: int = 15) -> dict[str, Any]:
+    """What was watched recently (newest first), with local date/time and whether it was finished.
+
+    For "čo som pozeral včera / minulý týždeň", "kedy som videl X", "kde som skončil".
+    """
+    items = await client().history(max(1, min(limit, 50)))
+    out = []
+    for i in items:
+        user_data = i.get("UserData") or {}
+        entry = _list_item(i)
+        entry.pop("genres", None)
+        entry["last_played"] = _local_time(user_data.get("LastPlayedDate"))
+        if not user_data.get("Played") and user_data.get("PlayedPercentage"):
+            entry["progress_percent"] = round(user_data["PlayedPercentage"])
+        out.append(entry)
+    return {"history": out}
+
+
+@mcp.tool()
+async def library_stats() -> dict[str, Any]:
+    """How big the library is: number of movies, series, episodes; watched vs unwatched movies;
+    the movie genres that exist. For "koľko mám filmov", "koľko som toho už videl"."""
+    c = client()
+    counts = await c.counts()
+    _, watched = await c.browse(["Movie"], is_played=True, limit=1)
+    _, unwatched = await c.browse(["Movie"], is_played=False, limit=1)
+    return {
+        "movies": counts.get("MovieCount"),
+        "series": counts.get("SeriesCount"),
+        "episodes": counts.get("EpisodeCount"),
+        "movies_watched": watched,
+        "movies_unwatched": unwatched,
+        "movie_genres": await c.genres(["Movie"]),
+    }
 
 
 @mcp.tool()

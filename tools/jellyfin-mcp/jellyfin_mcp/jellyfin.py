@@ -384,6 +384,69 @@ class JellyfinClient:
         data = r.json()
         return data if isinstance(data, list) else []
 
+    # ---- Library browsing ----
+
+    async def browse(
+        self,
+        types: list[str],
+        *,
+        genres: list[str] | None = None,
+        years: list[int] | None = None,
+        person_ids: list[str] | None = None,
+        is_played: bool | None = None,
+        min_rating: float | None = None,
+        sort_by: str = "SortName",
+        sort_order: str = "Ascending",
+        limit: int = 20,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Filtered library listing; returns (items, total matching count)."""
+        data = await self._get(
+            "/Items",
+            userId=await self.user_id(),
+            recursive="true",
+            includeItemTypes=",".join(types),
+            genres="|".join(genres) if genres else None,
+            years=",".join(str(y) for y in years) if years else None,
+            personIds=",".join(person_ids) if person_ids else None,
+            isPlayed=None if is_played is None else str(is_played).lower(),
+            minCommunityRating=min_rating,
+            sortBy=sort_by,
+            sortOrder=sort_order,
+            limit=limit,
+            fields="ProductionYear,Genres,UserData,RunTimeTicks",
+            enableTotalRecordCount="true",
+        )
+        return data.get("Items", []), int(data.get("TotalRecordCount") or 0)
+
+    async def genres(self, types: list[str]) -> list[str]:
+        data = await self._get(
+            "/Genres", userId=await self.user_id(), includeItemTypes=",".join(types), recursive="true"
+        )
+        return [g["Name"] for g in data.get("Items", []) if g.get("Name")]
+
+    async def persons(self, name: str, limit: int = 5) -> list[dict[str, Any]]:
+        data = await self._get("/Persons", userId=await self.user_id(), searchTerm=name, limit=limit)
+        return data.get("Items", [])
+
+    async def counts(self) -> dict[str, Any]:
+        return await self._get("/Items/Counts", userId=await self.user_id())
+
+    async def history(self, limit: int = 15) -> list[dict[str, Any]]:
+        """Recently played movies/episodes (also partially watched), newest first."""
+        data = await self._get(
+            "/Items",
+            userId=await self.user_id(),
+            recursive="true",
+            includeItemTypes="Movie,Episode",
+            sortBy="DatePlayed",
+            sortOrder="Descending",
+            limit=limit * 2,  # items never played may sneak in; filtered below
+            fields="ProductionYear,UserData,RunTimeTicks",
+            enableTotalRecordCount="false",
+        )
+        items = [i for i in data.get("Items", []) if (i.get("UserData") or {}).get("LastPlayedDate")]
+        return items[:limit]
+
     async def unwatched_movies(self, limit: int = 300) -> list[dict[str, Any]]:
         """Unwatched movies of JELLYFIN_USER, best rated (CommunityRating = ČSFD % / 10) first."""
         data = await self._get(
