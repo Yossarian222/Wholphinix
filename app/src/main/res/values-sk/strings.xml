@@ -843,4 +843,6 @@
     <string name="abs_settings_test_failed">Nepodarilo sa pripojiť</string>
     <string name="abs_settings_incomplete">Vyplň adresu v domácej sieti a API token</string>
     <string name="not_in_library">Nie je v knižnici</string>
+    <string name="csfd_watchlist_empty">Zoznam Chcem vidieť je prázdny, alebo chýba ČSFD plugin či v ňom nie je nastavený ČSFD profil</string>
+    <string name="csfd_watchlist_loading">Načítavam zoznam Chcem vidieť, prvé načítanie môže trvať aj pol minúty…</string>
 </resources>

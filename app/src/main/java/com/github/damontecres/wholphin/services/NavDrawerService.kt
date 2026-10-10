@@ -200,7 +200,8 @@ class NavDrawerService
         ) {
             val builtins =
                 buildList {
-                    add(NavDrawerItem.Favorites)
+                    // Favorites is no longer in the nav drawer; a saved order that still contains it just skips it
+                    add(NavDrawerItem.CsfdWatchlist)
                     // Discover is no longer reachable from the nav drawer, search is in the top right corner instead
                     // Always shown: the connection is configured on the Audiobookshelf page itself,
                     // which would be unreachable if the item only appeared once configured

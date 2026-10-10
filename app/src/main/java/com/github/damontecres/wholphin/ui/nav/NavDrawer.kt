@@ -138,6 +138,13 @@ class NavDrawerViewModel
                     )
                 }
 
+                NavDrawerItem.CsfdWatchlist -> {
+                    setIndex(index)
+                    navigationManager.navigateToFromDrawer(
+                        Destination.CsfdWatchlist,
+                    )
+                }
+
                 NavDrawerItem.Audiobookshelf -> {
                     setIndex(index)
                     navigationManager.navigateToFromDrawer(
@@ -177,6 +184,7 @@ class NavDrawerViewModel
                             is NavDrawerItem.Favorites -> Destination.Favorites
                             is NavDrawerItem.Discover -> Destination.Discover
                             is NavDrawerItem.Audiobookshelf -> Destination.Audiobookshelf
+                            is NavDrawerItem.CsfdWatchlist -> Destination.CsfdWatchlist
                             else -> null
                         }
                     }
@@ -257,6 +265,14 @@ sealed interface NavDrawerItem {
             get() = "a_audiobookshelf"
 
         override fun name(context: Context): String = context.getString(R.string.audiobookshelf)
+    }
+
+    /** The user's ČSFD watchlist ("Chcem vidieť") from the Jellyfin ČSFD plugin */
+    object CsfdWatchlist : NavDrawerItem {
+        override val id: String
+            get() = "a_csfd_watchlist"
+
+        override fun name(context: Context): String = context.getString(R.string.csfd_watchlist)
     }
 }
 
@@ -680,6 +696,10 @@ fun NavigationDrawerScope.NavItem(
 
                 NavDrawerItem.Audiobookshelf -> {
                     R.string.fa_podcast
+                }
+
+                NavDrawerItem.CsfdWatchlist -> {
+                    R.string.fa_bookmark
                 }
 
                 is ServerNavDrawerItem -> {

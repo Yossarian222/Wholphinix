@@ -39,6 +39,7 @@ import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.abs
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -128,14 +129,15 @@ class CsfdTvTipsService
         /**
          * Items for the "Chcem vidieť (ČSFD)" home row: the user's ČSFD watchlist titles in the library (playable, in the
          * ČSFD order) followed by missing ones found in Seerr. Same timeout as [getRowItems]; empty if the plugin has no
-         * `/Csfd/Watchlist` endpoint yet (404).
+         * `/Csfd/Watchlist` endpoint yet (404). The full page passes a longer [timeout], since it has nothing else to show.
          */
         suspend fun getWatchlistRowItems(
             userId: UUID,
             useSeries: Boolean,
             limit: Int,
             missing: Int = 10,
-        ): List<BaseItem> = rowItems("watchlist", userId, useSeries) { getWatchlist(limit, missing) }
+            timeout: Duration = ROW_TIMEOUT,
+        ): List<BaseItem> = rowItems("watchlist", userId, useSeries, timeout) { getWatchlist(limit, missing) }
 
         /**
          * Items for the seasonal home row (eg "🎃 Na Halloween"): the plugin's curated titles for the holiday [event]
@@ -164,10 +166,11 @@ class CsfdTvTipsService
             name: String,
             userId: UUID,
             useSeries: Boolean,
+            timeout: Duration = ROW_TIMEOUT,
             fetch: suspend () -> List<CsfdTvTip>,
         ): List<BaseItem> {
             val load = scope.async { loadRowItems(userId, useSeries, fetch()) }
-            return withTimeoutOrNull(ROW_TIMEOUT) { load.await() }
+            return withTimeoutOrNull(timeout) { load.await() }
                 ?: listOf<BaseItem>().also { Timber.i("ČSFD %s took too long, showing an empty row", name) }
         }
 

@@ -1081,4 +1081,6 @@
     <string name="abs_settings_test_failed">Could not connect</string>
     <string name="abs_settings_incomplete">Fill in the home network address and the API token</string>
     <string name="not_in_library">Not in library</string>
+    <string name="csfd_watchlist_empty">The ČSFD watchlist is empty, or the ČSFD plugin is missing or has no ČSFD profile set</string>
+    <string name="csfd_watchlist_loading">Loading the ČSFD watchlist, the first load can take up to half a minute…</string>
 </resources>

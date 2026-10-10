@@ -23,6 +23,7 @@ import com.github.damontecres.wholphin.ui.detail.CollectionFolderPhotoAlbum
 import com.github.damontecres.wholphin.ui.detail.CollectionFolderPlaylist
 import com.github.damontecres.wholphin.ui.detail.CollectionFolderRecordings
 import com.github.damontecres.wholphin.ui.detail.CollectionFolderTv
+import com.github.damontecres.wholphin.ui.detail.CsfdWatchlistPage
 import com.github.damontecres.wholphin.ui.detail.DebugPage
 import com.github.damontecres.wholphin.ui.detail.FavoritesPage
 import com.github.damontecres.wholphin.ui.detail.HomeRowGrid
@@ -380,6 +381,13 @@ fun DestinationContent(
             LaunchedEffect(Unit) { onClearBackdrop.invoke() }
             DiscoverPage(
                 preferences = preferences,
+                modifier = modifier,
+            )
+        }
+
+        Destination.CsfdWatchlist -> {
+            LaunchedEffect(Unit) { onClearBackdrop.invoke() }
+            CsfdWatchlistPage(
                 modifier = modifier,
             )
         }

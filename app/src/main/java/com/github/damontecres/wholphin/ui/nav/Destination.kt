@@ -152,6 +152,9 @@ sealed class Destination(
     data object Audiobookshelf : Destination(false)
 
     @Serializable
+    data object CsfdWatchlist : Destination(false)
+
+    @Serializable
     data class DiscoveredItem(
         val item: DiscoverItem,
         // Index to scroll to on the person page grid
