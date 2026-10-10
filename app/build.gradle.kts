@@ -208,6 +208,13 @@ configure<ApplicationExtension> {
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
+            all {
+                // Full failure messages in the CI log
+                it.testLogging {
+                    events("failed")
+                    exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+                }
+            }
         }
     }
 
