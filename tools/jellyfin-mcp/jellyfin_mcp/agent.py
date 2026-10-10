@@ -13,10 +13,13 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import time
 from collections import deque
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 log = logging.getLogger("jellyfin_mcp.agent")
 
@@ -29,6 +32,9 @@ HISTORY_TTL_SECONDS = 30 * 60
 # Server-side refusal fallback (Claude API, beta): only these models accept fallbacks="default"
 FALLBACK_MODELS = {"claude-sonnet-5-5", "claude-opus-5-5", "claude-opus-5", "claude-fable-5-1"}
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
+
+DEFAULT_TIMEZONE = "Europe/Bratislava"
+DAYS = ("pondelok", "utorok", "streda", "štvrtok", "piatok", "sobota", "nedeľa")
 
 ERROR_REPLY = "Prepáč, niečo sa pokazilo a nepodarilo sa mi to vybaviť 😕 Skús to o chvíľu znova."
 REFUSAL_REPLY = "Prepáč, s týmto ti nepomôžem."
@@ -89,6 +95,21 @@ def tool_result_text(result: Any) -> str:
     return "\n".join(str(_block_get(b, "text", "")) for b in blocks or []) or "{}"
 
 
+def local_timezone() -> ZoneInfo:
+    """TIMEZONE env (IANA name), default Europe/Bratislava; the container itself runs in UTC."""
+    name = os.environ.get("TIMEZONE", "").strip() or DEFAULT_TIMEZONE
+    try:
+        return ZoneInfo(name)
+    except (ZoneInfoNotFoundError, ValueError):
+        log.warning("Unknown TIMEZONE %r, using %s", name, DEFAULT_TIMEZONE)
+        return ZoneInfo(DEFAULT_TIMEZONE)
+
+
+def time_note(now: datetime) -> str:
+    """'Aktuálny čas: sobota 10. 10. 2026, 21:39' - Claude has no clock of its own."""
+    return f"[Aktuálny čas: {DAYS[now.weekday()]} {now.day}. {now.month}. {now.year}, {now:%H:%M}]"
+
+
 class ChatAgent:
     """Claude with the MCP tools; `answer(key, text)` keeps a short history per key."""
 
@@ -115,6 +136,8 @@ class ChatAgent:
         self.anthropic = anthropic_client
         self.memory = Memory()
         self._tools: list[dict[str, Any]] | None = None
+        self.timezone = local_timezone()
+        self.now = lambda: datetime.now(self.timezone)  # replaced in tests
 
     async def tool_definitions(self) -> list[dict[str, Any]]:
         """The MCP tools as Claude tool definitions (stable order, so the cached prefix stays the same)."""
@@ -159,7 +182,12 @@ class ChatAgent:
         for user_text, assistant_text in history:
             messages.append({"role": "user", "content": user_text})
             messages.append({"role": "assistant", "content": assistant_text})
-        messages.append({"role": "user", "content": text})
+        # The time goes into the new message, not the system prompt, so the cached prefix stays
+        # the same; history keeps only the plain text
+        messages.append({"role": "user", "content": [
+            {"type": "text", "text": time_note(self.now())},
+            {"type": "text", "text": text},
+        ]})
 
         for _ in range(MAX_TOOL_ROUNDS):
             try:

@@ -4,7 +4,9 @@ import hmac
 import json
 import logging
 import time
+from datetime import datetime
 from types import SimpleNamespace
+from zoneinfo import ZoneInfo
 
 import anthropic
 import httpx
@@ -95,6 +97,15 @@ class FakeAnthropic:
         return r
 
 
+def user(text: str) -> dict:
+    """The new user message as the agent sends it: a time note block + the text."""
+    return {"role": "user", "content": [{"type": "text", "text": NOTE}, {"type": "text", "text": text}]}
+
+
+NOW = datetime(2026, 10, 10, 21, 39, tzinfo=ZoneInfo("Europe/Bratislava"))
+NOTE = "[Aktuálny čas: sobota 10. 10. 2026, 21:39]"
+
+
 def resp(stop_reason: str, *content):
     return SimpleNamespace(stop_reason=stop_reason, content=list(content))
 
@@ -119,11 +130,13 @@ def graph():
 
 
 def make_bot(graph: FakeGraph, responses: list) -> whatsapp.WhatsAppBot:
-    return whatsapp.WhatsAppBot(
+    bot = whatsapp.WhatsAppBot(
         config(), server.mcp, whatsapp.WHATSAPP_SYSTEM + server.INSTRUCTIONS,
         anthropic_client=FakeAnthropic(responses),
         graph_transport=httpx.MockTransport(graph.handler),
     )
+    bot.now = lambda: NOW
+    return bot
 
 
 @pytest.fixture
@@ -329,10 +342,12 @@ class FakeVoice:
 def make_voice_bot(graph: FakeGraph, voice: FakeVoice, responses: list, **cfg) -> whatsapp.WhatsAppBot:
     cfg = {"stt_api_key": "sk-openai-test", **cfg}
     transport = httpx.MockTransport(voice.handler)
-    return whatsapp.WhatsAppBot(
+    bot = whatsapp.WhatsAppBot(
         whatsapp.Config(**{**config().__dict__, **cfg}), server.mcp, "sys",
         anthropic_client=FakeAnthropic(responses), graph_transport=transport, http_transport=transport,
     )
+    bot.now = lambda: NOW
+    return bot
 
 
 def test_voice_config(bot_env, monkeypatch):
@@ -356,7 +371,7 @@ def test_voice_transcribed_and_answered(graph, caplog):
     assert graph.texts() == ["Rozumel som: „pusti Pelíšky“\n\nPúšťam Pelíšky 🍿"]
     assert graph.read == ["wamid.v1"]
     # Same Claude loop as text, with the transcript as the user message
-    assert bot.anthropic.requests[0]["messages"] == [{"role": "user", "content": "pusti Pelíšky"}]
+    assert bot.anthropic.requests[0]["messages"] == [user("pusti Pelíšky")]
     assert list(bot.memory.get(ALLOWED).exchanges) == [("pusti Pelíšky", "Púšťam Pelíšky 🍿")]
     # Media lookup and download both carry the WhatsApp token
     assert voice.media_auth == [f"Bearer {TOKEN}", f"Bearer {TOKEN}"]
@@ -435,7 +450,7 @@ def test_end_to_end_tool_use(graph, jf, caplog):
     names = [t["name"] for t in first["tools"]]
     assert names == sorted(names) and {"play", "search_library", "set_audio", "show_message"} <= set(names)
     assert reqs[1]["tools"] == first["tools"] and reqs[1]["system"] == first["system"]  # stable prefix
-    assert first["messages"] == [{"role": "user", "content": "pusti pulp fiction"}]
+    assert first["messages"] == [user("pusti pulp fiction")]
     result = reqs[1]["messages"][-1]["content"][0]
     assert result["tool_use_id"] == "t1" and "is_error" not in result
     assert json.loads(result["content"])["results"][0]["id"] == M1
@@ -449,7 +464,7 @@ def test_end_to_end_tool_use(graph, jf, caplog):
     assert bot.anthropic.requests[-1]["messages"] == [
         {"role": "user", "content": "pusti pulp fiction"},
         {"role": "assistant", "content": "Púšťam Pulp Fiction od 20. minúty 🍿"},
-        {"role": "user", "content": "a daj titulky"},
+        user("a daj titulky"),
     ]
 
 
@@ -491,3 +506,16 @@ def test_long_reply_truncated(graph):
     bot = make_bot(graph, [resp("end_turn", text("x" * 5000))])
     run(bot.handle_payload(payload(text_msg("wamid.long", "dlho"))))
     assert len(graph.texts()[0]) == whatsapp.MAX_WHATSAPP_CHARS
+
+
+def test_time_note_and_timezone(monkeypatch):
+    from jellyfin_mcp import agent
+
+    assert agent.time_note(NOW) == NOTE
+    assert agent.time_note(datetime(2026, 1, 4, 7, 5)) == "[Aktuálny čas: nedeľa 4. 1. 2026, 07:05]"
+    monkeypatch.delenv("TIMEZONE", raising=False)
+    assert agent.local_timezone().key == "Europe/Bratislava"
+    monkeypatch.setenv("TIMEZONE", "Europe/Prague")
+    assert agent.local_timezone().key == "Europe/Prague"
+    monkeypatch.setenv("TIMEZONE", "Mars/Olympus")
+    assert agent.local_timezone().key == "Europe/Bratislava"

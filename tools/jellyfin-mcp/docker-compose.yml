@@ -57,6 +57,8 @@ services:
       - STT_API_KEY=${STT_API_KEY:-}
       - STT_MODEL=${STT_MODEL:-}
       - STT_LANGUAGE=${STT_LANGUAGE:-}
+      # Local time Claude gets with each chat message (IANA name)
+      - TIMEZONE=${TIMEZONE:-Europe/Bratislava}
       # Phone app (PWA) at /<MCP_SECRET>/app; on by default, 0 = off
       - PHONE_APP=${PHONE_APP:-}
     restart: unless-stopped

@@ -6,7 +6,7 @@ import pytest
 from jellyfin_mcp import phone, server
 from jellyfin_mcp.jellyfin import JellyfinClient
 from test_server import M1, SECRET, SESSION, FakeJellyfin
-from test_whatsapp import FakeAnthropic, resp, text, tool_use
+from test_whatsapp import NOW, FakeAnthropic, resp, text, tool_use, user
 
 CONV = "abcdef0123456789"
 
@@ -31,6 +31,7 @@ def fake_agent(responses: list) -> phone.PhoneAgent:
         server.mcp, phone.PHONE_SYSTEM + server.INSTRUCTIONS, api_key="sk-ant-test",
         anthropic_client=FakeAnthropic(responses),
     )
+    agent.now = lambda: NOW
     phone.set_agent(agent)
     return agent
 
@@ -111,7 +112,7 @@ def test_chat_tool_use_and_history(app, jf, caplog):
     assert httpx.post(f"{app}/reset", json={"conversation": CONV}).json() == {"ok": True}
     agent.anthropic.responses.append(resp("end_turn", text("Ahoj")))
     httpx.post(f"{app}/chat", json={"text": "ahoj", "conversation": CONV}, timeout=10)
-    assert agent.anthropic.requests[-1]["messages"] == [{"role": "user", "content": "ahoj"}]
+    assert agent.anthropic.requests[-1]["messages"] == [user("ahoj")]
 
 
 def test_status(app, jf):

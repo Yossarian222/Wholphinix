@@ -8,6 +8,8 @@ dependencies = [
     "httpx>=0.27,<1",
     "uvicorn>=0.30,<1",
     "anthropic>=1.12,<2",
+    # IANA time zones for the time note (python:slim has no system zoneinfo)
+    "tzdata>=2024.1",
 ]
 
 [project.optional-dependencies]
