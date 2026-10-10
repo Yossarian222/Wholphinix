@@ -184,6 +184,7 @@
     <string name="csfd_filter_rating">Hodnotenie</string>
     <string name="csfd_filter_year">Rok</string>
     <string name="csfd_filter_genre">Žáner</string>
+    <string name="csfd_outside_top">Mimo ČSFD top 1000</string>
     <string name="because_you_watched">Lebo si pozeral: %1$s</string>
     <string name="prefer_dovi_over_hdr10_plus">Uprednostniť Dolby Vision pred HDR10+</string>
     <string name="prefer_dovi_over_hdr10_plus_summary">Odstráni metadáta HDR10+ z videí s Dolby Vision pre TV, ktoré by ich inak prehrali ako HDR10+</string>
