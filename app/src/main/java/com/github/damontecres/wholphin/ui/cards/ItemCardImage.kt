@@ -95,6 +95,7 @@ fun ItemCardImage(
         modifier = modifier,
         useFallbackText = useFallbackText,
         contentScale = contentScale,
+        notInLibrary = item?.inLibrary == false,
         fallback = {
             if (item?.inLibrary == false) {
                 NotInLibraryPlaceholder(title = item.name, year = item.data.productionYear)
@@ -122,6 +123,7 @@ fun ItemCardImage(
     modifier: Modifier = Modifier,
     useFallbackText: Boolean = true,
     contentScale: ContentScale = ContentScale.Fit,
+    notInLibrary: Boolean = false,
     fallback: @Composable BoxScope.() -> Unit = {
         ItemCardImageFallback(
             name = name,
@@ -160,6 +162,13 @@ fun ItemCardImage(
                 watchedPercent = watchedPercent,
                 numberOfVersions = numberOfVersions,
                 modifier = Modifier,
+            )
+        }
+        if (notInLibrary) {
+            NotInLibraryBadge(
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(6.dp),
             )
         }
     }

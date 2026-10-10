@@ -1080,4 +1080,5 @@
     <string name="abs_settings_test_ok">Connected to %1$s: %2$d libraries, %3$d with podcasts</string>
     <string name="abs_settings_test_failed">Could not connect</string>
     <string name="abs_settings_incomplete">Fill in the home network address and the API token</string>
+    <string name="not_in_library">Not in library</string>
 </resources>

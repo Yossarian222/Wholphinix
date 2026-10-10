@@ -842,4 +842,5 @@
     <string name="abs_settings_test_ok">Pripojené k %1$s: knižníc %2$d, s podcastmi %3$d</string>
     <string name="abs_settings_test_failed">Nepodarilo sa pripojiť</string>
     <string name="abs_settings_incomplete">Vyplň adresu v domácej sieti a API token</string>
+    <string name="not_in_library">Nie je v knižnici</string>
 </resources>

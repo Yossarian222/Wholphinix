@@ -115,7 +115,6 @@ fun BannerCard(
         onClick = { currentOnClick() },
         onLongClick = { currentOnLongClick() },
         interactionSource = interactionSource,
-        border = libraryCardBorder(item),
         colors =
             CardDefaults.colors(
 //                containerColor = Color.Transparent,
@@ -190,6 +189,13 @@ fun BannerCard(
                     text = stringResource(R.string.fa_heart),
                     fontSize = 16.sp,
                     fontFamily = FontAwesome,
+                )
+            }
+            if (item?.inLibrary == false) {
+                NotInLibraryBadge(
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(6.dp),
                 )
             }
             if (playPercent > 0 && playPercent < 100) {

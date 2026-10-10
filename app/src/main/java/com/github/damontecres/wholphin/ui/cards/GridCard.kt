@@ -88,7 +88,6 @@ fun GridCard(
             onClick = onClick,
             onLongClick = onLongClick,
             interactionSource = interactionSource,
-            border = libraryCardBorder(item),
             colors =
                 CardDefaults.colors(
                     containerColor = Color.Transparent,
