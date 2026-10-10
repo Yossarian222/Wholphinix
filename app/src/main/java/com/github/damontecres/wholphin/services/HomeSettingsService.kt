@@ -620,6 +620,9 @@ class HomeSettingsService
 
         /**
          * Fetch the data from the server for a given [HomeRowConfig]
+         *
+         * @param csfdThrowIfUnavailable a ČSFD row that could not be loaded in time (and was never loaded before) throws
+         * [CsfdRowUnavailableException] instead of returning an empty row, so the caller can keep its own copy
          */
         suspend fun fetchDataForRow(
             row: HomeRowConfig,
@@ -630,6 +633,7 @@ class HomeSettingsService
             limit: Int = prefs.maxItemsPerRow,
             isRefresh: Boolean,
             usePaging: Boolean = false,
+            csfdThrowIfUnavailable: Boolean = false,
         ): HomeRowLoadingState =
             when (row) {
                 is HomeRowConfig.ContinueWatching -> {
@@ -1203,6 +1207,7 @@ class HomeSettingsService
                             userId = userDto.id,
                             useSeries = row.viewOptions.useSeries,
                             limit = limit.coerceAtMost(10),
+                            throwIfUnavailable = csfdThrowIfUnavailable,
                         )
                     val day =
                         LocalDate
@@ -1218,6 +1223,7 @@ class HomeSettingsService
                             userId = userDto.id,
                             useSeries = row.viewOptions.useSeries,
                             limit = limit.coerceAtMost(20),
+                            throwIfUnavailable = csfdThrowIfUnavailable,
                         )
                     Success(ResStringProvider(R.string.csfd_watchlist), items, row.viewOptions, rowType = row)
                 }

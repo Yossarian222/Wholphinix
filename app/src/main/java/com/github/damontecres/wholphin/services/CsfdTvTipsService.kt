@@ -7,12 +7,17 @@ import com.github.damontecres.wholphin.services.hilt.IoCoroutineScope
 import com.github.damontecres.wholphin.ui.HomeItemFields
 import com.github.damontecres.wholphin.ui.toBaseItems
 import com.github.damontecres.wholphin.util.GetItemsRequestHandler
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -63,6 +68,14 @@ data class CsfdTvTip(
 )
 
 /**
+ * A ČSFD home row could not be loaded (yet), eg the plugin is still downloading from ČSFD, and there is no previous
+ * version of it
+ */
+class CsfdRowUnavailableException(
+    message: String,
+) : Exception(message)
+
+/**
  * Talks to the Jellyfin ČSFD plugin: "TV tipy dňa" (`/Csfd/TvTips`), the user's watchlist "Chcem vidieť" (`/Csfd/Watchlist`)
  * and the ČSFD best-of rankings (`/Csfd/Ranks`).
  *
@@ -98,7 +111,34 @@ class CsfdTvTipsService
             var myRatings: ConcurrentHashMap<Int, Int>? = null
 
             val trivia = ConcurrentHashMap<Int, List<String>>()
+
+            /** The last loaded items of each home row, see [rowItems] */
+            val rowResults = ConcurrentHashMap<String, RowResult>()
+
+            /** The running loads of the home rows, shared by the callers */
+            val rowLoads = ConcurrentHashMap<String, RowLoad>()
         }
+
+        private class RowResult(
+            val time: Long,
+            val items: List<BaseItem>,
+        )
+
+        private class RowLoad(
+            val deferred: Deferred<List<BaseItem>?>,
+        ) {
+            /** Whether a caller gave up waiting, so the result is announced in [rowUpdates] when it arrives */
+            @Volatile
+            var timedOut = false
+        }
+
+        private val _rowUpdates = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+
+        /**
+         * Emits when a home row load that a caller gave up waiting for (see [ROW_TIMEOUT]) has finished, so the row can be
+         * fetched again, which now returns right away
+         */
+        val rowUpdates: SharedFlow<Unit> = _rowUpdates
 
         @Volatile
         private var currentCaches = Caches(null)
@@ -116,15 +156,20 @@ class CsfdTvTipsService
          * found in Seerr, which open the Seerr page to request them.
          *
          * The first call of the day can take minutes (the plugin fetches the missing tips from ČSFD), so this gives up
-         * after [ROW_TIMEOUT] with an empty row instead of holding up the home page. The request keeps running in the
-         * background, so the plugin caches the tips and the next load is fast.
+         * after [ROW_TIMEOUT] instead of holding up the home page and returns the previous items, or else an empty row
+         * (or throws [CsfdRowUnavailableException] if [throwIfUnavailable]). The request keeps running in the background,
+         * its result is kept for the next call and announced in [rowUpdates].
          */
         suspend fun getRowItems(
             userId: UUID,
             useSeries: Boolean,
             limit: Int,
             missing: Int = 7,
-        ): List<BaseItem> = rowItems("TV tips", userId, useSeries) { getTips(limit, missing) }
+            throwIfUnavailable: Boolean = false,
+        ): List<BaseItem> =
+            rowItems("TV tips $limit/$missing", userId, useSeries, throwIfUnavailable) {
+                get("Csfd/TvTips?limit=$limit&missing=$missing", slowClient)?.let(::parseTips)
+            }
 
         /**
          * Items for the "Chcem vidieť (ČSFD)" home row: the user's ČSFD watchlist titles in the library (playable, in the
@@ -137,7 +182,11 @@ class CsfdTvTipsService
             limit: Int,
             missing: Int = 10,
             timeout: Duration = ROW_TIMEOUT,
-        ): List<BaseItem> = rowItems("watchlist", userId, useSeries, timeout) { getWatchlist(limit, missing) }
+            throwIfUnavailable: Boolean = false,
+        ): List<BaseItem> =
+            rowItems("watchlist $limit/$missing", userId, useSeries, throwIfUnavailable, timeout) {
+                get("Csfd/Watchlist?limit=$limit&missing=$missing", slowClient)?.let(::parseTips)
+            }
 
         /**
          * Items for the seasonal home row (eg "🎃 Na Halloween"): the plugin's curated titles for the holiday [event]
@@ -151,7 +200,11 @@ class CsfdTvTipsService
             useSeries: Boolean,
             limit: Int = 20,
             missing: Int = 20,
-        ): List<BaseItem> = rowItems("seasonal $event", userId, useSeries) { getSeasonal(event, limit, missing) }
+            throwIfUnavailable: Boolean = false,
+        ): List<BaseItem> =
+            rowItems("seasonal $event $limit/$missing", userId, useSeries, throwIfUnavailable) {
+                get("Csfd/Seasonal?event=$event&limit=$limit&missing=$missing", slowClient)?.let(::parseTips)
+            }
 
         /**
          * The plugin's curated titles for a holiday, same format as [getTips]. Empty if the plugin is missing/too old.
@@ -162,16 +215,69 @@ class CsfdTvTipsService
             missing: Int,
         ): List<CsfdTvTip> = get("Csfd/Seasonal?event=$event&limit=$limit&missing=$missing", slowClient)?.let(::parseTips).orEmpty()
 
+        /**
+         * Loads a home row from the tips that [fetch] returns (null if the plugin failed). A load that is already running
+         * is shared and a result younger than [ROW_FRESH] is reused, so going back and forth to the home page does not
+         * pile up requests. When the load fails or takes longer than [ROW_TIMEOUT] the previous items are returned, if
+         * there are none an empty list (or [CsfdRowUnavailableException] if [throwIfUnavailable]).
+         */
         private suspend fun rowItems(
             name: String,
             userId: UUID,
             useSeries: Boolean,
+            throwIfUnavailable: Boolean,
             timeout: Duration = ROW_TIMEOUT,
-            fetch: suspend () -> List<CsfdTvTip>,
+            fetch: suspend () -> List<CsfdTvTip>?,
         ): List<BaseItem> {
-            val load = scope.async { loadRowItems(userId, useSeries, fetch()) }
-            return withTimeoutOrNull(timeout) { load.await() }
-                ?: listOf<BaseItem>().also { Timber.i("ČSFD %s took too long, showing an empty row", name) }
+            val caches = caches()
+            val key = "$name|$userId|$useSeries"
+            val previous = caches.rowResults[key]
+            if (previous != null && System.currentTimeMillis() - previous.time < ROW_FRESH.inWholeMilliseconds) {
+                return previous.items
+            }
+            val load =
+                synchronized(caches) {
+                    caches.rowLoads[key]?.takeIf { it.deferred.isActive }
+                        ?: run {
+                            lateinit var newLoad: RowLoad
+                            val deferred =
+                                scope.async(start = CoroutineStart.LAZY) {
+                                    val items = fetch()?.let { loadRowItems(userId, useSeries, it) }
+                                    if (items != null) {
+                                        caches.rowResults[key] = RowResult(System.currentTimeMillis(), items)
+                                        if (newLoad.timedOut) {
+                                            Timber.i("ČSFD %s finished in the background", name)
+                                            _rowUpdates.tryEmit(Unit)
+                                        }
+                                    }
+                                    items
+                                }
+                            newLoad = RowLoad(deferred)
+                            deferred.start()
+                            newLoad.also { caches.rowLoads[key] = it }
+                        }
+                }
+            val items =
+                try {
+                    withTimeoutOrNull(timeout) { load.deferred.await() }.also {
+                        if (it == null && load.deferred.isActive) {
+                            load.timedOut = true
+                            Timber.i("ČSFD %s took too long", name)
+                        }
+                    }
+                } catch (ex: CancellationException) {
+                    throw ex
+                } catch (ex: Exception) {
+                    Timber.w(ex, "ČSFD %s failed", name)
+                    null
+                }
+            return items
+                ?: caches.rowResults[key]?.items
+                ?: if (throwIfUnavailable) {
+                    throw CsfdRowUnavailableException("ČSFD $name is not available yet")
+                } else {
+                    listOf()
+                }
         }
 
         private suspend fun loadRowItems(
@@ -374,6 +480,9 @@ class CsfdTvTipsService
 
         companion object {
             private val ROW_TIMEOUT = 12.seconds
+
+            /** How long a loaded home row is reused without asking the plugin again */
+            private val ROW_FRESH = 60.seconds
 
             fun parseTips(json: String): List<CsfdTvTip> = parseTips(Json.parseToJsonElement(json))
 
