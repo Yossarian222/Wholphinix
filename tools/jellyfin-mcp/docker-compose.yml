@@ -2,11 +2,8 @@
 # Stack environment variables to set in Portainer:
 #   TS_AUTHKEY, JELLYFIN_API_KEY, JELLYFIN_USER, MCP_SECRET
 # Optional: SEERR_URL, SEERR_API_KEY (request_on_seerr), TARGET_DEVICE
-# Optional WhatsApp bot (README "WhatsApp"): WHATSAPP_TOKEN, WHATSAPP_PHONE_NUMBER_ID,
-#   WHATSAPP_APP_SECRET, WHATSAPP_VERIFY_TOKEN, WHATSAPP_ALLOWED_NUMBERS, ANTHROPIC_API_KEY,
-#   CLAUDE_MODEL, CLAUDE_EFFORT, GRAPH_VERSION
-# Optional voice notes (README "Hlasové správy"): STT_URL, STT_API_KEY, STT_MODEL, STT_LANGUAGE
-# Phone app at /<MCP_SECRET>/app (README "Appka v mobile"): chat needs ANTHROPIC_API_KEY; PHONE_APP=0 turns it off
+# Phone app at /<MCP_SECRET>/app (README "Appka v mobile"): chat needs ANTHROPIC_API_KEY
+#   (optional CLAUDE_MODEL, CLAUDE_EFFORT, TIMEZONE); PHONE_APP=0 turns it off
 services:
   ts:
     image: tailscale/tailscale:stable
@@ -42,21 +39,10 @@ services:
       # Optional, for request_on_seerr; leave empty to disable
       - SEERR_URL=${SEERR_URL:-}
       - SEERR_API_KEY=${SEERR_API_KEY:-}
-      # Optional WhatsApp bot at /<MCP_SECRET>/whatsapp; disabled (404) unless the first six are set
-      - WHATSAPP_TOKEN=${WHATSAPP_TOKEN:-}
-      - WHATSAPP_PHONE_NUMBER_ID=${WHATSAPP_PHONE_NUMBER_ID:-}
-      - WHATSAPP_APP_SECRET=${WHATSAPP_APP_SECRET:-}
-      - WHATSAPP_VERIFY_TOKEN=${WHATSAPP_VERIFY_TOKEN:-}
-      - WHATSAPP_ALLOWED_NUMBERS=${WHATSAPP_ALLOWED_NUMBERS:-}
+      # Phone app chat (Claude API)
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - CLAUDE_MODEL=${CLAUDE_MODEL:-}
       - CLAUDE_EFFORT=${CLAUDE_EFFORT:-}
-      - GRAPH_VERSION=${GRAPH_VERSION:-}
-      # Optional WhatsApp voice notes (OpenAI-compatible Whisper); off unless STT_API_KEY or STT_URL is set
-      - STT_URL=${STT_URL:-}
-      - STT_API_KEY=${STT_API_KEY:-}
-      - STT_MODEL=${STT_MODEL:-}
-      - STT_LANGUAGE=${STT_LANGUAGE:-}
       # Local time Claude gets with each chat message (IANA name)
       - TIMEZONE=${TIMEZONE:-Europe/Bratislava}
       # Phone app (PWA) at /<MCP_SECRET>/app; on by default, 0 = off

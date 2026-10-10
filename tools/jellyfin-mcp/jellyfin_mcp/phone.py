@@ -1,7 +1,7 @@
 """Phone app ("Telka"): a small installable web app (PWA) for chatting with Claude about the TV.
 
 Served by this server under /<MCP_SECRET>/app, i.e. over the same Tailscale Funnel as the MCP
-endpoint; open it in Chrome on the phone and "Add to home screen". No WhatsApp/Meta needed.
+endpoint; open it in Chrome on the phone and "Add to home screen".
 
 - GET  /app                 the page (static files in phone_app/)
 - POST /app/chat            {"text", "conversation"} -> {"reply"}  (shared Claude agent, agent.py)

@@ -6,7 +6,7 @@ import pytest
 from jellyfin_mcp import phone, server
 from jellyfin_mcp.jellyfin import JellyfinClient
 from test_server import M1, SECRET, SESSION, FakeJellyfin
-from test_whatsapp import NOW, FakeAnthropic, resp, text, tool_use, user
+from test_agent import NOW, FakeAnthropic, resp, text, tool_use, user
 
 CONV = "abcdef0123456789"
 

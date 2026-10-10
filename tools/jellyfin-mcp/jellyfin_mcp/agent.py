@@ -1,4 +1,4 @@
-"""Claude agent shared by the chat front-ends (WhatsApp bot, phone app).
+"""Claude agent behind the phone app chat (phone.py).
 
 A text message goes to the Anthropic Messages API with the MCP tools as Claude tools (a manual
 tool-use loop, max MAX_TOOL_ROUNDS model calls); tool calls go through FastMCP.call_tool, i.e.
