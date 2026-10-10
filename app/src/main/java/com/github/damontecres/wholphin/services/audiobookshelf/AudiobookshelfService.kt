@@ -25,7 +25,7 @@ class AudiobookshelfService
         /** Current settings, or an empty config if none were saved */
         val config: Flow<AbsConfig> = keyValueService.get<AbsConfig>(KEY, AbsConfig())
 
-        /** Whether the integration is configured and should appear in the nav drawer */
+        /** Whether the integration is configured (the nav drawer item is shown either way) */
         val active: Flow<Boolean> = config.map { it.isComplete }
 
         suspend fun save(config: AbsConfig) {

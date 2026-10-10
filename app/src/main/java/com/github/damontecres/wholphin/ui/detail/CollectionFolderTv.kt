@@ -11,7 +11,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
-import com.github.damontecres.wholphin.R
 import com.github.damontecres.wholphin.data.filter.DefaultTvFilterOptions
 import com.github.damontecres.wholphin.data.model.BaseItem
 import com.github.damontecres.wholphin.data.model.CollectionFolderFilter
@@ -22,7 +21,6 @@ import com.github.damontecres.wholphin.ui.components.CollectionFolderView
 import com.github.damontecres.wholphin.ui.components.CsfdRankingGrid
 import com.github.damontecres.wholphin.ui.components.ErrorMessage
 import com.github.damontecres.wholphin.ui.components.GenreCardGrid
-import com.github.damontecres.wholphin.ui.components.RecommendedTvShow
 import com.github.damontecres.wholphin.ui.components.StudioCardGrid
 import com.github.damontecres.wholphin.ui.components.TabDetails
 import com.github.damontecres.wholphin.ui.components.TabbedPage
@@ -48,16 +46,8 @@ fun CollectionFolderTv(
     modifier: Modifier = Modifier,
     viewModel: CollectionFolderTvViewModel = hiltViewModel(),
 ) {
-    val tabs =
-        remember {
-            listOf(
-                TabDetails(R.string.recommended),
-                TabDetails(R.string.library),
-                TabDetails(R.string.genres),
-                TabDetails(R.string.studios),
-                TabDetails(R.string.csfd_rankings),
-            )
-        }
+    val tabKeys = preferences.appPreferences.libraryTabs(LibraryTabsKind.TV)
+    val tabs = remember(tabKeys) { tabKeys.map { TabDetails(it.title) } }
     val onClickItem =
         remember {
             { position: Int, item: BaseItem ->
@@ -68,29 +58,13 @@ fun CollectionFolderTv(
     var showHeader by rememberSaveable { mutableStateOf(true) }
 
     TabbedPage(
-        itemId = destination.itemId.toString(),
+        itemId = libraryTabsRememberKey(destination.itemId.toString(), tabKeys),
         tabs = tabs,
         modifier = modifier,
         showTabs = showHeader,
     ) { tabIndex, tabDetails ->
-        when (tabIndex) {
-            // Recommended
-            0 -> {
-                RecommendedTvShow(
-                    preferences = preferences,
-                    parentId = destination.itemId,
-                    onFocusPosition = { pos ->
-                        showHeader = pos.row < 1
-                    },
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .focusRequester(tabDetails.contentFocusRequester),
-                )
-            }
-
-            // Library
-            1 -> {
+        when (tabKeys.getOrNull(tabIndex)) {
+            LibraryTab.LIBRARY -> {
                 CollectionFolderView(
                     preferences = preferences,
                     itemId = destination.itemId,
@@ -119,8 +93,7 @@ fun CollectionFolderTv(
                 )
             }
 
-            // Genres
-            2 -> {
+            LibraryTab.GENRES -> {
                 GenreCardGrid(
                     itemId = destination.itemId,
                     includeItemTypes = listOf(BaseItemKind.SERIES),
@@ -132,8 +105,7 @@ fun CollectionFolderTv(
                 )
             }
 
-            // Studios
-            3 -> {
+            LibraryTab.STUDIOS -> {
                 StudioCardGrid(
                     itemId = destination.itemId,
                     includeItemTypes = listOf(BaseItemKind.SERIES),
@@ -145,7 +117,7 @@ fun CollectionFolderTv(
             }
 
             // Rebríčky (ČSFD)
-            tabs.lastIndex -> {
+            LibraryTab.CSFD_RANKINGS -> {
                 CsfdRankingGrid(
                     parentId = destination.itemId,
                     itemKind = BaseItemKind.SERIES,
@@ -156,7 +128,7 @@ fun CollectionFolderTv(
                 )
             }
 
-            else -> {
+            LibraryTab.COLLECTIONS, null -> {
                 ErrorMessage("Invalid tab index $tabIndex", null)
             }
         }

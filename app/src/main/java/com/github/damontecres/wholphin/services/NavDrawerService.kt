@@ -25,7 +25,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 import org.jellyfin.sdk.api.client.ApiClient
@@ -197,14 +196,15 @@ class NavDrawerService
             user: JellyfinUser,
             userDto: ServerUserConfig,
             @Suppress("UNUSED_PARAMETER") discoverActive: Boolean,
-            absActive: Boolean? = null,
+            @Suppress("UNUSED_PARAMETER") absActive: Boolean? = null,
         ) {
             val builtins =
                 buildList {
                     add(NavDrawerItem.Favorites)
                     // Discover is no longer reachable from the nav drawer, search is in the top right corner instead
-                    // Shown only once Audiobookshelf is configured in its settings
-                    if (absActive ?: audiobookshelfService.active.first()) add(NavDrawerItem.Audiobookshelf)
+                    // Always shown: the connection is configured on the Audiobookshelf page itself,
+                    // which would be unreachable if the item only appeared once configured
+                    add(NavDrawerItem.Audiobookshelf)
                 }
             val allLibraries = getAllUserLibraries(user.id, userDto.tvAccess)
             val libraries =

@@ -9,6 +9,7 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import com.github.damontecres.wholphin.R
 import com.github.damontecres.wholphin.services.ScreensaverService
 import com.github.damontecres.wholphin.services.audiobookshelf.AbsConfig
 import com.github.damontecres.wholphin.services.audiobookshelf.AbsConnection
@@ -58,6 +59,10 @@ data class AbsUiState(
     val durationMs: Long = 0L,
     val showSettings: Boolean = false,
     val settingsError: String? = null,
+    /** Positive result of the connection test in the settings dialog */
+    val settingsInfo: String? = null,
+    /** A connection test or save is running */
+    val testing: Boolean = false,
     val config: AbsConfig = AbsConfig(),
     /** The address that answered most recently (LAN or Tailscale), used for cover images */
     val activeBaseUrl: String = "",
@@ -153,7 +158,11 @@ class AudiobookshelfViewModel
                 val cfg = service.config.first()
                 config = cfg
                 _state.update { it.copy(configured = cfg.isComplete, config = cfg) }
-                if (!cfg.isComplete) return@launch
+                if (!cfg.isComplete) {
+                    // Nothing to show yet: open the connection form right away
+                    _state.update { it.copy(showSettings = true, settingsError = null, settingsInfo = null) }
+                    return@launch
+                }
 
                 _state.update { it.copy(loading = true, error = null) }
                 try {
@@ -310,16 +319,60 @@ class AudiobookshelfViewModel
         fun seekForward() = player.seekForward()
 
         fun openSettings() {
-            _state.update { it.copy(showSettings = true, settingsError = null) }
+            _state.update { it.copy(showSettings = true, settingsError = null, settingsInfo = null) }
         }
 
         fun closeSettings() {
             _state.update { it.copy(showSettings = false) }
         }
 
+        /** Tests the entered settings without saving them */
+        fun testSettings(draft: AbsConfig) {
+            if (!draft.isComplete) {
+                _state.update {
+                    it.copy(settingsError = context.getString(R.string.abs_settings_incomplete), settingsInfo = null)
+                }
+                return
+            }
+            viewModelScope.launch {
+                _state.update { it.copy(testing = true, settingsError = null, settingsInfo = null) }
+                try {
+                    val (conn, libraries) = service.withConnection(draft) { c -> service.libraries(c) }
+                    val podcastLibraries = libraries.libraries.count { it.mediaType == "podcast" }
+                    _state.update {
+                        it.copy(
+                            testing = false,
+                            settingsInfo =
+                                context.getString(
+                                    R.string.abs_settings_test_ok,
+                                    conn.baseUrl,
+                                    libraries.libraries.size,
+                                    podcastLibraries,
+                                ),
+                        )
+                    }
+                } catch (ex: Exception) {
+                    Timber.w(ex, "Audiobookshelf connection test failed")
+                    _state.update {
+                        it.copy(
+                            testing = false,
+                            settingsError = ex.message ?: context.getString(R.string.abs_settings_test_failed),
+                        )
+                    }
+                }
+            }
+        }
+
         /** Tests the entered settings, saves them if the server answers, then reloads */
         fun saveSettings(draft: AbsConfig) {
+            if (!draft.isComplete) {
+                _state.update {
+                    it.copy(settingsError = context.getString(R.string.abs_settings_incomplete), settingsInfo = null)
+                }
+                return
+            }
             viewModelScope.launch {
+                _state.update { it.copy(testing = true, settingsError = null, settingsInfo = null) }
                 try {
                     service.withConnection(draft) { c -> service.libraries(c) }
                     service.save(draft)
@@ -327,6 +380,7 @@ class AudiobookshelfViewModel
                     _state.update {
                         it.copy(
                             showSettings = false,
+                            testing = false,
                             settingsError = null,
                             config = draft,
                             configured = draft.isComplete,
@@ -335,7 +389,12 @@ class AudiobookshelfViewModel
                     load()
                 } catch (ex: Exception) {
                     Timber.w(ex, "Audiobookshelf settings test failed")
-                    _state.update { it.copy(settingsError = ex.message ?: "Nepodarilo sa pripojiť") }
+                    _state.update {
+                        it.copy(
+                            testing = false,
+                            settingsError = ex.message ?: context.getString(R.string.abs_settings_test_failed),
+                        )
+                    }
                 }
             }
         }

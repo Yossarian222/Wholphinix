@@ -24,9 +24,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
@@ -37,12 +41,14 @@ import androidx.tv.material3.Card
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
+import com.github.damontecres.wholphin.R
 import com.github.damontecres.wholphin.services.audiobookshelf.AbsConfig
 import com.github.damontecres.wholphin.services.audiobookshelf.AbsEpisode
 import com.github.damontecres.wholphin.services.audiobookshelf.AbsLibraryItem
 import com.github.damontecres.wholphin.services.audiobookshelf.AbsMediaProgress
 import com.github.damontecres.wholphin.ui.components.BasicDialog
 import com.github.damontecres.wholphin.ui.components.EditTextBox
+import com.github.damontecres.wholphin.ui.tryRequestFocus
 import java.util.Date
 
 /**
@@ -94,10 +100,7 @@ fun AudiobookshelfPage(
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when {
                 !state.configured -> {
-                    Text(
-                        text = "Audiobookshelf ešte nie je nastavený.",
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
+                    NotConfigured(onSetUp = viewModel::openSettings)
                 }
 
                 state.loading && state.podcasts.isEmpty() -> {
@@ -144,10 +147,34 @@ fun AudiobookshelfPage(
         SettingsDialog(
             config = state.config,
             error = state.settingsError,
+            info = state.settingsInfo,
+            testing = state.testing,
+            onTest = viewModel::testSettings,
             onSave = viewModel::saveSettings,
             onDismiss = viewModel::closeSettings,
         )
     }
+}
+
+/** Shown instead of the podcasts until a connection is saved */
+@Composable
+private fun NotConfigured(onSetUp: () -> Unit) {
+    val focusRequester = remember { FocusRequester() }
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(
+            text = stringResource(R.string.abs_not_configured),
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        Text(
+            text = stringResource(R.string.abs_not_configured_hint),
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Button(
+            onClick = onSetUp,
+            modifier = Modifier.focusRequester(focusRequester),
+        ) { Text(stringResource(R.string.abs_set_up_connection)) }
+    }
+    LaunchedEffect(Unit) { focusRequester.tryRequestFocus() }
 }
 
 private fun coverUrl(
@@ -330,12 +357,22 @@ private fun formatTime(ms: Long): String {
 private fun SettingsDialog(
     config: AbsConfig,
     error: String?,
+    info: String?,
+    testing: Boolean,
+    onTest: (AbsConfig) -> Unit,
     onSave: (AbsConfig) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val lan = rememberTextFieldState(config.lanUrl)
     val tailscale = rememberTextFieldState(config.tailscaleUrl)
     val token = rememberTextFieldState(config.token)
+
+    fun draft() =
+        AbsConfig(
+            lanUrl = lan.text.toString().trim(),
+            tailscaleUrl = tailscale.text.toString().trim(),
+            token = token.text.toString().trim(),
+        )
 
     BasicDialog(
         onDismissRequest = onDismiss,
@@ -345,29 +382,32 @@ private fun SettingsDialog(
             modifier = Modifier.widthIn(min = 420.dp).padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(text = "Nastavenia Audiobookshelf", style = MaterialTheme.typography.titleLarge)
-            Text(text = "Adresa v domácej sieti (primárna)", style = MaterialTheme.typography.bodySmall)
+            Text(text = stringResource(R.string.abs_settings_title), style = MaterialTheme.typography.titleLarge)
+            Text(text = stringResource(R.string.abs_settings_lan_url), style = MaterialTheme.typography.bodySmall)
             EditTextBox(state = lan)
-            Text(text = "Tailscale adresa (záložná, nepovinná)", style = MaterialTheme.typography.bodySmall)
+            Text(text = stringResource(R.string.abs_settings_tailscale_url), style = MaterialTheme.typography.bodySmall)
             EditTextBox(state = tailscale)
-            Text(text = "API token", style = MaterialTheme.typography.bodySmall)
+            Text(text = stringResource(R.string.abs_settings_token), style = MaterialTheme.typography.bodySmall)
             EditTextBox(state = token, isPassword = true)
+            if (testing) {
+                Text(text = stringResource(R.string.abs_settings_testing), style = MaterialTheme.typography.bodySmall)
+            }
+            info?.let {
+                Text(text = it, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
+            }
             error?.let {
                 Text(text = it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(onClick = onDismiss) { Text("Zrušiť") }
+                Button(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
                 Button(
-                    onClick = {
-                        onSave(
-                            AbsConfig(
-                                lanUrl = lan.text.toString().trim(),
-                                tailscaleUrl = tailscale.text.toString().trim(),
-                                token = token.text.toString().trim(),
-                            ),
-                        )
-                    },
-                ) { Text("Uložiť") }
+                    onClick = { onTest(draft()) },
+                    enabled = !testing,
+                ) { Text(stringResource(R.string.abs_settings_test)) }
+                Button(
+                    onClick = { onSave(draft()) },
+                    enabled = !testing,
+                ) { Text(stringResource(R.string.save)) }
             }
         }
     }

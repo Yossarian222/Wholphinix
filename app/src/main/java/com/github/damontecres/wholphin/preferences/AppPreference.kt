@@ -822,6 +822,35 @@ sealed interface AppPreference<Pref, T> {
                 valueToIndex = { it.number },
             )
 
+        val BackdropRotatePref =
+            AppChoicePreference<AppPreferences, Int>(
+                title = R.string.backdrop_rotate_interval,
+                defaultValue = DEFAULT_BACKDROP_ROTATE_MINUTES,
+                getter = { it.interfacePreferences.backdropRotateMinutes.toBackdropRotateMinutes() },
+                setter = { prefs, value ->
+                    prefs.updateInterfacePreferences { backdropRotateMinutes = value }
+                },
+                displayValues = R.array.backdrop_rotate_options,
+                indexToValue = { BACKDROP_ROTATE_MINUTES.getOrElse(it) { DEFAULT_BACKDROP_ROTATE_MINUTES } },
+                valueToIndex = { BACKDROP_ROTATE_MINUTES.indexOf(it.toBackdropRotateMinutes()) },
+            )
+
+        val MovieLibraryTabOrder =
+            AppClickablePreference<AppPreferences>(
+                title = R.string.movie_library_tab_order,
+                summary = R.string.library_tab_order_summary,
+                getter = { },
+                setter = { prefs, _ -> prefs },
+            )
+
+        val TvLibraryTabOrder =
+            AppClickablePreference<AppPreferences>(
+                title = R.string.tv_library_tab_order,
+                summary = R.string.library_tab_order_summary,
+                getter = { },
+                setter = { prefs, _ -> prefs },
+            )
+
         val FontScalePref =
             AppChoicePreference<AppPreferences, Int>(
                 title = R.string.font_size_scale,
@@ -1144,6 +1173,8 @@ val basicPreferences =
                 listOf(
                     AppPreference.SignInAuto,
                     AppPreference.RememberSelectedTab,
+                    AppPreference.MovieLibraryTabOrder,
+                    AppPreference.TvLibraryTabOrder,
                     AppPreference.PlayThemeMusic,
                     AppPreference.SubtitleStyle,
                     AppPreference.ThemeColors,
@@ -1263,6 +1294,7 @@ val advancedPreferences =
                     listOf(
                         AppPreference.ShowClock,
                         AppPreference.BackdropStylePref,
+                        AppPreference.BackdropRotatePref,
                         AppPreference.ShowLogos,
                         AppPreference.ManageMedia,
                         AppPreference.DisplayTogglesPref,
@@ -1527,3 +1559,15 @@ fun Int.toUiScalePercent(): Int = if (this in UI_SCALE_PERCENTS) this else DEFAU
  * Converts a stored nav panel scale percentage to a supported one; unset (0) or unknown values become [DEFAULT_UI_SCALE_PERCENT]
  */
 fun Int.toNavScalePercent(): Int = if (this in NAV_SCALE_PERCENTS) this else DEFAULT_UI_SCALE_PERCENT
+
+/**
+ * The selectable random backdrop rotation intervals in minutes for [AppPreference.BackdropRotatePref]
+ */
+val BACKDROP_ROTATE_MINUTES = listOf(1, 5, 10, 30, 60)
+
+const val DEFAULT_BACKDROP_ROTATE_MINUTES = 5
+
+/**
+ * Converts a stored rotation interval to a supported one; unset (0) or unknown values become [DEFAULT_BACKDROP_ROTATE_MINUTES]
+ */
+fun Int.toBackdropRotateMinutes(): Int = if (this in BACKDROP_ROTATE_MINUTES) this else DEFAULT_BACKDROP_ROTATE_MINUTES

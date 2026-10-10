@@ -29,6 +29,7 @@ import kotlin.time.Duration.Companion.minutes
  *
  * It is shown on pages which do not have a specific item backdrop (home, library tabs, settings, etc).
  * A handful of random items with backdrops is fetched and cached, then [next] picks another one.
+ * How often it changes while staying on the same page is set by [com.github.damontecres.wholphin.preferences.AppPreference.BackdropRotatePref].
  */
 @Singleton
 class RandomBackdropService
@@ -148,11 +149,6 @@ class RandomBackdropService
             const val RANDOM_PREFIX = "random_"
             private const val POOL_SIZE = 20
             private val POOL_MAX_AGE = 30.minutes.inWholeMilliseconds
-
-            /**
-             * How often to switch the random backdrop while staying on the same page
-             */
-            val ROTATE_INTERVAL = 3.minutes
         }
     }
 

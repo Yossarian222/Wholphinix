@@ -69,6 +69,9 @@ import com.github.damontecres.wholphin.ui.components.ConfirmDialog
 import com.github.damontecres.wholphin.ui.components.ErrorMessage
 import com.github.damontecres.wholphin.ui.components.LoadingPage
 import com.github.damontecres.wholphin.ui.components.ScrollableDialog
+import com.github.damontecres.wholphin.ui.detail.LibraryTabsKind
+import com.github.damontecres.wholphin.ui.detail.libraryTabs
+import com.github.damontecres.wholphin.ui.detail.withLibraryTabOrder
 import com.github.damontecres.wholphin.ui.ifElse
 import com.github.damontecres.wholphin.ui.indexOfFirstOrNull
 import com.github.damontecres.wholphin.ui.nav.Destination
@@ -376,6 +379,32 @@ fun PreferencesContent(
                                         modifier = focusModifier,
                                         summary = summary,
                                         onLongClick = {},
+                                        interactionSource = interactionSource,
+                                    )
+                                }
+
+                                AppPreference.MovieLibraryTabOrder,
+                                AppPreference.TvLibraryTabOrder,
+                                -> {
+                                    val kind =
+                                        if (pref == AppPreference.MovieLibraryTabOrder) {
+                                            LibraryTabsKind.MOVIES
+                                        } else {
+                                            LibraryTabsKind.TV
+                                        }
+                                    LibraryTabOrderPreference(
+                                        title = stringResource(pref.title),
+                                        summary = pref.summary(context, null),
+                                        tabs = preferences.libraryTabs(kind),
+                                        onSave = { tabs ->
+                                            scope.launch(ExceptionHandler()) {
+                                                preferences =
+                                                    viewModel.preferenceDataStore.updateData { prefs ->
+                                                        prefs.withLibraryTabOrder(kind, tabs)
+                                                    }
+                                            }
+                                        },
+                                        modifier = focusModifier,
                                         interactionSource = interactionSource,
                                     )
                                 }

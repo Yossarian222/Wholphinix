@@ -22,6 +22,7 @@ import com.github.damontecres.wholphin.data.model.JellyfinServer
 import com.github.damontecres.wholphin.data.model.JellyfinUser
 import com.github.damontecres.wholphin.preferences.BackdropStyle
 import com.github.damontecres.wholphin.preferences.UserPreferences
+import com.github.damontecres.wholphin.preferences.toBackdropRotateMinutes
 import com.github.damontecres.wholphin.services.BackdropService
 import com.github.damontecres.wholphin.services.NavigationManager
 import com.github.damontecres.wholphin.services.RandomBackdropService
@@ -33,6 +34,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import org.jellyfin.sdk.model.api.BaseItemKind
 import javax.inject.Inject
+import kotlin.time.Duration.Companion.minutes
 
 // Top scrim configuration for text readability (clock, season tabs)
 const val TOP_SCRIM_ALPHA = 0.55f
@@ -113,12 +115,20 @@ fun ApplicationContent(
                 backdropStyle != BackdropStyle.BACKDROP_NONE &&
                 !topDestination.hidesBackdrop
         val useRandomState by rememberUpdatedState(useRandom)
-        // Change the random backdrop when navigating to another page and periodically while idle
+        val rotateInterval =
+            preferences.appPreferences.interfacePreferences.backdropRotateMinutes
+                .toBackdropRotateMinutes()
+                .minutes
+        // Change the random backdrop when navigating to another page
         LaunchedEffect(topDestination, backdropStyle) {
             if (backdropStyle == BackdropStyle.BACKDROP_NONE || topDestination.hidesBackdrop) return@LaunchedEffect
             viewModel.randomBackdropService.next()
+        }
+        // And periodically while idle; restarted when the interval setting changes so it applies immediately
+        LaunchedEffect(topDestination, backdropStyle, rotateInterval) {
+            if (backdropStyle == BackdropStyle.BACKDROP_NONE || topDestination.hidesBackdrop) return@LaunchedEffect
             while (true) {
-                delay(RandomBackdropService.ROTATE_INTERVAL)
+                delay(rotateInterval)
                 if (useRandomState) {
                     viewModel.randomBackdropService.next()
                 }

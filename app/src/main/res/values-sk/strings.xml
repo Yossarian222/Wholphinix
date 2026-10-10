@@ -819,4 +819,25 @@
     <string name="claude_model">Model</string>
     <string name="claude_model_haiku_subtitle">Rýchly a lacný (odporúčaný)</string>
     <string name="claude_model_sonnet_subtitle">Múdrejší, drahší</string>
+    <string name="backdrop_rotate_interval">Meniť náhodné pozadie každých</string>
+    <string name="backdrop_rotate_1">1 minútu</string>
+    <string name="backdrop_rotate_5">5 minút</string>
+    <string name="backdrop_rotate_10">10 minút</string>
+    <string name="backdrop_rotate_30">30 minút</string>
+    <string name="backdrop_rotate_60">60 minút</string>
+    <string name="movie_library_tab_order">Poradie záložiek knižnice filmov</string>
+    <string name="tv_library_tab_order">Poradie záložiek knižnice seriálov</string>
+    <string name="library_tab_order_summary">Prvá záložka sa otvorí pri vstupe do knižnice</string>
+    <string name="abs_not_configured">Audiobookshelf ešte nie je nastavený.</string>
+    <string name="abs_not_configured_hint">Zadaj adresu servera v domácej sieti, prípadne Tailscale adresu, a API token (Audiobookshelf → Nastavenia → Používatelia → tvoj používateľ → API token).</string>
+    <string name="abs_set_up_connection">Nastaviť pripojenie</string>
+    <string name="abs_settings_title">Nastavenia Audiobookshelf</string>
+    <string name="abs_settings_lan_url">Adresa v domácej sieti (primárna), napr. http://192.168.1.10:13378</string>
+    <string name="abs_settings_tailscale_url">Tailscale adresa (záložná, nepovinná)</string>
+    <string name="abs_settings_token">API token</string>
+    <string name="abs_settings_test">Otestovať spojenie</string>
+    <string name="abs_settings_testing">Pripájam sa…</string>
+    <string name="abs_settings_test_ok">Pripojené k %1$s: knižníc %2$d, s podcastmi %3$d</string>
+    <string name="abs_settings_test_failed">Nepodarilo sa pripojiť</string>
+    <string name="abs_settings_incomplete">Vyplň adresu v domácej sieti a API token</string>
 </resources>

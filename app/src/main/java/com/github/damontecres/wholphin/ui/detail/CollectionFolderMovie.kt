@@ -10,7 +10,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import com.github.damontecres.wholphin.R
 import com.github.damontecres.wholphin.data.model.CollectionFolderFilter
 import com.github.damontecres.wholphin.data.model.GetItemsFilter
 import com.github.damontecres.wholphin.preferences.UserPreferences
@@ -18,7 +17,6 @@ import com.github.damontecres.wholphin.ui.components.CollectionFolderView
 import com.github.damontecres.wholphin.ui.components.CsfdRankingGrid
 import com.github.damontecres.wholphin.ui.components.ErrorMessage
 import com.github.damontecres.wholphin.ui.components.GenreCardGrid
-import com.github.damontecres.wholphin.ui.components.RecommendedMovie
 import com.github.damontecres.wholphin.ui.components.TabDetails
 import com.github.damontecres.wholphin.ui.components.TabbedPage
 import com.github.damontecres.wholphin.ui.components.ViewOptionsPoster
@@ -36,43 +34,19 @@ fun CollectionFolderMovie(
     modifier: Modifier = Modifier,
     preferencesViewModel: PreferencesViewModel = hiltViewModel(),
 ) {
-    val tabs =
-        remember {
-            listOf(
-                TabDetails(R.string.recommended),
-                TabDetails(R.string.library),
-                TabDetails(R.string.collections),
-                TabDetails(R.string.genres),
-                TabDetails(R.string.csfd_rankings),
-            )
-        }
+    val tabKeys = preferences.appPreferences.libraryTabs(LibraryTabsKind.MOVIES)
+    val tabs = remember(tabKeys) { tabKeys.map { TabDetails(it.title) } }
 
     var showHeader by rememberSaveable { mutableStateOf(true) }
 
     TabbedPage(
-        itemId = destination.itemId.toString(),
+        itemId = libraryTabsRememberKey(destination.itemId.toString(), tabKeys),
         tabs = tabs,
         modifier = modifier,
         showTabs = showHeader,
     ) { tabIndex, tabDetails ->
-        when (tabIndex) {
-            // Recommended
-            0 -> {
-                RecommendedMovie(
-                    preferences = preferences,
-                    parentId = destination.itemId,
-                    onFocusPosition = { pos ->
-                        showHeader = pos.row < 1
-                    },
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .focusRequester(tabDetails.contentFocusRequester),
-                )
-            }
-
-            // Library
-            1 -> {
+        when (tabKeys.getOrNull(tabIndex)) {
+            LibraryTab.LIBRARY -> {
                 CollectionFolderView(
                     preferences = preferences,
                     onClickItem = { _, item ->
@@ -103,8 +77,7 @@ fun CollectionFolderMovie(
                 )
             }
 
-            // Collections
-            2 -> {
+            LibraryTab.COLLECTIONS -> {
                 CollectionFolderView(
                     preferences = preferences,
                     onClickItem = { _, item ->
@@ -135,8 +108,7 @@ fun CollectionFolderMovie(
                 )
             }
 
-            // Genres
-            3 -> {
+            LibraryTab.GENRES -> {
                 GenreCardGrid(
                     itemId = destination.itemId,
                     includeItemTypes = listOf(BaseItemKind.MOVIE),
@@ -149,7 +121,7 @@ fun CollectionFolderMovie(
             }
 
             // Rebríčky (ČSFD)
-            tabs.lastIndex -> {
+            LibraryTab.CSFD_RANKINGS -> {
                 CsfdRankingGrid(
                     parentId = destination.itemId,
                     itemKind = BaseItemKind.MOVIE,
@@ -160,7 +132,7 @@ fun CollectionFolderMovie(
                 )
             }
 
-            else -> {
+            LibraryTab.STUDIOS, null -> {
                 ErrorMessage("Invalid tab index $tabIndex", null)
             }
         }

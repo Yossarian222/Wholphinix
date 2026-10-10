@@ -221,6 +221,13 @@ message InterfacePreferences {
   int32 font_scale_percent = 16;
   // Navigation panel (side drawer & top tabs) size scale in percent, 0 means default (100)
   int32 nav_scale_percent = 17;
+  // Field numbers 30+ are used by the wip/ui branch to avoid clashing with other branches
+  // How often the random backdrop changes in minutes, 0 means default (5)
+  int32 backdrop_rotate_minutes = 30;
+  // Order of the tabs in movie libraries (tab keys, unknown keys are ignored, missing tabs are appended)
+  repeated string movie_library_tab_order = 31;
+  // Order of the tabs in TV libraries (tab keys, unknown keys are ignored, missing tabs are appended)
+  repeated string tv_library_tab_order = 32;
 }
 
 message AdvancedPreferences {
