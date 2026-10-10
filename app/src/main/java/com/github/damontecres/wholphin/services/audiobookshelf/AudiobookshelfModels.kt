@@ -36,26 +36,93 @@ data class AbsLibrariesResponse(
     val libraries: List<AbsLibrary> = emptyList(),
 )
 
+/** A named reference, e.g. a book's author */
+@Serializable
+data class AbsNamed(
+    val id: String? = null,
+    val name: String = "",
+)
+
+/** A book's series with the book's position in it */
+@Serializable
+data class AbsSeriesRef(
+    val id: String? = null,
+    val name: String = "",
+    val sequence: String? = null,
+)
+
+/**
+ * Metadata of a podcast or a book. Podcasts use [author] and [releaseDate], books [authorName] (minified)
+ * or [authors] (expanded) and [publishedYear].
+ */
 @Serializable
 data class AbsMetadata(
     val title: String? = null,
+    val titleIgnorePrefix: String? = null,
+    val subtitle: String? = null,
     val author: String? = null,
+    val authorName: String? = null,
+    val narratorName: String? = null,
+    val seriesName: String? = null,
+    val authors: List<AbsNamed> = emptyList(),
+    val narrators: List<String> = emptyList(),
+    val series: List<AbsSeriesRef> = emptyList(),
+    val genres: List<String> = emptyList(),
+    val description: String? = null,
+    val publishedYear: String? = null,
+    val releaseDate: String? = null,
+    val publisher: String? = null,
 )
 
+/** A chapter of a book or an episode, times in seconds */
+@Serializable
+data class AbsChapter(
+    val id: Int? = null,
+    val start: Double = 0.0,
+    val end: Double = 0.0,
+    val title: String? = null,
+)
+
+/** The media of a library item: a podcast (with episodes) or a book (with chapters) */
 @Serializable
 data class AbsPodcastMedia(
     val metadata: AbsMetadata? = null,
     val numEpisodes: Int? = null,
     val episodes: List<AbsEpisode> = emptyList(),
+    val duration: Double? = null,
+    val numChapters: Int? = null,
+    val numTracks: Int? = null,
+    val chapters: List<AbsChapter> = emptyList(),
 )
 
 @Serializable
 data class AbsLibraryItem(
     val id: String,
+    val libraryId: String? = null,
+    /** "podcast" or "book" */
+    val mediaType: String? = null,
+    val addedAt: Long? = null,
+    val updatedAt: Long? = null,
     val media: AbsPodcastMedia? = null,
+    /** Only in the "items in progress" response: the podcast episode being listened to */
+    val recentEpisode: AbsEpisode? = null,
+    /** Only in the "items in progress" response */
+    val progressLastUpdate: Long? = null,
 ) {
     val title: String get() = media?.metadata?.title ?: id
-    val author: String? get() = media?.metadata?.author
+    val author: String?
+        get() =
+            media?.metadata?.let { meta ->
+                meta.author?.takeIf { it.isNotBlank() }
+                    ?: meta.authorName?.takeIf { it.isNotBlank() }
+                    ?: meta.authors
+                        .map { it.name }
+                        .filter { it.isNotBlank() }
+                        .joinToString(", ")
+                        .takeIf { it.isNotBlank() }
+            }
+    val isPodcast: Boolean get() = mediaType == "podcast" || (mediaType == null && media?.numEpisodes != null)
+    val sortTitle: String get() = media?.metadata?.titleIgnorePrefix?.takeIf { it.isNotBlank() } ?: title
 }
 
 @Serializable
@@ -71,6 +138,12 @@ data class AbsEpisode(
     val duration: Double? = null,
     val publishedAt: Long? = null,
     val index: Int? = null,
+    val subtitle: String? = null,
+    /** HTML from the feed */
+    val description: String? = null,
+    val season: String? = null,
+    val episode: String? = null,
+    val chapters: List<AbsChapter> = emptyList(),
 )
 
 @Serializable
@@ -87,6 +160,44 @@ data class AbsMediaProgress(
 @Serializable
 data class AbsUser(
     val mediaProgress: List<AbsMediaProgress> = emptyList(),
+)
+
+/** Response of `/api/me/items-in-progress` */
+@Serializable
+data class AbsItemsInProgressResponse(
+    val libraryItems: List<AbsLibraryItem> = emptyList(),
+)
+
+/** A series of a book library with its books */
+@Serializable
+data class AbsSeries(
+    val id: String,
+    val name: String = "",
+    val nameIgnorePrefix: String? = null,
+    val addedAt: Long? = null,
+    val books: List<AbsLibraryItem> = emptyList(),
+)
+
+@Serializable
+data class AbsSeriesResponse(
+    val results: List<AbsSeries> = emptyList(),
+)
+
+@Serializable
+data class AbsAuthor(
+    val id: String,
+    val name: String = "",
+    val description: String? = null,
+    val imagePath: String? = null,
+    val numBooks: Int? = null,
+    val addedAt: Long? = null,
+    /** Only when requested with `include=items` */
+    val libraryItems: List<AbsLibraryItem> = emptyList(),
+)
+
+@Serializable
+data class AbsAuthorsResponse(
+    val authors: List<AbsAuthor> = emptyList(),
 )
 
 @Serializable
@@ -108,6 +219,8 @@ data class AbsAudioTrack(
     val contentUrl: String,
     val mimeType: String? = null,
     val duration: Double? = null,
+    /** Start of this track within the whole book, in seconds */
+    val startOffset: Double? = null,
 )
 
 @Serializable
@@ -118,6 +231,9 @@ data class AbsPlaySession(
     val currentTime: Double = 0.0,
     val duration: Double = 0.0,
     val audioTracks: List<AbsAudioTrack> = emptyList(),
+    val chapters: List<AbsChapter> = emptyList(),
+    val displayTitle: String? = null,
+    val displayAuthor: String? = null,
 )
 
 @Serializable

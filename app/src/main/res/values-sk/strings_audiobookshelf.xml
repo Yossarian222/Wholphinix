@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Audiobookshelf library, detail page and player -->
+    <string name="abs_continue_listening">Pokračovať v počúvaní</string>
+    <string name="abs_series">Série</string>
+    <string name="abs_authors">Autori</string>
+    <string name="abs_series_tab">Série – %s</string>
+    <string name="abs_authors_tab">Autori – %s</string>
+    <string name="abs_nothing_in_progress">Nič rozpočúvané</string>
+    <plurals name="abs_episode_count">
+        <item quantity="one">%d epizóda</item>
+        <item quantity="few">%d epizódy</item>
+        <item quantity="many">%d epizódy</item>
+        <item quantity="other">%d epizód</item>
+    </plurals>
+    <plurals name="abs_book_count">
+        <item quantity="one">%d kniha</item>
+        <item quantity="few">%d knihy</item>
+        <item quantity="many">%d knihy</item>
+        <item quantity="other">%d kníh</item>
+    </plurals>
+    <string name="abs_narrated_by">Číta %s</string>
+    <string name="abs_series_sequence">%1$s #%2$s</string>
+    <string name="abs_finished">Dopočúvané</string>
+    <string name="abs_time_left">zostáva %s</string>
+    <string name="abs_play_latest">Prehrať najnovšiu</string>
+    <string name="abs_chapter_of">Kapitola %1$d z %2$d</string>
+    <string name="abs_settings">Nastavenia</string>
+</resources>
