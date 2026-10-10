@@ -54,6 +54,7 @@ import com.github.damontecres.wholphin.services.TvMessageService
 import com.github.damontecres.wholphin.services.UpdateChecker
 import com.github.damontecres.wholphin.services.UserPreferencesService
 import com.github.damontecres.wholphin.services.UserSwitchListener
+import com.github.damontecres.wholphin.services.dlna.DlnaRendererService
 import com.github.damontecres.wholphin.services.hilt.AuthOkHttpClient
 import com.github.damontecres.wholphin.services.tvprovider.TvProviderSchedulerService
 import com.github.damontecres.wholphin.ui.CoilConfig
@@ -160,6 +161,10 @@ class MainActivity : AppCompatActivity() {
     // Injected so it starts watching for idle time on the home page
     @Inject
     lateinit var claudeCompanionService: ClaudeCompanionService
+
+    // Injected so the DLNA renderer (music from the phone) starts with the app
+    @Inject
+    lateinit var dlnaRendererService: DlnaRendererService
 
     private var signInAuto = true
     private var playerBackend: PlayerBackend? = null
@@ -290,6 +295,7 @@ class MainActivity : AppCompatActivity() {
                                                 backdropService = backdropService,
                                                 screensaverService = screensaverService,
                                                 tvMessageService = tvMessageService,
+                                                dlnaRendererService = dlnaRendererService,
                                                 modifier = Modifier.fillMaxSize(),
                                             )
                                         }
@@ -323,6 +329,7 @@ class MainActivity : AppCompatActivity() {
             screensaverService.pulse()
         }
         claudeCompanionService.onUserActivity()
+        dlnaRendererService.onAppResumed()
     }
 
     override fun onRestart() {

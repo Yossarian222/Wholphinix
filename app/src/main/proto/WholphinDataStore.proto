@@ -242,6 +242,8 @@ message InterfacePreferences {
   bool seasonal_themes_disabled = 40;
   // Shows a holiday's theme even outside of its period, to try it out
   SeasonalThemePreview seasonal_theme_preview = 41;
+  // DLNA/UPnP music renderer (music from a phone, e.g. TIDAL via BubbleUPnP), stored inverted so it is on by default
+  bool dlna_renderer_disabled = 75;
 }
 
 message AdvancedPreferences {

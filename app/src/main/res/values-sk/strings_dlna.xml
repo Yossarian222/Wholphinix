@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- DLNA/UPnP prehrávač hudby (hudba z mobilu, napr. TIDAL cez BubbleUPnP) -->
+    <string name="dlna_renderer_setting">Prijímať hudbu z mobilu (DLNA)</string>
+    <string name="dlna_renderer_summary_on">Viditeľné v sieti ako DLNA prehrávač, napr. pre BubbleUPnP (TIDAL)</string>
+    <string name="dlna_renderer_title">Hudba z mobilu</string>
+    <string name="dlna_video_playing">Práve hrá video. Najprv ho zastav a potom pusti hudbu znova.</string>
+    <string name="dlna_now_playing">Hrá z mobilu</string>
+    <string name="dlna_controls_hint">OK: pauza/prehrať · ←/→: posun · Späť: skryť</string>
+    <string name="dlna_music_continues">Hudba hrá ďalej, ovládaš ju z mobilu</string>
+    <string name="dlna_loading">Načítava sa…</string>
+    <string name="dlna_stopped">Zastavené</string>
+</resources>

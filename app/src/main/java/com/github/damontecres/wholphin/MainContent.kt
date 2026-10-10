@@ -34,8 +34,10 @@ import com.github.damontecres.wholphin.services.NavigationManager
 import com.github.damontecres.wholphin.services.ScreensaverService
 import com.github.damontecres.wholphin.services.SetupDestination
 import com.github.damontecres.wholphin.services.TvMessageService
+import com.github.damontecres.wholphin.services.dlna.DlnaRendererService
 import com.github.damontecres.wholphin.ui.components.AppScreensaver
 import com.github.damontecres.wholphin.ui.components.TvMessageOverlay
+import com.github.damontecres.wholphin.ui.dlna.DlnaNowPlayingOverlay
 import com.github.damontecres.wholphin.ui.nav.ApplicationContent
 import com.github.damontecres.wholphin.ui.setup.SwitchServerContent
 import com.github.damontecres.wholphin.ui.setup.SwitchUserContent
@@ -50,6 +52,7 @@ fun MainContent(
     backdropService: BackdropService,
     screensaverService: ScreensaverService,
     tvMessageService: TvMessageService,
+    dlnaRendererService: DlnaRendererService,
     modifier: Modifier = Modifier,
 ) {
     val preferences by rememberUpdatedState(userPreferences)
@@ -137,6 +140,8 @@ fun MainContent(
                     }
                 },
             )
+            // Music sent from a phone over DLNA, over the app (see DlnaRendererService)
+            DlnaNowPlayingOverlay(dlnaRendererService, tvMessageService, Modifier.fillMaxSize())
             val screenSaverState by screensaverService.state.collectAsState()
             if (screenSaverState.enabled || screenSaverState.enabledTemp) {
                 AnimatedVisibility(

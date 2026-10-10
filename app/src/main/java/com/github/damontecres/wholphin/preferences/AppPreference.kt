@@ -890,6 +890,19 @@ sealed interface AppPreference<Pref, T> {
                 summaryOff = R.string.disabled,
             )
 
+        val DlnaRendererPref =
+            AppSwitchPreference<AppPreferences>(
+                title = R.string.dlna_renderer_setting,
+                defaultValue = true,
+                // Stored inverted so it is on by default
+                getter = { !it.interfacePreferences.dlnaRendererDisabled },
+                setter = { prefs, value ->
+                    prefs.updateInterfacePreferences { dlnaRendererDisabled = !value }
+                },
+                summaryOn = R.string.dlna_renderer_summary_on,
+                summaryOff = R.string.disabled,
+            )
+
         val SeasonalThemePreviewPref =
             AppChoicePreference<AppPreferences, SeasonalThemePreview>(
                 title = R.string.seasonal_theme_preview,
@@ -1218,6 +1231,7 @@ val basicPreferences =
                     AppPreference.SkipForward,
                     AppPreference.SkipBack,
                     AppPreference.SkipBackOnResume,
+                    AppPreference.DlnaRendererPref,
                 ),
         ),
         PreferenceGroup(
