@@ -254,6 +254,21 @@ def test_ignores_numbers_not_allowed_and_statuses(graph, caplog):
     assert STRANGER not in logs and "999" in logs and "pusti film" not in logs
 
 
+def test_failed_status_logged(graph, caplog):
+    bot = make_bot(graph, [])
+    failed = {
+        "id": "wamid.z",
+        "status": "failed",
+        "recipient_id": ALLOWED,
+        "errors": [{"code": 131030, "title": "Recipient phone number not in allowed list", "error_data": {"details": "x"}}],
+    }
+    with caplog.at_level(logging.INFO, logger="jellyfin_mcp"):
+        run(bot.handle_payload(payload(statuses=[failed])))
+    logs = " ".join(r.getMessage() for r in caplog.records)
+    assert "131030" in logs and "not in allowed list" in logs and ALLOWED not in logs
+    assert graph.sent == []
+
+
 def test_dedup(graph):
     bot = make_bot(graph, [resp("end_turn", text("Raz"))])
     p = payload(text_msg("wamid.dup", "ahoj"))

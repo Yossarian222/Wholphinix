@@ -296,7 +296,17 @@ class WhatsAppBot:
                 if change.get("field") != "messages":
                     continue
                 value = change.get("value") or {}
-                # value["statuses"] (sent/delivered/read) are ignored on purpose
+                # Successful statuses (sent/delivered/read) are ignored; a failed one says why a reply never arrived
+                for status in value.get("statuses") or []:
+                    if status.get("status") == "failed":
+                        for err in status.get("errors") or [{}]:
+                            log.warning(
+                                "WhatsApp: reply to %s not delivered: %s %s %s",
+                                mask_number(str(status.get("recipient_id") or "")),
+                                err.get("code"),
+                                err.get("title"),
+                                str((err.get("error_data") or {}).get("details") or "")[:200],
+                            )
                 for msg in value.get("messages") or []:
                     jobs.append(self._handle_message(msg))
         if jobs:
