@@ -9,7 +9,6 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -44,7 +43,9 @@ class CsfdRatingSenderTest {
             sender.rate(42, 4, previous = 3)
             assertTrue(42 in sender.sending.value)
             assertEquals(4, sender.pendingStars(42))
-            advanceUntilIdle()
+            // TestScope.advanceUntilIdle() ignores backgroundScope, where the sender runs
+            testScheduler.advanceTimeBy(10_000)
+            testScheduler.runCurrent()
 
             coVerify(exactly = 1) { tvTips.rate(any(), any()) }
             coVerify { tvTips.rate(42, 4) }
@@ -64,7 +65,9 @@ class CsfdRatingSenderTest {
 
             sender.rate(7, 1, previous = 5)
             sender.rate(7, 0, previous = 1)
-            advanceUntilIdle()
+            // TestScope.advanceUntilIdle() ignores backgroundScope, where the sender runs
+            testScheduler.advanceTimeBy(10_000)
+            testScheduler.runCurrent()
 
             assertEquals(listOf(CsfdRatingResult(7, 0, 5, "Príliš rýchlo za sebou")), results)
             assertEquals(listOf("Príliš rýchlo za sebou"), messages)
@@ -86,7 +89,9 @@ class CsfdRatingSenderTest {
             sender.rate(1, 3, previous = null)
             testScheduler.advanceTimeBy(700)
             sender.rate(2, 4, previous = null)
-            advanceUntilIdle()
+            // TestScope.advanceUntilIdle() ignores backgroundScope, where the sender runs
+            testScheduler.advanceTimeBy(10_000)
+            testScheduler.runCurrent()
 
             assertEquals(2, sentAt.size)
             assertTrue("Sent ${sentAt[1] - sentAt[0]} ms apart", sentAt[1] - sentAt[0] >= 1000)
