@@ -66,16 +66,32 @@ import java.util.UUID
 import kotlin.math.roundToInt
 
 /**
+ * An entry of the library ranking grid: an item or the header of the items outside the ČSFD top 1000
+ */
+@Stable
+sealed interface RankingEntry : CardGridItem
+
+/**
  * An item of the library ranking with its position in the ČSFD best-of rankings (if it is in the top 1000)
  */
 @Stable
 data class RankedItem(
     val item: BaseItem,
     val csfdRank: Int?,
-) : CardGridItem {
+) : RankingEntry {
     override val gridId: String get() = item.gridId
     override val playable: Boolean get() = item.playable
     override val sortName: String get() = item.sortName
+}
+
+/**
+ * Full-width separator between the items in the ČSFD top 1000 and the other items sorted by rating
+ */
+@Stable
+data object OutsideTopHeader : RankingEntry {
+    override val gridId: String get() = "csfd_outside_top_header"
+    override val playable: Boolean get() = false
+    override val sortName: String get() = ""
 }
 
 @HiltViewModel(assistedFactory = CsfdRankingViewModel.Factory::class)
@@ -97,8 +113,8 @@ class CsfdRankingViewModel
             ): CsfdRankingViewModel
         }
 
-        private val _state = MutableStateFlow<DataLoadingState<List<RankedItem>>>(DataLoadingState.Pending)
-        val state: StateFlow<DataLoadingState<List<RankedItem>>> = _state
+        private val _state = MutableStateFlow<DataLoadingState<List<RankingEntry>>>(DataLoadingState.Pending)
+        val state: StateFlow<DataLoadingState<List<RankingEntry>>> = _state
 
         fun init() {
             _state.update { DataLoadingState.Loading }
@@ -112,7 +128,8 @@ class CsfdRankingViewModel
                     var skipped = 0
                     var startIndex = 0
                     // Items without a ČSFD id carry a TMDb/IMDb rating and items with incomplete ČSFD metadata have no
-                    // rating at all; fetch extra and drop them, page by page until the ranking is full
+                    // rating at all; fetch extra and drop them, page by page until the ranking is full and all items
+                    // rated well enough to be in the ČSFD top 1000 are there (they are listed first by their position)
                     val pageSize = RANKING_SIZE * 3
                     var pages = 0
                     while (pages++ < MAX_PAGES) {
@@ -133,25 +150,22 @@ class CsfdRankingViewModel
                                         enableTotalRecordCount = false,
                                     ),
                                 ).toBaseItems(true)
-                        val selected = selectRanked(pageItems, RANKING_SIZE - items.size)
+                        val selected = selectRanked(pageItems)
                         items.addAll(selected.items)
                         skipped += selected.skippedWithoutRating
-                        if (items.size >= RANKING_SIZE || pageItems.size < pageSize) break
+                        if (pageItems.size < pageSize || !shouldFetchMore(items.size, pageItems)) break
                         startIndex += pageSize
                     }
                     if (skipped > 0) {
                         Timber.i("ČSFD ranking: skipped %d items with a ČSFD id but no ČSFD rating", skipped)
                     }
                     val csfdRanks = if (ranks.isCompleted) ranks.await() else null
-                    _state.update {
-                        DataLoadingState.Success(items.map { (csfdId, item) -> RankedItem(item, csfdRanks?.get(csfdId)) })
-                    }
+                    _state.update { DataLoadingState.Success(arrange(items, csfdRanks)) }
                     if (csfdRanks == null) {
+                        // Re-sort when the positions arrive
                         val lateRanks = ranks.await()
                         if (lateRanks.isNotEmpty()) {
-                            _state.update {
-                                DataLoadingState.Success(items.map { (csfdId, item) -> RankedItem(item, lateRanks[csfdId]) })
-                            }
+                            _state.update { DataLoadingState.Success(arrange(items, lateRanks)) }
                         }
                     }
                 } catch (ex: Exception) {
@@ -168,13 +182,70 @@ class CsfdRankingViewModel
             private const val MAX_PAGES = 4
 
             /**
+             * Items rated at least this (community rating, 0-10) may be in the ČSFD top 1000 (its lowest rating is
+             * around 80 %), so they are all fetched to list the ranked ones first even beyond [RANKING_SIZE]
+             */
+            const val MIN_TOP_RATING = 7f
+
+            /**
+             * Whether to fetch another page after [page] (sorted by rating, descending) with [selectedCount] items
+             * selected so far: until there are [RANKING_SIZE] items and the ratings dropped below [MIN_TOP_RATING]
+             */
+            fun shouldFetchMore(
+                selectedCount: Int,
+                page: List<BaseItem>,
+            ): Boolean {
+                val lowest =
+                    page
+                        .lastOrNull()
+                        ?.data
+                        ?.communityRating ?: return false
+                return selectedCount < RANKING_SIZE || lowest >= MIN_TOP_RATING
+            }
+
+            /**
+             * Arranges the ranking from [items] (ČSFD id and item pairs sorted by rating): first the items in the ČSFD
+             * top 1000 ([ranks]: ČSFD id → position) by their position, then [OutsideTopHeader] and up to [limit] other
+             * items by rating. Without positions (not loaded yet or none of the items ranked) just the first [limit]
+             * items by rating.
+             */
+            fun arrange(
+                items: List<Pair<Int, BaseItem>>,
+                ranks: Map<Int, Int>?,
+                limit: Int = RANKING_SIZE,
+            ): List<RankingEntry> {
+                val withRanks = items.map { (csfdId, item) -> RankedItem(item, ranks?.get(csfdId)) }
+                val (ranked, others) = withRanks.partition { it.csfdRank != null }
+                if (ranked.isEmpty()) return others.take(limit)
+                val rest = others.take(limit)
+                return ranked.sortedBy { it.csfdRank } + (if (rest.isNotEmpty()) listOf(OutsideTopHeader) + rest else listOf())
+            }
+
+            /**
+             * Keeps the entries of [entries] matching [predicate] and [OutsideTopHeader] only when there are items both
+             * before and after it
+             */
+            fun filterEntries(
+                entries: List<RankingEntry>,
+                predicate: (RankedItem) -> Boolean,
+            ): List<RankingEntry> {
+                val filtered = entries.filter { it !is RankedItem || predicate(it) }
+                val headerIndex = filtered.indexOf(OutsideTopHeader)
+                return if (headerIndex == 0 || headerIndex == filtered.lastIndex) {
+                    filtered.filter { it !== OutsideTopHeader }
+                } else {
+                    filtered
+                }
+            }
+
+            /**
              * Picks up to [limit] items for the ranking from [items] (sorted by rating): only items with a ČSFD id and a
              * ČSFD rating (community rating). Items with a ČSFD id but no rating have incomplete metadata and are counted
              * in [RankingSelection.skippedWithoutRating].
              */
             fun selectRanked(
                 items: List<BaseItem>,
-                limit: Int,
+                limit: Int = Int.MAX_VALUE,
             ): RankingSelection {
                 val selected = mutableListOf<Pair<Int, BaseItem>>()
                 var skipped = 0
@@ -207,7 +278,7 @@ data class RankingSelection(
 )
 
 /**
- * The "Rebríčky" tab of a library: best rated items first, each with its position in the ČSFD rankings
+ * The "Rebríčky" tab of a library: the items in the ČSFD top 1000 by their position, then the other best rated items
  */
 @Composable
 fun CsfdRankingGrid(
@@ -233,13 +304,13 @@ fun CsfdRankingGrid(
             ErrorMessage(st, modifier.focusable())
         }
 
-        is DataLoadingState.Success<List<RankedItem>> -> {
+        is DataLoadingState.Success<List<RankingEntry>> -> {
             var minRating by rememberSaveable { mutableStateOf<Int?>(null) }
             var decade by rememberSaveable { mutableStateOf<Int?>(null) }
             var genre by rememberSaveable { mutableStateOf<String?>(null) }
             val shown =
                 remember(st.data, minRating, decade, genre) {
-                    st.data.filter { ranked ->
+                    CsfdRankingViewModel.filterEntries(st.data) { ranked ->
                         val dto = ranked.item.data
                         val percent = dto.communityRating?.times(10)?.roundToInt() ?: 0
                         val year = dto.productionYear
@@ -250,7 +321,7 @@ fun CsfdRankingGrid(
                 }
             Column(modifier = modifier) {
                 CsfdRankingFilters(
-                    items = st.data,
+                    items = st.data.filterIsInstance<RankedItem>(),
                     minRating = minRating,
                     decade = decade,
                     genre = genre,
@@ -262,7 +333,9 @@ fun CsfdRankingGrid(
                 LaunchedEffect(Unit) { gridFocusRequester.tryRequestFocus() }
                 CardGrid(
                     pager = shown,
-                    onClickItem = { _, ranked -> viewModel.navigationManager.navigateTo(ranked.item.destination()) },
+                    onClickItem = { _, entry ->
+                        if (entry is RankedItem) viewModel.navigationManager.navigateTo(entry.item.destination())
+                    },
                     onLongClickItem = { _, _ -> },
                     onClickPlay = { _, _ -> },
                     letterPosition = { 0 },
@@ -274,18 +347,29 @@ fun CsfdRankingGrid(
                     positionCallback = { _, _ -> },
                     columns = 6,
                     spacing = 16.dp,
-                    cardContent = { (ranked, index, onClick, onLongClick, widthPx, mod) ->
-                        Box(modifier = mod) {
-                            GridCard(
-                                item = ranked?.item,
-                                onClick = onClick,
-                                onLongClick = onLongClick,
-                                showTitle = true,
-                                // Without a size the card does not build an image URL
-                                fillWidth = widthPx,
-                                imageContentScale = ContentScale.Crop,
+                    fullLineItem = { it === OutsideTopHeader },
+                    cardContent = { (entry, index, onClick, onLongClick, widthPx, mod) ->
+                        if (entry === OutsideTopHeader) {
+                            Text(
+                                text = stringResource(R.string.csfd_outside_top),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.padding(top = 16.dp, start = 4.dp),
                             )
-                            ranked?.csfdRank?.let { CsfdRankBadge(it, Modifier.align(Alignment.TopStart)) }
+                        } else {
+                            val ranked = entry as? RankedItem
+                            Box(modifier = mod) {
+                                GridCard(
+                                    item = ranked?.item,
+                                    onClick = onClick,
+                                    onLongClick = onLongClick,
+                                    showTitle = true,
+                                    // Without a size the card does not build an image URL
+                                    fillWidth = widthPx,
+                                    imageContentScale = ContentScale.Crop,
+                                )
+                                ranked?.csfdRank?.let { CsfdRankBadge(it, Modifier.align(Alignment.TopStart)) }
+                            }
                         }
                     },
                 )

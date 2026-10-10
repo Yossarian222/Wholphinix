@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridItemSpanScope
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.layout.LazyLayoutCacheWindow
@@ -98,6 +100,8 @@ data class GridItemDetails<T : CardGridItem>(
 
 /**
  * Shows a vertical grid of [CardGridItem]s
+ *
+ * @param fullLineItem items for which it returns true take a whole row (e.g. a section header)
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -117,6 +121,7 @@ fun <T : CardGridItem> CardGrid(
     columns: Int = 6,
     spacing: Dp = 16.dp,
     bringIntoViewSpec: BringIntoViewSpec = LocalBringIntoViewSpec.current,
+    fullLineItem: ((T?) -> Boolean)? = null,
 ) {
     val startPosition =
         remember(initialPosition, pager.size) {
@@ -316,6 +321,12 @@ fun <T : CardGridItem> CardGrid(
                 modifier = Modifier.weight(1f),
             ) {
                 CompositionLocalProvider(LocalBringIntoViewSpec provides bringIntoViewSpec) {
+                    val lineSpan: (LazyGridItemSpanScope.(Int) -> GridItemSpan)? =
+                        if (fullLineItem == null) {
+                            null
+                        } else {
+                            { index -> GridItemSpan(if (fullLineItem(pager[index])) maxLineSpan else 1) }
+                        }
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(columns),
                         horizontalArrangement = Arrangement.spacedBy(spacing),
@@ -342,7 +353,10 @@ fun <T : CardGridItem> CardGrid(
 //                                    Timber.v("cardWidthPx=%s", cardWidthPx)
                                 },
                     ) {
-                        items(pager.size) { index ->
+                        items(
+                            count = pager.size,
+                            span = lineSpan,
+                        ) { index ->
                             val item = pager[index]
                             val details =
                                 remember(index, item, cardWidthPx, columns) {

@@ -185,6 +185,7 @@
     <string name="csfd_filter_rating">Rating</string>
     <string name="csfd_filter_year">Year</string>
     <string name="csfd_filter_genre">Genre</string>
+    <string name="csfd_outside_top">Outside ČSFD top 1000</string>
     <string name="because_you_watched">Because you watched %1$s</string>
     <plurals name="years_old">
         <item quantity="zero">%1$d years old</item>
