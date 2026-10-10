@@ -207,7 +207,7 @@ class CsfdRankingViewModel
              * Arranges the ranking from [items] (ČSFD id and item pairs sorted by rating): first the items in the ČSFD
              * top 1000 ([ranks]: ČSFD id → position) by their position, then [OutsideTopHeader] and up to [limit] other
              * items by rating. Without positions (not loaded yet or none of the items ranked) just the first [limit]
-             * items by rating.
+             * items by rating. Items outside the top with a rating from fewer than [MIN_VOTES] votes are left out.
              */
             fun arrange(
                 items: List<Pair<Int, BaseItem>>,
@@ -216,9 +216,26 @@ class CsfdRankingViewModel
             ): List<RankingEntry> {
                 val withRanks = items.map { (csfdId, item) -> RankedItem(item, ranks?.get(csfdId)) }
                 val (ranked, others) = withRanks.partition { it.csfdRank != null }
-                if (ranked.isEmpty()) return others.take(limit)
-                val rest = others.take(limit)
+                val rest = others.filterNot { hasFewVotes(it.item) }.take(limit)
+                if (ranked.isEmpty()) return rest
                 return ranked.sortedBy { it.csfdRank } + (if (rest.isNotEmpty()) listOf(OutsideTopHeader) + rest else listOf())
+            }
+
+            /** Ratings from fewer ČSFD votes than this (e.g. 95 % from 40 votes) are not comparable with the rankings */
+            const val MIN_VOTES = 100
+
+            /**
+             * Whether the ČSFD rating of [item] comes from fewer than [MIN_VOTES] votes: the ČSFD plugin stores the number
+             * of votes in the provider ids under "CsfdVotes" (older plugin versions do not, then it is unknown = false)
+             */
+            fun hasFewVotes(item: BaseItem): Boolean {
+                val votes =
+                    item.data.providerIds
+                        ?.entries
+                        ?.firstOrNull { it.key.equals("CsfdVotes", ignoreCase = true) }
+                        ?.value
+                        ?.toIntOrNull() ?: return false
+                return votes < MIN_VOTES
             }
 
             /**

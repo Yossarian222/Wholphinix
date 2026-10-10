@@ -13,9 +13,12 @@ class TestCsfdRanking {
         name: String,
         csfdId: Int?,
         rating: Float?,
+        votes: Int? = null,
     ) = BaseItem(
         movie(name = name).copy(
-            providerIds = csfdId?.let { mapOf("Csfd" to it.toString()) } ?: mapOf("Tmdb" to "1"),
+            providerIds =
+                (csfdId?.let { mapOf("Csfd" to it.toString()) } ?: mapOf("Tmdb" to "1")) +
+                    (votes?.let { mapOf("CsfdVotes" to it.toString()) } ?: mapOf()),
             communityRating = rating,
         ),
     )
@@ -111,5 +114,26 @@ class TestCsfdRanking {
         Assert.assertTrue(CsfdRankingViewModel.shouldFetchMore(full, high))
         Assert.assertFalse(CsfdRankingViewModel.shouldFetchMore(full, low))
         Assert.assertFalse(CsfdRankingViewModel.shouldFetchMore(0, listOf(item("no rating", 1, null))))
+    }
+
+    @Test
+    fun `Items outside the top rated from few votes are left out`() {
+        val items =
+            listOf(
+                item("few votes", 20, 9.8f, votes = 40),
+                item("few votes but ranked", 1, 9.7f, votes = 50),
+                item("enough votes", 21, 9.0f, votes = 100),
+                item("unknown votes", 22, 8.5f),
+            )
+        val selection = CsfdRankingViewModel.selectRanked(items).items
+
+        Assert.assertEquals(
+            listOf("few votes but ranked", "---", "enough votes", "unknown votes"),
+            names(CsfdRankingViewModel.arrange(selection, mapOf(1 to 5))),
+        )
+        Assert.assertEquals(
+            listOf("enough votes", "unknown votes"),
+            names(CsfdRankingViewModel.arrange(selection, null)),
+        )
     }
 }
