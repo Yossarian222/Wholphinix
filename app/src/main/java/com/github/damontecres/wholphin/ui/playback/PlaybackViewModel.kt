@@ -214,7 +214,6 @@ class PlaybackViewModel
             screensaverService.acquireKeepScreenOn(this)
             addCloseable { screensaverService.releaseKeepScreenOn(this@PlaybackViewModel) }
             addCloseable { claudeCompanionService.onPlaybackStopped() }
-            startPlaybackWatchdog()
             initJob =
                 viewModelScope.launchIO {
                     addCloseable {
@@ -1106,6 +1105,9 @@ class PlaybackViewModel
 
         override fun onPlaybackStateChanged(playbackState: Int) {
             updateKeepScreenOn()
+            // Progress for the rating prompt; a loop is avoided so tests (Robolectric main looper) never spin forever
+            runCatching { rememberProgress(player) }
+            if (player.isPlaying) screensaverService.reportPlaybackActive(this)
             if (playbackState == Player.STATE_ENDED) {
                 Timber.v("Playback state is STATE_ENDED")
                 viewModelScope.launchDefault {
@@ -1471,37 +1473,6 @@ class PlaybackViewModel
 
         @Volatile
         private var lastDurationMs = C.TIME_UNSET
-
-        /**
-         * While the page is open: remembers the playback progress every [PROGRESS_INTERVAL] and, while playing, tells
-         * [ScreensaverService] every [ScreensaverService.PLAYBACK_REPORT_INTERVAL] that the movie is still playing, so
-         * neither its idle timer nor a missed player event lets the screensaver start over the video.
-         *
-         * On the main thread (the player lives there), which is not the test dispatcher, so tests are not kept busy.
-         */
-        private fun startPlaybackWatchdog() {
-            viewModelScope.launch(WholphinDispatchers.Main + ExceptionHandler()) {
-                var sinceReport = Duration.ZERO
-                while (!released) {
-                    delay(PROGRESS_INTERVAL)
-                    if (released || !this@PlaybackViewModel::player.isInitialized) continue
-                    val p = player
-                    val playing =
-                        try {
-                            rememberProgress(p)
-                            p.isPlaying
-                        } catch (ex: Exception) {
-                            Timber.w(ex, "Cannot read the player state")
-                            false
-                        }
-                    sinceReport += PROGRESS_INTERVAL
-                    if (playing && sinceReport >= ScreensaverService.PLAYBACK_REPORT_INTERVAL) {
-                        sinceReport = Duration.ZERO
-                        screensaverService.reportPlaybackActive(this@PlaybackViewModel)
-                    }
-                }
-            }
-        }
 
         private fun rememberProgress(p: Player) {
             val position = p.currentPosition
@@ -1913,6 +1884,3 @@ class PlaybackViewModel
             }
         }
     }
-
-/** How often [PlaybackViewModel] remembers the playback progress */
-private val PROGRESS_INTERVAL = 10.seconds
