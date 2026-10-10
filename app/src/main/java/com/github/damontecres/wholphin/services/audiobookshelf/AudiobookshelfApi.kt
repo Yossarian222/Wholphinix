@@ -26,6 +26,8 @@ class AudiobookshelfApi
             Json {
                 ignoreUnknownKeys = true
                 isLenient = true
+                // A null for a field with a default value (e.g. "genres": null) uses the default
+                coerceInputValues = true
             }
         private val jsonType = "application/json".toMediaType()
 
@@ -34,7 +36,7 @@ class AudiobookshelfApi
                 json.decodeFromString(get(conn, "/api/libraries"))
             }
 
-        /** All items in a podcast library */
+        /** All items in a library (podcasts or books) */
         suspend fun libraryItems(
             conn: AbsConnection,
             libraryId: String,
@@ -58,17 +60,55 @@ class AudiobookshelfApi
                 json.decodeFromString(get(conn, "/api/me"))
             }
 
-        /** Starts a playback session for one episode. The response includes the saved position. */
+        /** Items the user has started but not finished, most recent first */
+        suspend fun itemsInProgress(conn: AbsConnection): AbsItemsInProgressResponse =
+            withContext(WholphinDispatchers.IO) {
+                json.decodeFromString(get(conn, "/api/me/items-in-progress?limit=100"))
+            }
+
+        /** All series of a book library, each with its books */
+        suspend fun series(
+            conn: AbsConnection,
+            libraryId: String,
+        ): AbsSeriesResponse =
+            withContext(WholphinDispatchers.IO) {
+                json.decodeFromString(get(conn, "/api/libraries/$libraryId/series?limit=0&minified=1"))
+            }
+
+        /** All authors of a book library */
+        suspend fun authors(
+            conn: AbsConnection,
+            libraryId: String,
+        ): AbsAuthorsResponse =
+            withContext(WholphinDispatchers.IO) {
+                json.decodeFromString(get(conn, "/api/libraries/$libraryId/authors"))
+            }
+
+        /** One author with their books */
+        suspend fun author(
+            conn: AbsConnection,
+            authorId: String,
+        ): AbsAuthor =
+            withContext(WholphinDispatchers.IO) {
+                json.decodeFromString(get(conn, "/api/authors/$authorId?include=items"))
+            }
+
+        /**
+         * Starts a playback session for a podcast episode or, with a null [episodeId], a book.
+         * The response includes the saved position.
+         */
         suspend fun startPlay(
             conn: AbsConnection,
             itemId: String,
-            episodeId: String,
+            episodeId: String?,
         ): AbsPlaySession =
             withContext(WholphinDispatchers.IO) {
+                val path =
+                    if (episodeId != null) "/api/items/$itemId/play/$episodeId" else "/api/items/$itemId/play"
                 json.decodeFromString(
                     post(
                         conn,
-                        "/api/items/$itemId/play/$episodeId",
+                        path,
                         json.encodeToString(AbsPlayRequest()),
                     ),
                 )
@@ -97,6 +137,12 @@ class AudiobookshelfApi
             conn: AbsConnection,
             itemId: String,
         ): String = "${conn.baseUrl.trimEnd('/')}/api/items/$itemId/cover?token=${conn.token}"
+
+        /** Author photo URL, see [coverUrl] */
+        fun authorImageUrl(
+            conn: AbsConnection,
+            authorId: String,
+        ): String = "${conn.baseUrl.trimEnd('/')}/api/authors/$authorId/image?token=${conn.token}"
 
         private fun get(
             conn: AbsConnection,

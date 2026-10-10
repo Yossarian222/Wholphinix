@@ -71,10 +71,28 @@ class AudiobookshelfService
 
         suspend fun me(conn: AbsConnection) = api.me(conn)
 
+        suspend fun itemsInProgress(conn: AbsConnection) = api.itemsInProgress(conn)
+
+        suspend fun series(
+            conn: AbsConnection,
+            libraryId: String,
+        ) = api.series(conn, libraryId)
+
+        suspend fun authors(
+            conn: AbsConnection,
+            libraryId: String,
+        ) = api.authors(conn, libraryId)
+
+        suspend fun author(
+            conn: AbsConnection,
+            authorId: String,
+        ) = api.author(conn, authorId)
+
+        /** Starts playback of a podcast episode, or of a book when [episodeId] is null */
         suspend fun startPlay(
             conn: AbsConnection,
             itemId: String,
-            episodeId: String,
+            episodeId: String?,
         ) = api.startPlay(conn, itemId, episodeId)
 
         suspend fun sync(
@@ -92,4 +110,9 @@ class AudiobookshelfService
             conn: AbsConnection,
             itemId: String,
         ) = api.coverUrl(conn, itemId)
+
+        fun authorImageUrl(
+            conn: AbsConnection,
+            authorId: String,
+        ) = api.authorImageUrl(conn, authorId)
     }

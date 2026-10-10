@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Audiobookshelf library, detail page and player -->
+    <string name="abs_continue_listening">Continue listening</string>
+    <string name="abs_series">Series</string>
+    <string name="abs_authors">Authors</string>
+    <string name="abs_series_tab">Series – %s</string>
+    <string name="abs_authors_tab">Authors – %s</string>
+    <string name="abs_nothing_in_progress">Nothing in progress</string>
+    <plurals name="abs_episode_count">
+        <item quantity="one">%d episode</item>
+        <item quantity="other">%d episodes</item>
+    </plurals>
+    <plurals name="abs_book_count">
+        <item quantity="one">%d book</item>
+        <item quantity="other">%d books</item>
+    </plurals>
+    <string name="abs_narrated_by">Narrated by %s</string>
+    <string name="abs_series_sequence">%1$s #%2$s</string>
+    <string name="abs_finished">Finished</string>
+    <string name="abs_time_left">%s left</string>
+    <string name="abs_play_latest">Play latest</string>
+    <string name="abs_chapter_of">Chapter %1$d of %2$d</string>
+    <string name="abs_settings">Settings</string>
+</resources>
