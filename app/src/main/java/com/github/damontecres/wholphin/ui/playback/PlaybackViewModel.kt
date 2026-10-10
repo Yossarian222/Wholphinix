@@ -214,6 +214,7 @@ class PlaybackViewModel
             screensaverService.acquireKeepScreenOn(this)
             addCloseable { screensaverService.releaseKeepScreenOn(this@PlaybackViewModel) }
             addCloseable { claudeCompanionService.onPlaybackStopped() }
+            startPlaybackWatchdog()
             initJob =
                 viewModelScope.launchIO {
                     addCloseable {
@@ -477,6 +478,9 @@ class PlaybackViewModel
                 }
                 this@PlaybackViewModel.currentItem = playlistItem
                 this@PlaybackViewModel.itemId = item.id
+                // The progress of the previous item must not count for this one
+                lastPositionMs = C.TIME_UNSET
+                lastDurationMs = C.TIME_UNSET
                 if (playlistItem is PlaylistItem.Media) {
                     claudeCompanionService.onPlaybackStarted(item.id, item.type)
                 }
@@ -1452,9 +1456,58 @@ class PlaybackViewModel
 
         fun release() {
             Timber.v("release")
+            released = true
             reportLeftForRating()
             disconnectPlayer()
             activityListener = null
+        }
+
+        @Volatile
+        private var released = false
+
+        // Last known progress, for the rating prompt when the player cannot tell any more (e.g. already released)
+        @Volatile
+        private var lastPositionMs = C.TIME_UNSET
+
+        @Volatile
+        private var lastDurationMs = C.TIME_UNSET
+
+        /**
+         * While the page is open: remembers the playback progress every [PROGRESS_INTERVAL] and, while playing, tells
+         * [ScreensaverService] every [ScreensaverService.PLAYBACK_REPORT_INTERVAL] that the movie is still playing, so
+         * neither its idle timer nor a missed player event lets the screensaver start over the video.
+         *
+         * On the main thread (the player lives there), which is not the test dispatcher, so tests are not kept busy.
+         */
+        private fun startPlaybackWatchdog() {
+            viewModelScope.launch(WholphinDispatchers.Main + ExceptionHandler()) {
+                var sinceReport = Duration.ZERO
+                while (!released) {
+                    delay(PROGRESS_INTERVAL)
+                    if (released || !this@PlaybackViewModel::player.isInitialized) continue
+                    val p = player
+                    val playing =
+                        try {
+                            rememberProgress(p)
+                            p.isPlaying
+                        } catch (ex: Exception) {
+                            Timber.w(ex, "Cannot read the player state")
+                            false
+                        }
+                    sinceReport += PROGRESS_INTERVAL
+                    if (playing && sinceReport >= ScreensaverService.PLAYBACK_REPORT_INTERVAL) {
+                        sinceReport = Duration.ZERO
+                        screensaverService.reportPlaybackActive(this@PlaybackViewModel)
+                    }
+                }
+            }
+        }
+
+        private fun rememberProgress(p: Player) {
+            val position = p.currentPosition
+            val duration = p.duration
+            if (position > 0) lastPositionMs = position
+            if (duration != C.TIME_UNSET && duration > 0) lastDurationMs = duration
         }
 
         private var ratingReported = false
@@ -1462,23 +1515,53 @@ class PlaybackViewModel
         /**
          * Offers the ČSFD rating prompt for a movie (or the last episode of a series) that ended or was left after most of it was watched.
          * Not for playlists or when another item follows, so autoplay is never interrupted.
+         *
+         * Also called when the app goes to the background during playback (the page's lifecycle stops), using the
+         * last known position.
          */
         private fun reportLeftForRating() {
-            if (ratingReported || isPlaylist) return
-            if (!this::player.isInitialized || !this::currentItem.isInitialized) return
-            val media = currentItem as? PlaylistItem.Media ?: return
-            if (state.value.nextItem() is PlaylistItem.Media) return
+            if (ratingReported) return
+            // Released on stop and again when the page is disposed, decided (and logged) once
             ratingReported = true
+            if (isPlaylist) {
+                Timber.i("No rating prompt: played as a playlist")
+                return
+            }
+            if (!this::player.isInitialized || !this::currentItem.isInitialized) {
+                Timber.i("No rating prompt: nothing was played")
+                return
+            }
+            val media =
+                currentItem as? PlaylistItem.Media ?: run {
+                    Timber.i("No rating prompt: left during an intro")
+                    return
+                }
+            if (state.value.nextItem() is PlaylistItem.Media) {
+                Timber.i("No rating prompt for %s: another item follows", media.item.id)
+                return
+            }
             try {
                 val p = player
-                val duration = p.duration
+                val ended = runCatching { p.playbackState == Player.STATE_ENDED }.getOrDefault(false)
+                runCatching { rememberProgress(p) }
+                val duration =
+                    lastDurationMs.takeIf { it > 0 }
+                        ?: media.item.data.runTimeTicks
+                            ?.ticks
+                            ?.inWholeMilliseconds
+                            ?.takeIf { it > 0 }
+                val position = lastPositionMs
                 val watched =
-                    p.playbackState == Player.STATE_ENDED ||
-                        (
-                            duration != C.TIME_UNSET &&
-                                duration > 0 &&
-                                p.currentPosition >= duration * PendingRatingService.WATCHED_FRACTION
-                        )
+                    ended ||
+                        (duration != null && position > 0 && position >= duration * PendingRatingService.WATCHED_FRACTION)
+                Timber.i(
+                    "Left %s at %s of %s ms (ended=%s), watched=%s",
+                    media.item.id,
+                    position,
+                    duration,
+                    ended,
+                    watched,
+                )
                 pendingRatingService.onPlaybackLeft(media.item, watched)
             } catch (ex: Exception) {
                 Timber.w(ex, "Could not check playback progress for the rating prompt")
@@ -1830,3 +1913,6 @@ class PlaybackViewModel
             }
         }
     }
+
+/** How often [PlaybackViewModel] remembers the playback progress */
+private val PROGRESS_INTERVAL = 10.seconds
