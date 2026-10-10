@@ -53,7 +53,7 @@ Stručný postup krok za krokom. Podrobnosti sú v [README → WhatsApp](README.
 - [ ] **Webhook fields → Manage** → zapnúť **`messages`**
 
 ### G) Test
-- [ ] Napísať botovi (testovacie číslo +1 646 589-4168) napr. „čo práve hrá?“
+- [ ] Napísať botovi (testovacie číslo +1 555 650-7675) napr. „čo práve hrá?“
 - [ ] Ak nefunguje: screenshot (bez citlivých hodnôt) + posledné riadky logu kontajnera z Portainera
 
 ### H) Hlasové správy (voliteľné)
