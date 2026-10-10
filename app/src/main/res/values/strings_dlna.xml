@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- DLNA/UPnP music renderer (music from the phone, e.g. TIDAL via BubbleUPnP) -->
+    <string name="dlna_renderer_setting">Receive music from phone (DLNA)</string>
+    <string name="dlna_renderer_summary_on">Visible on the network as a DLNA player, e.g. for BubbleUPnP (TIDAL)</string>
+    <string name="dlna_renderer_title">Music from phone</string>
+    <string name="dlna_video_playing">A video is playing. Stop it first, then play the music again.</string>
+    <string name="dlna_now_playing">Now playing from phone</string>
+    <string name="dlna_controls_hint">OK: play/pause · ←/→: seek · Back: hide</string>
+    <string name="dlna_music_continues">The music keeps playing, control it from the phone</string>
+    <string name="dlna_loading">Loading…</string>
+    <string name="dlna_stopped">Stopped</string>
+</resources>
