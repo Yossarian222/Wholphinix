@@ -211,6 +211,21 @@ class JellyfinClient:
         if r.status_code >= 400:
             raise JellyfinError(f"POST {path} -> HTTP {r.status_code}")
 
+    async def image(self, item_id: str, max_height: int = 360) -> tuple[bytes, str] | None:
+        """Primary image (poster) of an item, or None if it has none."""
+        validate_id(item_id, "item_id")
+        r = await self._http.get(
+            f"/Items/{item_id}/Images/Primary", params={"maxHeight": max_height, "quality": 85}
+        )
+        if r.status_code == 404:
+            return None
+        if r.status_code >= 400:
+            raise JellyfinError(f"GET image -> HTTP {r.status_code}")
+        ctype = r.headers.get("content-type", "")
+        if not ctype.startswith("image/"):
+            return None
+        return r.content, ctype
+
     # ---- Users / items ----
 
     async def user_id(self) -> str:

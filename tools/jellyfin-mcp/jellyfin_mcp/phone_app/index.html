@@ -94,7 +94,17 @@
     margin: 0 16px; padding: 12px 14px; border-radius: 18px;
     background: var(--surface); border: 1px solid var(--line);
   }
-  .now .title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .now .head { display: flex; gap: 12px; align-items: center; }
+  .now .info { flex: 1; min-width: 0; }
+  .poster {
+    width: 64px; height: 96px; flex: none; border-radius: 10px; object-fit: cover;
+    background: var(--surface-2); box-shadow: 0 4px 14px rgba(0,0,0,.3);
+  }
+  .now.idle .poster { display: none; }
+  .now .title {
+    font-weight: 600; overflow: hidden; display: -webkit-box;
+    -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  }
   .now .sub { color: var(--muted); font-size: 14px; margin-top: 2px; min-height: 1.4em; }
   .progress { height: 4px; border-radius: 2px; background: var(--surface-2); margin-top: 8px; overflow: hidden; }
   .progress > div { height: 100%; width: 0; background: var(--accent); transition: width .4s; }
@@ -192,9 +202,14 @@
 </div>
 
 <section class="now idle" id="now" aria-live="polite">
-  <div class="title" id="nowTitle">Zisťujem, čo beží…</div>
-  <div class="sub" id="nowSub"></div>
-  <div class="progress"><div id="nowBar"></div></div>
+  <div class="head">
+    <img class="poster" id="nowPoster" alt="" hidden>
+    <div class="info">
+      <div class="title" id="nowTitle">Zisťujem, čo beží…</div>
+      <div class="sub" id="nowSub"></div>
+      <div class="progress"><div id="nowBar"></div></div>
+    </div>
+  </div>
   <div class="remote">
     <button data-act="previous" aria-label="Predchádzajúca epizóda"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
     <button data-act="back" data-sec="30" aria-label="Späť o 30 sekúnd"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><text x="12" y="16" font-size="8" text-anchor="middle" fill="currentColor" stroke="none" font-family="system-ui" font-weight="700">30</text></svg></button>

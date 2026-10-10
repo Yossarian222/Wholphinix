@@ -7,6 +7,8 @@ endpoint; open it in Chrome on the phone and "Add to home screen". No WhatsApp/M
 - POST /app/chat            {"text", "conversation"} -> {"reply"}  (shared Claude agent, agent.py)
 - POST /app/reset           {"conversation"} -> forget that conversation's history
 - GET  /app/status          whats_playing, for the "now playing" card
+- GET  /app/image/<id>      poster of a library item, proxied from Jellyfin (the API key stays
+                            on the server)
 - POST /app/control         {"action", "seconds"?} -> the control tool directly (remote buttons,
                             no Claude call, so instant and free)
 
@@ -205,6 +207,27 @@ async def status(request: Request) -> Response:
         return _json({"connected": None, "message": str(ex)[:200]})
 
 
+async def image(request: Request) -> Response:
+    if not enabled():
+        return _not_found()
+    from .jellyfin import validate_id
+    from .server import client  # late import: server imports this module
+
+    item_id = request.path_params.get("item_id", "")
+    try:
+        validate_id(item_id, "item_id")
+        found = await client().image(item_id)
+    except ValueError:
+        return _not_found()
+    except Exception as ex:
+        log.info("Phone: image failed: %s", type(ex).__name__)
+        return PlainTextResponse("unavailable", status_code=502)
+    if found is None:
+        return _not_found()
+    data, ctype = found
+    return Response(data, media_type=ctype, headers={**SECURITY_HEADERS, "Cache-Control": "private, max-age=86400"})
+
+
 async def control(request: Request) -> Response:
     if not enabled():
         return _not_found()
@@ -233,4 +256,5 @@ def register(mcp: Any, instructions: str) -> None:
     mcp.custom_route("/app/reset", methods=["POST"])(reset)
     mcp.custom_route("/app/status", methods=["GET"])(status)
     mcp.custom_route("/app/control", methods=["POST"])(control)
+    mcp.custom_route("/app/image/{item_id}", methods=["GET"])(image)
     mcp.custom_route("/app/{name}", methods=["GET"])(static)

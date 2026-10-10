@@ -147,3 +147,38 @@ def test_control_error_shown(app, jf):
     jf.wholphin_user = "someone-else"
     r = httpx.post(f"{app}/control", json={"action": "pause"})
     assert r.status_code == 200 and r.json()["ok"] is False and r.json()["error"]
+
+
+JPEG = b"\xff\xd8\xff\xe0fake-jpeg"
+
+
+@pytest.fixture
+def jf_images():
+    f = FakeJellyfin()
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "/Images/" in request.url.path:
+            seen.append((request.url.path, dict(request.url.params), request.headers.get("authorization", "")))
+            if request.url.path == f"/Items/{M1}/Images/Primary":
+                return httpx.Response(200, content=JPEG, headers={"content-type": "image/jpeg"})
+            return httpx.Response(404)
+        return f.handler(request)
+
+    server.set_client(JellyfinClient("http://jf", "key", "Roman", transport=httpx.MockTransport(handler)))
+    return seen
+
+
+def test_poster_proxied(app, jf_images):
+    r = httpx.get(f"{app}/image/{M1}")
+    assert r.status_code == 200 and r.content == JPEG and r.headers["content-type"] == "image/jpeg"
+    assert r.headers["cache-control"].startswith("private")
+    path, params, auth = jf_images[-1]
+    assert params["maxHeight"] == "360" and 'Token="key"' in auth  # key used server-side only
+
+
+def test_poster_missing_and_invalid(app, jf_images):
+    assert httpx.get(f"{app}/image/{'9' * 32}").status_code == 404  # item without a poster
+    assert httpx.get(f"{app}/image/not-a-guid").status_code == 404
+    assert httpx.get(f"{app}/image/..%2F..%2FUsers").status_code == 404
+    assert all(p.startswith("/Items/") for p, _, _ in jf_images)

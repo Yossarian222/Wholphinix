@@ -241,6 +241,7 @@
       return;
     }
     now.classList.remove("idle");
+    showPoster(p);
     var title = p.series
       ? p.series + " · S" + (p.season || "?") + "E" + (p.episode || "?") + " " + (p.name || "")
       : (p.name || "?") + (p.year ? " (" + p.year + ")" : "");
@@ -249,6 +250,24 @@
     if (p.runtime_min) sub += " / " + fmt(p.runtime_min);
     $("nowSub").textContent = sub;
     $("nowBar").style.width = p.runtime_min ? Math.min(100, (100 * (s.position_min || 0)) / p.runtime_min) + "%" : "0";
+  }
+  // Poster through the server (Jellyfin key stays there); episodes show the series poster,
+  // and fall back to the episode's own image when the series has none
+  var poster = $("nowPoster"), posterKey = null;
+  function showPoster(p) {
+    var ids = [p.series_id, p.id].filter(Boolean);
+    var key = ids.join("/");
+    if (key === posterKey) return;
+    posterKey = key;
+    poster.hidden = true;
+    var i = 0;
+    poster.onload = function () { poster.hidden = false; };
+    poster.onerror = function () {
+      i += 1;
+      if (i < ids.length) poster.src = BASE + "image/" + ids[i];
+      else poster.hidden = true;
+    };
+    poster.src = BASE + "image/" + ids[0];
   }
   var refreshTimer;
   function refresh() {
