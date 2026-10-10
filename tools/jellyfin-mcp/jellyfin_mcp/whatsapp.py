@@ -477,7 +477,8 @@ class WhatsAppBot:
                 log.warning("WhatsApp: Claude rate limited")
                 return ERROR_REPLY
             except anthropic.APIStatusError as ex:
-                log.error("WhatsApp: Claude API error %s", ex.status_code)
+                # The API's message says what is wrong (no secrets in it), e.g. low credit or a bad parameter
+                log.error("WhatsApp: Claude API error %s: %s", ex.status_code, str(ex.message)[:300])
                 return ERROR_REPLY
             except anthropic.APIConnectionError:
                 log.error("WhatsApp: cannot reach the Claude API")
