@@ -18,6 +18,7 @@ import com.github.damontecres.wholphin.services.audiobookshelf.AbsLibraryItem
 import com.github.damontecres.wholphin.services.audiobookshelf.AbsMediaProgress
 import com.github.damontecres.wholphin.services.audiobookshelf.AbsPlaySession
 import com.github.damontecres.wholphin.services.audiobookshelf.AbsSyncRequest
+import com.github.damontecres.wholphin.services.audiobookshelf.AudiobookshelfHttpException
 import com.github.damontecres.wholphin.services.audiobookshelf.AudiobookshelfService
 import com.github.damontecres.wholphin.util.WholphinDispatchers
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -184,7 +185,7 @@ class AudiobookshelfViewModel
                     }
                 } catch (ex: Exception) {
                     Timber.e(ex, "Audiobookshelf load failed")
-                    _state.update { it.copy(loading = false, error = ex.message ?: "Chyba pripojenia") }
+                    _state.update { it.copy(loading = false, error = errorMessage(ex, "Chyba pripojenia")) }
                 }
             }
         }
@@ -219,7 +220,7 @@ class AudiobookshelfViewModel
                     }
                 } catch (ex: Exception) {
                     Timber.e(ex, "Audiobookshelf podcast load failed")
-                    _state.update { it.copy(loading = false, error = ex.message ?: "Chyba pripojenia") }
+                    _state.update { it.copy(loading = false, error = errorMessage(ex, "Chyba pripojenia")) }
                 }
             }
         }
@@ -356,7 +357,7 @@ class AudiobookshelfViewModel
                     _state.update {
                         it.copy(
                             testing = false,
-                            settingsError = ex.message ?: context.getString(R.string.abs_settings_test_failed),
+                            settingsError = errorMessage(ex, context.getString(R.string.abs_settings_test_failed)),
                         )
                     }
                 }
@@ -392,12 +393,23 @@ class AudiobookshelfViewModel
                     _state.update {
                         it.copy(
                             testing = false,
-                            settingsError = ex.message ?: context.getString(R.string.abs_settings_test_failed),
+                            settingsError = errorMessage(ex, context.getString(R.string.abs_settings_test_failed)),
                         )
                     }
                 }
             }
         }
+
+        /** User-friendly error text: a rejected token gets an explanation instead of the raw HTTP message */
+        private fun errorMessage(
+            ex: Exception,
+            fallback: String,
+        ): String =
+            if (ex is AudiobookshelfHttpException && ex.code == 401) {
+                context.getString(R.string.abs_token_invalid)
+            } else {
+                ex.message ?: fallback
+            }
 
         private fun isStarted(progress: AbsMediaProgress?): Boolean = progress != null && !progress.isFinished && progress.currentTime > 0
 

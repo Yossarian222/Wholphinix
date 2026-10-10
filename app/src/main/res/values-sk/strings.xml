@@ -835,6 +835,8 @@
     <string name="abs_settings_lan_url">Adresa v domácej sieti (primárna), napr. http://192.168.1.10:13378</string>
     <string name="abs_settings_tailscale_url">Tailscale adresa (záložná, nepovinná)</string>
     <string name="abs_settings_token">API token</string>
+    <string name="abs_settings_token_hint">Tip: dlhý token vlož cez scrcpy (Alt+Shift+V)</string>
+    <string name="abs_token_invalid">Token neplatí – vytvor nový API kľúč v ABS: Settings → API Keys</string>
     <string name="abs_settings_test">Otestovať spojenie</string>
     <string name="abs_settings_testing">Pripájam sa…</string>
     <string name="abs_settings_test_ok">Pripojené k %1$s: knižníc %2$d, s podcastmi %3$d</string>

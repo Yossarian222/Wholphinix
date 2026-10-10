@@ -371,7 +371,8 @@ private fun SettingsDialog(
         AbsConfig(
             lanUrl = lan.text.toString().trim(),
             tailscaleUrl = tailscale.text.toString().trim(),
-            token = token.text.toString().trim(),
+            // Long tokens are often pasted with line breaks or spaces in the middle
+            token = token.text.toString().filterNot { it.isWhitespace() },
         )
 
     BasicDialog(
@@ -389,6 +390,11 @@ private fun SettingsDialog(
             EditTextBox(state = tailscale)
             Text(text = stringResource(R.string.abs_settings_token), style = MaterialTheme.typography.bodySmall)
             EditTextBox(state = token, isPassword = true)
+            Text(
+                text = stringResource(R.string.abs_settings_token_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             if (testing) {
                 Text(text = stringResource(R.string.abs_settings_testing), style = MaterialTheme.typography.bodySmall)
             }

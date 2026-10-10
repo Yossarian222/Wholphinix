@@ -1073,6 +1073,8 @@
     <string name="abs_settings_lan_url">Home network address (primary), e.g. http://192.168.1.10:13378</string>
     <string name="abs_settings_tailscale_url">Tailscale address (fallback, optional)</string>
     <string name="abs_settings_token">API token</string>
+    <string name="abs_settings_token_hint">Tip: paste a long token via scrcpy (Alt+Shift+V)</string>
+    <string name="abs_token_invalid">Token is not valid – create a new API key in ABS: Settings → API Keys</string>
     <string name="abs_settings_test">Test connection</string>
     <string name="abs_settings_testing">Connecting…</string>
     <string name="abs_settings_test_ok">Connected to %1$s: %2$d libraries, %3$d with podcasts</string>
