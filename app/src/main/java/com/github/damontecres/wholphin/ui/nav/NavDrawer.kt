@@ -574,6 +574,7 @@ fun NavDrawer(
             )
             TopRightHeader(
                 showClock = preferences.appPreferences.interfacePreferences.showClock,
+                showNameDay = !preferences.appPreferences.interfacePreferences.nameDaysDisabled,
                 onSearchClick = {
                     viewModel.setIndex(SEARCH_INDEX)
                     viewModel.navigationManager.navigateToFromDrawer(Destination.Search())

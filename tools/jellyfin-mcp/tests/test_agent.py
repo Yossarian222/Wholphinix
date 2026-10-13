@@ -15,7 +15,7 @@ from jellyfin_mcp.jellyfin import JellyfinClient
 from test_server import M1, SESSION, FakeJellyfin
 
 NOW = datetime(2026, 10, 10, 21, 39, tzinfo=ZoneInfo("Europe/Bratislava"))
-NOTE = "[Aktuálny čas: sobota 10. 10. 2026, 21:39]"
+NOTE = "[Aktuálny čas: sobota 10. 10. 2026, 21:39, meniny má Slavomíra]"
 KEY = "phone:abcdef0123456789"
 
 
@@ -161,7 +161,15 @@ def test_refusal_and_no_fallback_for_haiku():
 
 def test_time_note_and_timezone(monkeypatch):
     assert agent.time_note(NOW) == NOTE
-    assert agent.time_note(datetime(2026, 1, 4, 7, 5)) == "[Aktuálny čas: nedeľa 4. 1. 2026, 07:05]"
+    assert agent.time_note(datetime(2026, 1, 4, 7, 5)) == "[Aktuálny čas: nedeľa 4. 1. 2026, 07:05, meniny má Drahoslav]"
+    assert agent.time_note(datetime(2026, 10, 13, 21, 39)) == (
+        "[Aktuálny čas: utorok 13. 10. 2026, 21:39, meniny má Koloman]"
+    )
+    assert agent.time_note(datetime(2026, 12, 24, 18, 0)) == (
+        "[Aktuálny čas: štvrtok 24. 12. 2026, 18:00, meniny majú Adam, Eva]"
+    )
+    # No name day on holidays like Nový rok
+    assert agent.time_note(datetime(2027, 1, 1, 0, 5)) == "[Aktuálny čas: piatok 1. 1. 2027, 00:05]"
     monkeypatch.delenv("TIMEZONE", raising=False)
     assert agent.local_timezone().key == "Europe/Bratislava"
     monkeypatch.setenv("TIMEZONE", "Europe/Prague")

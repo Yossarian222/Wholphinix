@@ -916,6 +916,19 @@ sealed interface AppPreference<Pref, T> {
                 summaryOff = R.string.disabled,
             )
 
+        val NameDaysPref =
+            AppSwitchPreference<AppPreferences>(
+                title = R.string.show_name_days,
+                defaultValue = true,
+                // Stored inverted so it is on by default
+                getter = { !it.interfacePreferences.nameDaysDisabled },
+                setter = { prefs, value ->
+                    prefs.updateInterfacePreferences { nameDaysDisabled = !value }
+                },
+                summaryOn = R.string.show_name_days_summary_on,
+                summaryOff = R.string.disabled,
+            )
+
         val SeasonalThemePreviewPref =
             AppChoicePreference<AppPreferences, SeasonalThemePreview>(
                 title = R.string.seasonal_theme_preview,
@@ -1234,6 +1247,7 @@ val basicPreferences =
                     AppPreference.NavScalePref,
                     AppPreference.SeasonalThemesPref,
                     AppPreference.SeasonalThemePreviewPref,
+                    AppPreference.NameDaysPref,
                     AppPreference.ScreensaverSettings,
                 ),
         ),

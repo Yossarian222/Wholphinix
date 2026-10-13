@@ -195,6 +195,8 @@
     <string name="play_with_transcoding">Play with transcoding</string>
     <string name="media_information">Media Information</string>
     <string name="show_clock">Show Clock</string>
+    <string name="show_name_days">Show name days</string>
+    <string name="show_name_days_summary_on">Who has the name day today, next to the date</string>
     <string name="font_size_scale">Font size</string>
     <string name="nav_panel_scale">Navigation panel size</string>
     <string name="aired_episode_order">Aired Episode Order</string>

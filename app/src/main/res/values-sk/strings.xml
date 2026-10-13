@@ -201,6 +201,8 @@
     <string name="play_with_transcoding">Prehrávať s prekódovaním</string>
     <string name="media_information">Informácie o médiu</string>
     <string name="show_clock">Zobraziť hodiny</string>
+    <string name="show_name_days">Zobrazovať meniny</string>
+    <string name="show_name_days_summary_on">Kto má dnes meniny, vedľa dátumu</string>
     <string name="font_size_scale">Veľkosť písma</string>
     <string name="nav_panel_scale">Veľkosť navigačného panelu</string>
     <string name="aired_episode_order">Poradie odvysielaných epizód</string>
