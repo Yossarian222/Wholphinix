@@ -313,14 +313,29 @@ async def control(
 
 MAX_MESSAGE_CHARS = 300
 MAX_MESSAGE_SECONDS = 30
+MESSAGE_TITLE = "Jean"
+
+
+def message_seconds(text: str) -> float:
+    """How long a message stays on the TV when no time is given (same rule as Jean on the TV).
+
+    4 s + 90 ms per character (comfortable reading from the couch) + 1.5 s per extra line,
+    at least 10 s and at most 20 s.
+    """
+    lines = len(text.split("\n"))
+    ms = 4000 + 90 * len(text) + 1500 * (lines - 1)
+    return min(max(ms, 10_000), 20_000) / 1000
 
 
 @mcp.tool()
-async def show_message(text: str, title: str = "Claude", seconds: float = 8) -> dict[str, Any]:
+async def show_message(
+    text: str, title: str = MESSAGE_TITLE, seconds: float | None = None
+) -> dict[str, Any]:
     """Show a short message on the TV, e.g. "Večera je hotová!".
 
     It appears in a corner over whatever is on screen (also over a playing film) without pausing
-    it or taking focus, and disappears after `seconds` (1-30). Max 300 characters.
+    it or taking focus. The bubble is titled "Jean" unless `title` is given. Max 300 characters.
+    It disappears after `seconds` (1-30); leave it out and the time follows the text length (10-20 s).
     """
     text = text.strip()
     if not text:
@@ -329,8 +344,11 @@ async def show_message(text: str, title: str = "Claude", seconds: float = 8) -> 
         raise ValueError(
             f"text is {len(text)} characters long, max {MAX_MESSAGE_CHARS}: shorten it"
         )
-    title = (title or "Claude").strip()[:60] or "Claude"
-    seconds = min(max(float(seconds), 1.0), MAX_MESSAGE_SECONDS)
+    title = (title or MESSAGE_TITLE).strip()[:60] or MESSAGE_TITLE
+    if seconds is None:
+        seconds = message_seconds(text)
+    else:
+        seconds = min(max(float(seconds), 1.0), MAX_MESSAGE_SECONDS)
     c = client()
     session = await c.target_session()
     await c.display_message(session["Id"], text, header=title, timeout_ms=int(seconds * 1000))

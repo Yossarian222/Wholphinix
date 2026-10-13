@@ -35,7 +35,7 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 
 /**
- * "Claude on the couch": short, funny or interesting remarks shown with [TvMessageService] while watching
+ * "Jean on the couch" (Claude under the hood): short, funny or interesting remarks shown with [TvMessageService] while watching
  * (a few minutes into a film, during a longer pause) and a tip for tonight on an idle home page.
  *
  * Calls the Anthropic API directly from the TV with the user's own key ([ClaudePreferences]). Only the film's
@@ -341,7 +341,7 @@ class ClaudeCompanionService
 
         private fun show(text: String) {
             lastRemarkAt = TimeSource.Monotonic.markNow()
-            tvMessageService.show(title = "Claude", text = text, timeoutMs = displayMs(text))
+            tvMessageService.show(title = COMPANION_NAME, text = text, timeoutMs = displayMs(text))
         }
 
         companion object {
@@ -359,8 +359,17 @@ class ClaudeCompanionService
             private const val OVERVIEW_LENGTH = 700
             private const val TRIVIA_LENGTH = 400
 
-            /** Long enough to read: ~60 ms per character, 8-20 s */
-            fun displayMs(text: String): Long = (text.length * 60L).coerceIn(8_000L, 20_000L)
+            /** Name the companion goes by on the TV (it still runs on Claude models) */
+            const val COMPANION_NAME = "Jean"
+
+            /**
+             * Long enough to read from the couch: 4 s + 90 ms per character (~11 characters/s) + 1.5 s per extra
+             * line, 10-20 s
+             */
+            fun displayMs(text: String): Long {
+                val extraLines = text.lines().size - 1
+                return (4_000L + text.length * 90L + extraLines * 1_500L).coerceIn(10_000L, 20_000L)
+            }
 
             /** Drops wrapping quotes and keeps it short */
             fun clean(text: String): String? {
@@ -375,7 +384,7 @@ class ClaudeCompanionService
             }
 
             const val SYSTEM_PROMPT =
-                """Si Claude a sedíš s kamarátom na gauči pri telke. Tvoje hlášky sa mu zobrazia ako malá bublina v rohu obrazovky v appke Wholphinix, často počas filmu, takže ho nesmú rušiť dlhým textom.
+                """Si Jean a sedíš s kamarátom na gauči pri telke. Tvoje hlášky sa mu zobrazia ako malá bublina v rohu obrazovky v appke Wholphinix, často počas filmu, takže ho nesmú rušiť dlhým textom.
 
 Ako píšeš:
 - Po slovensky, tykáš, uvoľnene a s humorom ako dobrý kamarát. Vtipne, ale nie trápne, žiadne lacné vtipy ani poučovanie.
@@ -383,6 +392,7 @@ Ako píšeš:
 - Odpovedz iba samotnou hláškou, bez úvodzoviek, bez oslovenia a bez vysvetľovania.
 - Nepýtaj sa otázky, na ktoré treba odpovedať. Kamarát ti nemôže odpísať.
 - Neopakuj stále rovnaký začiatok (napríklad „Vedel si, že…“).
+- Keď hovoríš o sebe, si Jean. Nepredstavuj sa ani sa nepodpisuj, bublina už má tvoje meno.
 
 Obsah:
 - Nikdy neprezrádzaj dej: žiadne zvraty, odhalenia ani koniec, ani pri starých a známych filmoch. Môžeš hovoriť o natáčaní, hercoch, tvorcoch, hudbe, ohlase či dobe vzniku.

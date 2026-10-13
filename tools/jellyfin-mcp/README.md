@@ -20,7 +20,7 @@ Claude (cloud) ──HTTPS──▶ Tailscale Funnel ──▶ jellyfin-mcp (NAS
 | `set_subtitles` | titulky: `off`, jazyk (`slovenčina`, `cz`, `eng`) alebo číslo stopy |
 | `set_audio` | dabing (zvuková stopa) podľa jazyka alebo čísla |
 | `control` | pause / resume / stop / seek / forward / back / next / previous |
-| `show_message` | napíše správu na TV (bublina v rohu, aj cez bežiaci film, nepreruší ho; max 300 znakov, 1–30 s) |
+| `show_message` | napíše správu na TV (bublina „Jean“ v rohu, aj cez bežiaci film, nepreruší ho; max 300 znakov; čas 1–30 s, bez zadania podľa dĺžky textu 10–20 s) |
 | `tv_tips_today` | čo dnes dávajú v TV (ČSFD „TV tipy“) a čo z toho máš v knižnici – to sa dá hneď pustiť |
 | `recommend_tonight` | kandidáti na večer: nevidené filmy z knižnice podľa ČSFD hodnotenia, nálady (žánru) a dĺžky; vyberá Claude |
 | `browse_library` | prehľadáva knižnicu s filtrami (žáner, roky, herec/režisér, pozreté/nepozreté, ČSFD %) a vráti počet všetkých zhôd – „koľko mám hororov“, „filmy s Tomom Hanksom“ |

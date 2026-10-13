@@ -806,9 +806,9 @@
     <!-- ČSFD watchlist -->
     <string name="csfd_watchlist">Chcem vidieť (ČSFD)</string>
     <!-- Claude -->
-    <string name="claude_settings">Claude</string>
-    <string name="claude_settings_summary">Claude na gauči: zaujímavosti a tipy na TV</string>
-    <string name="claude_companion">Claude spoločník</string>
+    <string name="claude_settings">Jean</string>
+    <string name="claude_settings_summary">Jean na gauči: zaujímavosti a tipy na TV</string>
+    <string name="claude_companion">Jean – spoločník</string>
     <string name="claude_companion_summary">Krátke hlášky počas filmu a tip na večer na domovskej obrazovke</string>
     <string name="claude_api_key">Anthropic API kľúč</string>
     <string name="claude_api_key_not_set">Nenastavený – bez kľúča sa nič neposiela</string>

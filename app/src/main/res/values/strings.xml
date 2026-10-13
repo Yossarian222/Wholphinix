@@ -1023,10 +1023,10 @@
     <!-- ČSFD watchlist -->
     <string name="csfd_watchlist">Want to see (ČSFD)</string>
     <!-- Claude -->
-    <string name="claude" translatable="false">Claude</string>
-    <string name="claude_settings">Claude</string>
-    <string name="claude_settings_summary">Claude on the couch: fun facts and tips on the TV</string>
-    <string name="claude_companion">Claude companion</string>
+    <string name="claude" translatable="false">Jean</string>
+    <string name="claude_settings">Jean</string>
+    <string name="claude_settings_summary">Jean on the couch: fun facts and tips on the TV</string>
+    <string name="claude_companion">Jean – companion</string>
     <string name="claude_companion_summary">Short remarks during films and a tip for tonight on the home page</string>
     <string name="claude_api_key">Anthropic API key</string>
     <string name="claude_api_key_not_set">Not set – nothing is sent without a key</string>

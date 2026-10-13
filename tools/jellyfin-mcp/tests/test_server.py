@@ -355,10 +355,25 @@ def test_show_message(base_url, fake):
     assert fake.calls[-1][1:] == (
         f"/Sessions/{SESSION}/Command", {},
         {"Name": "DisplayMessage",
-         "Arguments": {"Header": "Claude", "Text": "Večera je hotová!", "TimeoutMs": "30000"}},
+         "Arguments": {"Header": "Jean", "Text": "Večera je hotová!", "TimeoutMs": "30000"}},
     )
     run(_call(base_url, "show_message", {"text": "Ahoj", "title": "Mama"}))
-    assert fake.calls[-1][3]["Arguments"] == {"Header": "Mama", "Text": "Ahoj", "TimeoutMs": "8000"}
+    assert fake.calls[-1][3]["Arguments"] == {"Header": "Mama", "Text": "Ahoj", "TimeoutMs": "10000"}
+    out = run(_call(base_url, "show_message", {"text": "Ahoj", "seconds": 0.2}))
+    assert out == {"shown": True, "seconds": 1.0}
+    out = run(_call(base_url, "show_message", {"text": "x" * 100}))
+    assert out == {"shown": True, "seconds": 13.0}
+    assert fake.calls[-1][3]["Arguments"]["Header"] == "Jean"
+
+
+def test_message_seconds():
+    assert server.message_seconds("Ahoj") == 10.0
+    assert server.message_seconds("x" * 100) == 13.0
+    assert server.message_seconds("x" * 180) == 20.0
+    assert server.message_seconds("x" * 300) == 20.0
+    # extra lines add 1.5 s each, capped at 20 s
+    assert server.message_seconds("x" * 49 + "\n" + "x" * 50) == 14.5
+    assert server.message_seconds("a\nb\nc\nd\ne\nf") == 12.49
 
 
 def test_show_message_validates_length(base_url, fake):
