@@ -885,6 +885,8 @@
     <string name="ass_subtitle_mode_transcode">Burn in/transcode on server</string>
     <string name="ass_subtitle_playback">SSA/ASS subtitle playback</string>
     <string name="cinema_mode">Cinema mode</string>
+    <string name="auto_foreign_subtitles">Automatic subtitles for foreign audio</string>
+    <string name="auto_foreign_subtitles_summary_on">Without Slovak or Czech audio, turn on SK, CZ or EN subtitles</string>
     <string name="show_more">Show %1$s more</string>
     <string name="skip_behavior">Skip behavior</string>
     <string name="skip_behavior_summary">For intros, credits, etc</string>

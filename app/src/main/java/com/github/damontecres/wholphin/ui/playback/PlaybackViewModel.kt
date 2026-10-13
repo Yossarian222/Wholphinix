@@ -32,6 +32,8 @@ import com.github.damontecres.wholphin.data.ItemPlaybackRepository
 import com.github.damontecres.wholphin.data.ServerRepository
 import com.github.damontecres.wholphin.data.model.BaseItem
 import com.github.damontecres.wholphin.data.model.Chapter
+import com.github.damontecres.wholphin.data.model.ItemPlayback
+import com.github.damontecres.wholphin.data.model.PlaybackLanguageChoice
 import com.github.damontecres.wholphin.data.model.Playlist
 import com.github.damontecres.wholphin.data.model.PlaylistItem
 import com.github.damontecres.wholphin.data.model.TrackIndex
@@ -42,6 +44,7 @@ import com.github.damontecres.wholphin.preferences.ShowNextUpWhen
 import com.github.damontecres.wholphin.preferences.SkipSegmentBehavior
 import com.github.damontecres.wholphin.preferences.UserPreferences
 import com.github.damontecres.wholphin.preferences.enabled
+import com.github.damontecres.wholphin.services.AutoForeignSubtitles
 import com.github.damontecres.wholphin.services.ClaudeCompanionService
 import com.github.damontecres.wholphin.services.DatePlayedService
 import com.github.damontecres.wholphin.services.DeviceProfileService
@@ -114,6 +117,7 @@ import org.jellyfin.sdk.model.api.GeneralCommandMessage
 import org.jellyfin.sdk.model.api.GeneralCommandType
 import org.jellyfin.sdk.model.api.ImageType
 import org.jellyfin.sdk.model.api.MediaSegmentType
+import org.jellyfin.sdk.model.api.MediaSourceInfo
 import org.jellyfin.sdk.model.api.MediaStreamType
 import org.jellyfin.sdk.model.api.MediaType
 import org.jellyfin.sdk.model.api.PlayMethod
@@ -555,7 +559,7 @@ class PlaybackViewModel
                     }
                 val audioIndex = audioStream?.index
 
-                val subtitleIndex =
+                val defaultSubtitleIndex =
                     mediaSource?.let {
                         streamChoiceService
                             .chooseSubtitleStream(
@@ -566,6 +570,12 @@ class PlaybackViewModel
                                 plc = plc,
                                 prefs = preferences,
                             )?.index
+                    }
+                val subtitleIndex =
+                    if (mediaSource != null) {
+                        applyAutoForeignSubtitles(mediaSource, itemPlayback, plc, defaultSubtitleIndex)
+                    } else {
+                        defaultSubtitleIndex
                     }
                 Timber.d(
                     "Selected mediaSource=%s, audioIndex=%s, subtitleIndex=%s",
@@ -627,6 +637,57 @@ class PlaybackViewModel
                 listenForSegments(item.id)
                 return@withContext true
             }
+
+        /**
+         * Automatic subtitles for foreign language audio (#46), only applied when an item starts playing.
+         *
+         * An explicit choice by the user (for the item or the series) always wins. Track changes, seeking
+         * and source changes go through [changeStreams], so this never overrides them.
+         */
+        private fun applyAutoForeignSubtitles(
+            mediaSource: MediaSourceInfo,
+            itemPlayback: ItemPlayback?,
+            plc: PlaybackLanguageChoice?,
+            defaultSubtitleIndex: Int?,
+        ): Int? {
+            val userChoseSubtitles =
+                (itemPlayback != null && itemPlayback.subtitleIndex != TrackIndex.UNSPECIFIED) ||
+                    plc?.subtitleLanguage.isNotNullOrBlank() ||
+                    plc?.subtitlesDisabled == true
+            if (userChoseSubtitles) {
+                Timber.i(
+                    "Auto foreign subtitles: skipped, user chose subtitles (itemPlayback=%s, plc=%s)",
+                    itemPlayback?.subtitleIndex,
+                    plc?.subtitleLanguage ?: plc?.subtitlesDisabled,
+                )
+                return defaultSubtitleIndex
+            }
+            val enabled = !preferences.appPreferences.playbackPreferences.autoForeignSubtitlesDisabled
+            val streams = mediaSource.mediaStreams.orEmpty()
+            val choice =
+                AutoForeignSubtitles.choose(
+                    audioStreams = streams.filter { it.type == MediaStreamType.AUDIO },
+                    subtitleStreams = streams.filter { it.type == MediaStreamType.SUBTITLE },
+                    enabled = enabled,
+                )
+            return if (choice != null) {
+                Timber.i(
+                    "Auto foreign subtitles: chose subtitle index=%s lang=%s title=%s, because %s",
+                    choice.stream.index,
+                    choice.stream.language,
+                    choice.stream.title ?: choice.stream.displayTitle,
+                    choice.reason,
+                )
+                choice.stream.index
+            } else {
+                Timber.i(
+                    "Auto foreign subtitles: no change (enabled=%s), keeping subtitleIndex=%s",
+                    enabled,
+                    defaultSubtitleIndex,
+                )
+                defaultSubtitleIndex
+            }
+        }
 
         /**
          * Change which streams (ie audio or subtitle) are active
