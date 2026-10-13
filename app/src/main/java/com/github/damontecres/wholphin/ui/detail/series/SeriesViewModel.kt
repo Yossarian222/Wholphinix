@@ -323,10 +323,13 @@ class SeriesViewModel
                                 listOf(
                                     ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
                                     ItemFields.CAN_DELETE,
+                                    // ČSFD id for "Moje hodnotenie" of the season
+                                    ItemFields.PROVIDER_IDS,
                                 )
                             } else {
                                 listOf(
                                     ItemFields.CAN_DELETE,
+                                    ItemFields.PROVIDER_IDS,
                                 )
                             },
                     )
@@ -361,6 +364,8 @@ class SeriesViewModel
                             ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
                             ItemFields.CAN_DELETE,
                             ItemFields.PARENT_ID,
+                            // ČSFD id for "Moje hodnotenie" of the episode
+                            ItemFields.PROVIDER_IDS,
                         ),
                 )
             Timber.v(

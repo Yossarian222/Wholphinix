@@ -1491,8 +1491,9 @@ class PlaybackViewModel
         private var ratingReported = false
 
         /**
-         * Offers the ČSFD rating prompt for a movie (or the last episode of a series) that ended or was left after most of it was watched.
-         * Not for playlists or when another item follows, so autoplay is never interrupted.
+         * Offers the ČSFD rating prompt for a movie (or the last episode of a season) that ended or was left after most of it was watched.
+         * Not for playlists or when another item follows (except the next season's first episode), so autoplay is never
+         * interrupted.
          *
          * Also called when the app goes to the background during playback (the page's lifecycle stops), using the
          * last known position.
@@ -1514,7 +1515,8 @@ class PlaybackViewModel
                     Timber.i("No rating prompt: left during an intro")
                     return
                 }
-            if (state.value.nextItem() is PlaylistItem.Media) {
+            val next = state.value.nextItem()
+            if (next is PlaylistItem.Media && !endsSeason(media.item, next.item)) {
                 Timber.i("No rating prompt for %s: another item follows", media.item.id)
                 return
             }
@@ -1545,6 +1547,16 @@ class PlaybackViewModel
                 Timber.w(ex, "Could not check playback progress for the rating prompt")
             }
         }
+
+        /** Whether [next] is the first episode of another season after the episode [current] */
+        private fun endsSeason(
+            current: BaseItem,
+            next: BaseItem,
+        ): Boolean =
+            current.type == BaseItemKind.EPISODE &&
+                next.type == BaseItemKind.EPISODE &&
+                current.data.seriesId == next.data.seriesId &&
+                (current.data.seasonId ?: current.data.parentId) != (next.data.seasonId ?: next.data.parentId)
 
         fun subscribeToWebSocket() {
             subscribeJob?.cancel()

@@ -12,6 +12,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontStyle
@@ -23,12 +24,14 @@ import com.github.damontecres.wholphin.R
 import com.github.damontecres.wholphin.data.ChosenStreams
 import com.github.damontecres.wholphin.data.model.BaseItem
 import com.github.damontecres.wholphin.preferences.UserPreferences
+import com.github.damontecres.wholphin.ui.components.CsfdMyRating
 import com.github.damontecres.wholphin.ui.components.EpisodeName
 import com.github.damontecres.wholphin.ui.components.OverviewText
 import com.github.damontecres.wholphin.ui.components.QuickDetails
 import com.github.damontecres.wholphin.ui.components.SeriesName
 import com.github.damontecres.wholphin.ui.components.VideoStreamDetails
 import com.github.damontecres.wholphin.ui.isNotNullOrBlank
+import kotlinx.coroutines.launch
 import org.jellyfin.sdk.model.api.PersonKind
 
 @Composable
@@ -56,6 +59,16 @@ fun EpisodeDetailsHeader(
         ) {
             val padding = 8.dp
             QuickDetails(ep.ui.quickDetails, ep.timeRemainingOrRuntime)
+
+            // My ČSFD rating of the episode, if the ČSFD plugin knows it
+            CsfdMyRating(
+                ep,
+                Modifier
+                    .padding(top = 4.dp)
+                    .onFocusChanged {
+                        if (it.hasFocus) scope.launch { bringIntoViewRequester.bringIntoView() }
+                    },
+            )
 
             VideoStreamDetails(
                 chosenStreams = chosenStreams,

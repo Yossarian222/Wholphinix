@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -33,6 +34,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -43,6 +45,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Text
 import com.github.damontecres.wholphin.R
 import com.github.damontecres.wholphin.data.ChosenStreams
 import com.github.damontecres.wholphin.data.ExtrasItem
@@ -53,12 +57,14 @@ import com.github.damontecres.wholphin.ui.AspectRatios
 import com.github.damontecres.wholphin.ui.cards.BannerCard
 import com.github.damontecres.wholphin.ui.cards.ExtrasRow
 import com.github.damontecres.wholphin.ui.cards.PersonRow
+import com.github.damontecres.wholphin.ui.components.CsfdMyRating
 import com.github.damontecres.wholphin.ui.components.ErrorMessage
 import com.github.damontecres.wholphin.ui.components.HeaderUtils
 import com.github.damontecres.wholphin.ui.components.LoadingPage
 import com.github.damontecres.wholphin.ui.components.TabDetails
 import com.github.damontecres.wholphin.ui.components.TabRow
 import com.github.damontecres.wholphin.ui.components.TitleOrLogo
+import com.github.damontecres.wholphin.ui.components.csfdId
 import com.github.damontecres.wholphin.ui.formatSeasonNumber
 import com.github.damontecres.wholphin.ui.ifElse
 import com.github.damontecres.wholphin.ui.logTab
@@ -193,6 +199,29 @@ fun SeriesOverviewContent(
                     showLogo = preferences.appPreferences.interfacePreferences.showLogos,
                     modifier = Modifier.padding(start = HeaderUtils.startPadding),
                 )
+                // My ČSFD rating of the selected season, if the ČSFD plugin knows the season
+                seasons.getOrNull(selectedTabIndex)?.takeIf { it.csfdId != null }?.let { season ->
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(start = HeaderUtils.startPadding),
+                    ) {
+                        Text(
+                            text =
+                                season.name
+                                    ?: season.data.indexNumber?.let { formatSeasonNumber(it) }
+                                    ?: "",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        CsfdMyRating(
+                            season,
+                            Modifier.onFocusChanged {
+                                if (it.hasFocus) scope.launch { bringIntoViewRequester.bringIntoView() }
+                            },
+                        )
+                    }
+                }
                 FocusedEpisodeHeader(
                     preferences = preferences,
                     ep = focusedEpisode,
