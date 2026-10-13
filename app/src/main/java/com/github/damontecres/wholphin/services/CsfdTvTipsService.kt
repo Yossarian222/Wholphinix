@@ -110,6 +110,12 @@ class CsfdTvTipsService
             @Volatile
             var myRatings: ConcurrentHashMap<Int, Int>? = null
 
+            /**
+             * Ratings sent from this app, they win over [myRatings]: the plugin may not have re-read the profile yet,
+             * or could not read it at all (then [myRatings] stays unknown)
+             */
+            val sentRatings = ConcurrentHashMap<Int, Int>()
+
             val trivia = ConcurrentHashMap<Int, List<String>>()
 
             /** The last loaded items of each home row, see [rowItems] */
@@ -419,10 +425,18 @@ class CsfdTvTipsService
          */
         suspend fun getMyRatings(): Map<Int, Int> {
             val caches = caches()
-            return caches.myRatings ?: ConcurrentHashMap(get("Csfd/MyRatings", slowClient)?.let(::parseRanks).orEmpty()).also {
-                if (it.isNotEmpty()) caches.myRatings = it
-            }
+            val ratings =
+                caches.myRatings ?: ConcurrentHashMap(get("Csfd/MyRatings", slowClient)?.let(::parseRanks).orEmpty()).also {
+                    if (it.isNotEmpty()) caches.myRatings = it
+                }
+            val sent = caches.sentRatings
+            return if (sent.isEmpty()) ratings else ratings + sent
         }
+
+        private val _ratingChanges = MutableSharedFlow<Pair<Int, Int>>(extraBufferCapacity = 16)
+
+        /** ČSFD id → stars of each rating successfully sent by [rate], so pages showing it can update */
+        val ratingChanges: SharedFlow<Pair<Int, Int>> = _ratingChanges
 
         /**
          * Rate on ČSFD through the plugin's account. Returns null on success, otherwise an error message.
@@ -445,6 +459,8 @@ class CsfdTvTipsService
                         val obj = runCatching { Json.parseToJsonElement(response.body.string()) as? JsonObject }.getOrNull()
                         if (response.isSuccessful && (obj?.field("Ok") as? JsonPrimitive)?.booleanOrNull == true) {
                             caches.myRatings?.set(csfdId, stars)
+                            caches.sentRatings[csfdId] = stars
+                            _ratingChanges.tryEmit(csfdId to stars)
                             null
                         } else {
                             obj?.string("Message") ?: "HTTP ${response.code}"

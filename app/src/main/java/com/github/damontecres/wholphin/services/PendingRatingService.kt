@@ -21,12 +21,16 @@ import javax.inject.Singleton
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * A finished movie (or series) waiting for its ČSFD rating
+ * A finished movie (or season, or series) waiting for its ČSFD rating
+ *
+ * @param title the movie's or series' name
+ * @param seasonNumber for a season, its number, shown after [title] (e.g. "Dark – 2. séria")
  */
 data class PendingRating(
     val itemId: UUID,
     val csfdId: Int,
     val title: String,
+    val seasonNumber: Int? = null,
 )
 
 /**

@@ -98,6 +98,14 @@ class CsfdMyRatingViewModel
                     }
                 }
             }
+            viewModelScope.launch {
+                // Rated elsewhere, e.g. in the prompt after watching shown over this page
+                csfdTvTipsService.ratingChanges.collect { (id, stars) ->
+                    if (id == csfdId.value && ratingSender.pendingStars(id) == null) {
+                        _stars.update { stars }
+                    }
+                }
+            }
         }
 
         fun load(csfdId: Int) {
