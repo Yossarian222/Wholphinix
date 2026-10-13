@@ -1024,6 +1024,9 @@
     <string name="csfd_rating_prompt_title">How did you like %1$s?</string>
     <string name="csfd_rating_prompt_not_now">Not now</string>
     <string name="csfd_rating_prompt_sent">Rating sent to ČSFD</string>
+    <string name="csfd_rating_prompt_season">%1$s – season %2$d</string>
+    <string name="csfd_rating_prompt_sending">Sending…</string>
+    <string name="csfd_rating_prompt_trash_confirm">Really trash?</string>
     <!-- ČSFD watchlist -->
     <string name="csfd_watchlist">Want to see (ČSFD)</string>
     <!-- Claude -->

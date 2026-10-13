@@ -807,6 +807,9 @@
     <string name="csfd_rating_prompt_title">Ako hodnotíš „%1$s“?</string>
     <string name="csfd_rating_prompt_not_now">Teraz nie</string>
     <string name="csfd_rating_prompt_sent">Hodnotenie odoslané na ČSFD</string>
+    <string name="csfd_rating_prompt_season">%1$s – %2$d. séria</string>
+    <string name="csfd_rating_prompt_sending">Odosielam…</string>
+    <string name="csfd_rating_prompt_trash_confirm">Naozaj odpad?</string>
     <!-- ČSFD watchlist -->
     <string name="csfd_watchlist">Chcem vidieť (ČSFD)</string>
     <!-- Claude -->

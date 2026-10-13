@@ -12,6 +12,7 @@ import androidx.compose.ui.unit.dp
 import com.github.damontecres.wholphin.data.ChosenStreams
 import com.github.damontecres.wholphin.data.model.BaseItem
 import com.github.damontecres.wholphin.preferences.UserPreferences
+import com.github.damontecres.wholphin.ui.components.CsfdMyRating
 import com.github.damontecres.wholphin.ui.components.EpisodeName
 import com.github.damontecres.wholphin.ui.components.HeaderUtils
 import com.github.damontecres.wholphin.ui.components.OverviewText
@@ -41,6 +42,11 @@ fun FocusedEpisodeHeader(
                 ep.timeRemainingOrRuntime,
                 Modifier.padding(start = HeaderUtils.startPadding),
             )
+        }
+
+        // My ČSFD rating of the episode, if the ČSFD plugin knows it
+        ep?.let {
+            CsfdMyRating(it, Modifier.padding(start = HeaderUtils.startPadding))
         }
 
         if (dto != null) {
