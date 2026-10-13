@@ -244,6 +244,8 @@ message InterfacePreferences {
   SeasonalThemePreview seasonal_theme_preview = 41;
   // DLNA/UPnP music renderer (music from a phone, e.g. TIDAL via BubbleUPnP), stored inverted so it is on by default
   bool dlna_renderer_disabled = 75;
+  // Who has the (Slovak) name day today next to the date in the header, stored inverted so it is on by default
+  bool name_days_disabled = 76;
 }
 
 message AdvancedPreferences {

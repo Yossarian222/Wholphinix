@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
@@ -20,6 +21,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.os.ConfigurationCompat
@@ -77,6 +79,16 @@ fun formatHeaderDate(
 }
 
 /**
+ * Appends who has the (Slovak) name day on [date] to [dateString], eg `pondelok 13. 10. 2026 · Koloman`
+ *
+ * Returns [dateString] unchanged when nobody has the name day on that day.
+ */
+fun withNameDay(
+    dateString: String,
+    date: LocalDate,
+): String = NameDays.forDate(date)?.let { "$dateString · $it" } ?: dateString
+
+/**
  * The block in the upper right corner of the parent [androidx.compose.foundation.layout.Box] on pages with the nav drawer
  *
  * Shows the date (smaller) above a row with a search (magnifier) button and the [LocalClock] time.
@@ -84,18 +96,23 @@ fun formatHeaderDate(
  *
  * @param showClock whether to show the date & time, the search button is always shown
  * @param onSearchClick called when the search button is clicked
+ * @param showNameDay whether to show who has the name day (meniny) today next to the date
  */
 @Composable
 fun BoxScope.TopRightHeader(
     showClock: Boolean,
     onSearchClick: () -> Unit,
     modifier: Modifier = Modifier,
+    showNameDay: Boolean = true,
 ) {
     val timeString by LocalClock.current.timeString
     val now by LocalClock.current.now
     val locale = ConfigurationCompat.getLocales(LocalConfiguration.current)[0] ?: Locale.getDefault()
     val date = now.toLocalDate()
-    val dateString = remember(date, locale) { formatHeaderDate(date, locale) }
+    val dateString =
+        remember(date, locale, showNameDay) {
+            formatHeaderDate(date, locale).let { if (showNameDay) withNameDay(it, date) else it }
+        }
     // Holiday decorations (only provided on pages with the nav drawer)
     val seasonal = LocalSeasonalState.current
     Column(
@@ -114,6 +131,9 @@ fun BoxScope.TopRightHeader(
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = .85f),
                 style = MaterialTheme.typography.bodyMedium,
                 maxLines = 1,
+                // Long name days must not reach over the page content, cut them off
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = HeaderDateMaxWidth),
             )
         }
         Row(
@@ -182,3 +202,8 @@ fun BoxScope.TopRightHeader(
  * Right margin of the [TopRightHeader], matches the end padding of the page content in the nav drawer
  */
 val HeaderEndPadding = 16.dp
+
+/**
+ * Maximum width of the date line (incl. the name day) in the [TopRightHeader]
+ */
+private val HeaderDateMaxWidth = 340.dp

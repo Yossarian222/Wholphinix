@@ -21,6 +21,8 @@ from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from .namedays import name_day
+
 log = logging.getLogger("jellyfin_mcp.agent")
 
 DEFAULT_MODEL = "claude-sonnet-5-5"
@@ -106,8 +108,13 @@ def local_timezone() -> ZoneInfo:
 
 
 def time_note(now: datetime) -> str:
-    """'Aktuálny čas: sobota 10. 10. 2026, 21:39' - Claude has no clock of its own."""
-    return f"[Aktuálny čas: {DAYS[now.weekday()]} {now.day}. {now.month}. {now.year}, {now:%H:%M}]"
+    """'[Aktuálny čas: sobota 10. 10. 2026, 21:39, meniny má Slavomíra]' - Claude has no clock
+    of its own (nor the Slovak name day calendar)."""
+    note = f"Aktuálny čas: {DAYS[now.weekday()]} {now.day}. {now.month}. {now.year}, {now:%H:%M}"
+    names = name_day(now.date())
+    if names:
+        note += f", meniny {'majú' if ', ' in names else 'má'} {names}"
+    return f"[{note}]"
 
 
 class ChatAgent:
