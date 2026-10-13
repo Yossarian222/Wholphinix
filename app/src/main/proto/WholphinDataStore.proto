@@ -89,6 +89,8 @@ message PlaybackPreferences {
   string external_player = 24;
   bool cinema_mode = 25;
   DpadSeekMode dpad_seek_mode = 26;
+  // Stored inverted so it is on by default
+  bool auto_foreign_subtitles_disabled = 27;
 }
 
 enum DpadSeekMode {

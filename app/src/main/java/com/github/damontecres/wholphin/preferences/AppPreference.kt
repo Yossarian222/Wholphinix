@@ -491,6 +491,19 @@ sealed interface AppPreference<Pref, T> {
                 summaryOff = R.string.disabled,
             )
 
+        val AutoForeignSubtitlesPref =
+            AppSwitchPreference<AppPreferences>(
+                title = R.string.auto_foreign_subtitles,
+                defaultValue = true,
+                // Stored inverted so it is on by default
+                getter = { !it.playbackPreferences.autoForeignSubtitlesDisabled },
+                setter = { prefs, value ->
+                    prefs.updatePlaybackPreferences { autoForeignSubtitlesDisabled = !value }
+                },
+                summaryOn = R.string.auto_foreign_subtitles_summary_on,
+                summaryOff = R.string.disabled,
+            )
+
         val RememberSelectedTab =
             AppSwitchPreference<AppPreferences>(
                 title = R.string.remember_selected_tab,
@@ -1355,6 +1368,7 @@ val advancedPreferences =
                         AppPreference.OneClickPause,
                         AppPreference.ControllerTimeout,
                         AppPreference.CinemaMode,
+                        AppPreference.AutoForeignSubtitlesPref,
                         AppPreference.GlobalContentScale,
                         AppPreference.SkipSegments,
                         AppPreference.DpadSeekModePref,
