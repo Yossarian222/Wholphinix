@@ -261,7 +261,7 @@ class HomeSettingsService
         }
 
         /**
-         * Rows "Pretože ste pozreli …" were added in 1.0.9 (#50): add them once to the end of an already saved layout.
+         * Rows "Pretože ste pozreli …" were added in 1.0.10 (#50): add them once to the end of an already saved layout.
          * Saved locally right away, so a user who removes them later does not get them back.
          */
         private suspend fun addBecauseYouWatchedOnce(
