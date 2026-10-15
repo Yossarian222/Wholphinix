@@ -133,6 +133,7 @@ class PlaybackViewModelTests {
             musicService = mockMusicService,
             pendingRatingService = mockPendingRatingService,
             claudeCompanionService = mockk(relaxed = true),
+            deviceStatusService = mockk(relaxed = true),
             authOkHttpClient = mockk(relaxed = true),
             destination = destination,
         )

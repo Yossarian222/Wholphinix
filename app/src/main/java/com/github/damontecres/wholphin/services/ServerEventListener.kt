@@ -50,6 +50,7 @@ class ServerEventListener
         private val serverRepository: ServerRepository,
         private val navigationManager: NavigationManager,
         private val tvMessageService: TvMessageService,
+        private val deviceStatusService: DeviceStatusService,
     ) : DefaultLifecycleObserver {
         private val activity = (context as AppCompatActivity)
 
@@ -71,6 +72,8 @@ class ServerEventListener
             user: JellyfinUser?,
         ) {
             if (server != null && user != null && api.baseUrl != null && api.accessToken != null) {
+                // CPU, temperature… for Claude / Telka (#52)
+                deviceStatusService.start()
                 (context as AppCompatActivity).lifecycleScope.launchIO {
                     api.sessionApi.postCapabilities(
                         playableMediaTypes = listOf(MediaType.VIDEO),
@@ -120,6 +123,11 @@ class ServerEventListener
                                         }
 
                                         GeneralCommandType.SEND_STRING -> {
+                                            if (message.data?.arguments?.get("String") == DeviceStatusService.REPORT_REQUEST) {
+                                                // jellyfin-mcp wants a fresh device status, nothing to show
+                                                deviceStatusService.reportNow()
+                                                return@onEach
+                                            }
                                             val header = message.data?.arguments["Header"]
                                             val text =
                                                 message.data?.arguments["Text"]

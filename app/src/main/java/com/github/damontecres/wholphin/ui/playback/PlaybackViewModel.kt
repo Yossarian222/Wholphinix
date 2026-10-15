@@ -48,6 +48,7 @@ import com.github.damontecres.wholphin.services.AutoForeignSubtitles
 import com.github.damontecres.wholphin.services.ClaudeCompanionService
 import com.github.damontecres.wholphin.services.DatePlayedService
 import com.github.damontecres.wholphin.services.DeviceProfileService
+import com.github.damontecres.wholphin.services.DeviceStatusService
 import com.github.damontecres.wholphin.services.ImageUrlService
 import com.github.damontecres.wholphin.services.MusicService
 import com.github.damontecres.wholphin.services.NavigationManager
@@ -169,6 +170,7 @@ class PlaybackViewModel
         private val musicService: MusicService,
         private val pendingRatingService: PendingRatingService,
         private val claudeCompanionService: ClaudeCompanionService,
+        private val deviceStatusService: DeviceStatusService,
         @param:AuthOkHttpClient private val authOkHttpClient: OkHttpClient,
         @Assisted private val destination: Destination,
     ) : ViewModel(),
@@ -229,6 +231,11 @@ class PlaybackViewModel
             }
             addCloseable { screensaverService.unregisterPlaybackProbe(this@PlaybackViewModel) }
             addCloseable { claudeCompanionService.onPlaybackStopped() }
+            // How the video plays, for device_status in Telka (#52)
+            viewModelScope.launchIO {
+                _state.collect { st -> deviceStatusService.playback = st.toDeviceSnapshot() }
+            }
+            addCloseable { deviceStatusService.playback = null }
             initJob =
                 viewModelScope.launchIO {
                     addCloseable {
@@ -2015,3 +2022,28 @@ class PlaybackViewModel
             }
         }
     }
+
+/** What [DeviceStatusService] reports about the video on screen: how it plays, codec and size, dropped frames */
+private fun PlaybackState.toDeviceSnapshot(): DeviceStatusService.PlaybackSnapshot? {
+    val playback = currentPlayback ?: return null
+    val stream = playback.mediaSourceInfo.mediaStreams?.firstOrNull { it.type == MediaStreamType.VIDEO }
+    val source =
+        listOfNotNull(
+            stream?.codec?.uppercase(),
+            stream?.let { s -> s.width?.let { w -> s.height?.let { h -> "$w×$h" } } },
+            stream?.videoRangeType?.takeIf { it != VideoRangeType.SDR && it != VideoRangeType.UNKNOWN }?.serialName,
+        ).joinToString(" ")
+    val transcoded =
+        playback.transcodeInfo?.let { info ->
+            listOfNotNull(
+                info.videoCodec?.uppercase(),
+                info.width?.let { w -> info.height?.let { h -> "$w×$h" } },
+            ).joinToString(" ").takeIf { it.isNotBlank() }
+        }
+    return DeviceStatusService.PlaybackSnapshot(
+        title = playback.item.title,
+        method = playback.playMethod.serialName,
+        video = listOfNotNull(source.ifBlank { null }, transcoded?.let { "→ $it" }).joinToString(" ").ifBlank { null },
+        droppedFrames = analyticsState.droppedFrames,
+    )
+}
