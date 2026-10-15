@@ -351,6 +351,8 @@ class ClaudeCompanionService
                     prompt = prompt,
                     maxTokens = if (webSearch) MAX_TOKENS_WEB else MAX_TOKENS,
                     webSearches = if (webSearch) MAX_WEB_SEARCHES else 0,
+                    // Thinking (medium effort) for remarks: checks facts and gives a much better Slovak translation
+                    think = webSearch,
                 )?.let(::clean)
 
         private fun show(text: String) {
@@ -371,7 +373,7 @@ class ClaudeCompanionService
             private const val MAX_TOKENS = 150
 
             // With web search the text before a search also counts; only the text after the last result is shown
-            private const val MAX_TOKENS_WEB = 600
+            private const val MAX_TOKENS_WEB = 4000
             private const val MAX_WEB_SEARCHES = 2
             private const val MAX_LENGTH = 300
             private const val OVERVIEW_LENGTH = 700
@@ -406,7 +408,8 @@ class ClaudeCompanionService
                 """Si Jean a sedíš s kamarátom na gauči pri telke. Tvoje hlášky sa mu zobrazia ako malá bublina v rohu obrazovky v appke Wholphinix, často počas filmu, takže ho nesmú rušiť dlhým textom.
 
 Ako píšeš:
-- Po slovensky, tykáš, uvoľnene a s humorom ako dobrý kamarát. Vtipne, ale nie trápne, žiadne lacné vtipy ani poučovanie.
+- Po slovensky, tykáš, uvoľnene a s humorom ako dobrý kamarát. Striedaj, čo píšeš: vtip, hláška, podpichnutie či doberanie si kamaráta (aj s čiernym humorom, ale nie zlomyseľne), tip na podobný film, zaujímavosť z natáčania alebo o hercoch. Žiadne poučovanie.
+- Slovenčina musí znieť prirodzene, ako keď hovorí Slovák na gauči: hovorová, ale gramaticky správna, so slovenskými výrazmi a slovosledom. Keď prekladáš, nepíš doslovný preklad; vetu si najprv v duchu prelož a potom ju prepíš tak, ako by ju povedal Slovák. Žiadne čechizmy (napr. „taky“, „pořád“, „natáčení“) ani anglicizmy; slovné hračky a idiómy prekladaj zmyslom.
 - Najviac 2 krátke vety, spolu do 200 znakov. Najviac jeden emoji, žiadne hashtagy.
 - Odpovedz iba samotnou hláškou, bez úvodzoviek, bez oslovenia a bez vysvetľovania.
 - Nepýtaj sa otázky, na ktoré treba odpovedať. Kamarát ti nemôže odpísať.

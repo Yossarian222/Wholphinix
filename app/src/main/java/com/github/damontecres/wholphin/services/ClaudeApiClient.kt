@@ -55,6 +55,7 @@ class ClaudeApiClient
             prompt: String,
             maxTokens: Int = 150,
             webSearches: Int = 0,
+            think: Boolean = false,
         ): String? =
             withContext(Dispatchers.IO) {
                 val modelId = modelId(model)
@@ -62,10 +63,12 @@ class ClaudeApiClient
                     buildJsonObject {
                         put("model", modelId)
                         put("max_tokens", maxTokens)
-                        // A short quip: no extended thinking, so the whole max_tokens goes to the answer
+                        // Short texts: no thinking by default, so the whole max_tokens goes to the answer; [think] lets
+                        // Sonnet think (Haiku never does)
                         when (model) {
                             ClaudeModel.CLAUDE_SONNET -> {
-                                putJsonObject("thinking") { put("type", "between_tools") }
+                                // Without the field Sonnet thinks adaptively, between_tools turns thinking off
+                                if (!think) putJsonObject("thinking") { put("type", "between_tools") }
                                 // Server-side fallback on a safeguard refusal (Claude API only)
                                 put("fallbacks", "default")
                             }
@@ -74,7 +77,7 @@ class ClaudeApiClient
                                 putJsonObject("thinking") { put("type", "disabled") }
                             }
                         }
-                        putJsonObject("output_config") { put("effort", "low") }
+                        putJsonObject("output_config") { put("effort", if (think) "medium" else "low") }
                         // The system prompt is the same in every request: cache it (only takes effect once it is
                         // above the model's minimum cacheable length, otherwise it is ignored)
                         putJsonArray("system") {
