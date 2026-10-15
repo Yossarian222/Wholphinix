@@ -66,7 +66,7 @@ class CsfdTvTipsRowTest {
         every { seerrService.active } returns flowOf(false)
         val serverRepository = mockk<ServerRepository>(relaxed = true)
         every { serverRepository.current } returns MutableStateFlow(null)
-        return CsfdTvTipsService(api, client, seerrService, serverRepository, scope)
+        return CsfdTvTipsService(api, client, seerrService, serverRepository, scope, mockk(relaxed = true))
     }
 
     @Test

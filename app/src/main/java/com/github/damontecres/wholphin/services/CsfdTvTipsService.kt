@@ -90,6 +90,7 @@ class CsfdTvTipsService
         private val seerrService: SeerrService,
         private val serverRepository: ServerRepository,
         @param:IoCoroutineScope private val scope: CoroutineScope,
+        private val watchlistArrivals: WatchlistArrivalsService,
     ) {
         // The plugin downloads 20 ranking pages from ČSFD on its first call of the week
         private val slowClient by lazy { okHttpClient.newBuilder().readTimeout(3, TimeUnit.MINUTES).build() }
@@ -192,7 +193,7 @@ class CsfdTvTipsService
         ): List<BaseItem> =
             rowItems("watchlist $limit/$missing", userId, useSeries, throwIfUnavailable, timeout) {
                 get("Csfd/Watchlist?limit=$limit&missing=$missing", slowClient)?.let(::parseTips)
-            }
+            }.also(watchlistArrivals::onWatchlistLoaded)
 
         /**
          * Items for the seasonal home row (eg "🎃 Na Halloween"): the plugin's curated titles for the holiday [event]

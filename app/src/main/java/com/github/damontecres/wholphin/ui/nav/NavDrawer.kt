@@ -6,6 +6,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateIntOffsetAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Home
@@ -75,7 +77,9 @@ import com.github.damontecres.wholphin.services.NavDrawerService
 import com.github.damontecres.wholphin.services.NavigationManager
 import com.github.damontecres.wholphin.services.SetupDestination
 import com.github.damontecres.wholphin.services.SetupNavigationManager
+import com.github.damontecres.wholphin.services.WatchlistArrivalsService
 import com.github.damontecres.wholphin.ui.FontAwesome
+import com.github.damontecres.wholphin.ui.components.CsfdRed
 import com.github.damontecres.wholphin.ui.components.TopRightHeader
 import com.github.damontecres.wholphin.ui.ifElse
 import com.github.damontecres.wholphin.ui.launchDefault
@@ -107,8 +111,12 @@ class NavDrawerViewModel
         val setupNavigationManager: SetupNavigationManager,
         val backdropService: BackdropService,
         private val musicService: MusicService,
+        watchlistArrivals: WatchlistArrivalsService,
     ) : ViewModel() {
         val serviceState = navDrawerService.state
+
+        /** A film from "Chcem vidieť" was downloaded and not seen yet: red dot at the item (#48) */
+        val watchlistHasNew = watchlistArrivals.hasNew
 
         private val _state = MutableStateFlow(NavDrawerState())
         val state: StateFlow<NavDrawerState> = _state
@@ -328,6 +336,7 @@ fun NavDrawer(
         focusRequester.requestFocus()
     }
     val serviceState by viewModel.serviceState.collectAsState()
+    val watchlistHasNew by viewModel.watchlistHasNew.collectAsState()
     val state by viewModel.state.collectAsState()
     val moreExpanded = state.moreExpanded
     // A negative index is a built-in page, >=0 is a library
@@ -482,6 +491,7 @@ fun NavDrawer(
                                 selected = selectedIndex == index,
                                 moreExpanded = moreExpanded,
                                 drawerOpen = isOpen,
+                                showDot = watchlistHasNew && it is NavDrawerItem.CsfdWatchlist,
                                 interactionSource = interactionSource,
                                 onClick = {
                                     viewModel.onClickDrawerItem(index, it)
@@ -503,6 +513,10 @@ fun NavDrawer(
                                     selected = false,
                                     moreExpanded = moreExpanded,
                                     drawerOpen = isOpen,
+                                    // The watchlist hidden under "More": show its dot there until expanded
+                                    showDot =
+                                        watchlistHasNew && !moreExpanded &&
+                                            serviceState.moreItems.any { it is NavDrawerItem.CsfdWatchlist },
                                     interactionSource = interactionSource,
                                     onClick = {
                                         viewModel.onClickDrawerItem(index, NavDrawerItem.More)
@@ -526,6 +540,7 @@ fun NavDrawer(
                                     selected = selectedIndex == adjustedIndex,
                                     moreExpanded = moreExpanded,
                                     drawerOpen = isOpen,
+                                    showDot = watchlistHasNew && it is NavDrawerItem.CsfdWatchlist,
                                     onClick = {
                                         viewModel.onClickDrawerItem(
                                             adjustedIndex,
@@ -673,6 +688,7 @@ fun NavigationDrawerScope.NavItem(
     modifier: Modifier = Modifier,
     interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
     containerColor: Color = Color.Unspecified,
+    showDot: Boolean = false,
 ) {
     val context = LocalContext.current
     val useFont = library !is ServerNavDrawerItem || library.type != CollectionType.LIVETV
@@ -740,6 +756,17 @@ fun NavigationDrawerScope.NavItem(
                         contentDescription = null,
                         tint = color,
                         modifier = Modifier.size(DrawerIconSize),
+                    )
+                }
+                if (showDot) {
+                    // Small ČSFD red dot at the top right of the icon, also visible with the drawer collapsed
+                    Box(
+                        modifier =
+                            Modifier
+                                .align(Alignment.TopEnd)
+                                .offset(x = (-4).dp, y = 4.dp)
+                                .size(9.dp)
+                                .background(CsfdRed, CircleShape),
                     )
                 }
             }

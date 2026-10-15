@@ -30,6 +30,7 @@ import com.github.damontecres.wholphin.data.ServerRepository
 import com.github.damontecres.wholphin.data.model.BaseItem
 import com.github.damontecres.wholphin.services.CsfdTvTipsService
 import com.github.damontecres.wholphin.services.NavigationManager
+import com.github.damontecres.wholphin.services.WatchlistArrivalsService
 import com.github.damontecres.wholphin.ui.cards.GridCard
 import com.github.damontecres.wholphin.ui.components.CircularProgress
 import com.github.damontecres.wholphin.ui.components.ErrorMessage
@@ -51,6 +52,7 @@ class CsfdWatchlistViewModel
     constructor(
         private val serverRepository: ServerRepository,
         private val csfdTvTipsService: CsfdTvTipsService,
+        private val watchlistArrivals: WatchlistArrivalsService,
         val navigationManager: NavigationManager,
     ) : ViewModel() {
         private val _state = MutableStateFlow<DataLoadingState<List<BaseItem>>>(DataLoadingState.Pending)
@@ -77,6 +79,8 @@ class CsfdWatchlistViewModel
                             timeout = 90.seconds,
                         )
                     _state.update { DataLoadingState.Success(items) }
+                    // The newly downloaded films are on the screen now, the red dot in the nav drawer goes away (#48)
+                    watchlistArrivals.markSeen()
                 } catch (ex: Exception) {
                     Timber.e(ex, "Error fetching the ČSFD watchlist")
                     _state.update { DataLoadingState.Error(ex) }
