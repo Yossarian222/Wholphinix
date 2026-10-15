@@ -69,6 +69,8 @@ import com.github.damontecres.wholphin.ui.formatBitrate
 import com.github.damontecres.wholphin.ui.isNotNullOrBlank
 import com.github.damontecres.wholphin.ui.playback.SimpleMediaStream
 import com.github.damontecres.wholphin.ui.roundMinutes
+import com.github.damontecres.wholphin.ui.util.appear
+import com.github.damontecres.wholphin.ui.util.rememberAppearProgress
 import com.github.damontecres.wholphin.util.ExceptionHandler
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -230,6 +232,7 @@ fun DialogPopup(
             onDismissRequest = onDismissRequest,
             properties = properties,
         ) {
+            val appearProgress = rememberAppearProgress()
             DialogPopupContent(
                 title = title,
                 dialogItems = dialogItems,
@@ -238,7 +241,7 @@ fun DialogPopup(
                 dismissOnClick = dismissOnClick,
                 elevation = elevation,
                 modifier =
-                    Modifier.onKeyEvent { event ->
+                    Modifier.appear(appearProgress).onKeyEvent { event ->
                         val code = event.nativeKeyEvent.keyCode
                         if (event.nativeKeyEvent.action == KeyEvent.ACTION_UP &&
                             code in
@@ -380,6 +383,7 @@ fun ScrollableDialog(
                 usePlatformDefaultWidth = false,
             ),
     ) {
+        val appearProgress = rememberAppearProgress()
         LazyColumn(
             state = columnState,
             contentPadding = PaddingValues(16.dp),
@@ -387,6 +391,7 @@ fun ScrollableDialog(
             content = content,
             modifier =
                 Modifier
+                    .appear(appearProgress)
                     .width(width)
                     .heightIn(max = maxHeight)
                     .focusable()
@@ -426,9 +431,11 @@ fun BasicDialog(
         onDismissRequest = onDismissRequest,
         properties = properties,
     ) {
+        val appearProgress = rememberAppearProgress()
         Box(
             modifier =
                 Modifier
+                    .appear(appearProgress)
                     .shadow(elevation = elevation, shape = RoundedCornerShape(8.dp))
                     .background(
                         MaterialTheme.colorScheme.surfaceColorAtElevation(elevation),

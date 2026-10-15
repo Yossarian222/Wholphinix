@@ -33,6 +33,7 @@ import com.github.damontecres.wholphin.ui.launchIO
 import com.github.damontecres.wholphin.ui.seasonal.SeasonalOverlay
 import com.github.damontecres.wholphin.ui.seasonal.SeasonalTheme
 import com.github.damontecres.wholphin.ui.seasonal.rememberSeasonalState
+import com.github.damontecres.wholphin.ui.util.Motion
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import org.jellyfin.sdk.model.api.BaseItemKind
@@ -156,6 +157,10 @@ fun ApplicationContent(
                     rememberSaveableStateHolderNavEntryDecorator(),
                     rememberViewModelStoreNavEntryDecorator(),
                 ),
+            // Short crossfade with a small slide instead of the default long slide of the whole screen (#49)
+            transitionSpec = { Motion.screenForward() },
+            popTransitionSpec = { Motion.screenBack() },
+            predictivePopTransitionSpec = { Motion.screenBack() },
             entryProvider = { key ->
                 key as Destination
                 val contentKey = "${key}_${server?.id}_${user?.id}"

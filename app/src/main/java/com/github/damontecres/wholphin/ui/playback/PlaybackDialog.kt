@@ -49,6 +49,8 @@ import com.github.damontecres.wholphin.ui.playback.overlay.BottomDialog
 import com.github.damontecres.wholphin.ui.playback.overlay.BottomDialogItem
 import com.github.damontecres.wholphin.ui.playback.overlay.PlaybackAction
 import com.github.damontecres.wholphin.ui.tryRequestFocus
+import com.github.damontecres.wholphin.ui.util.appear
+import com.github.damontecres.wholphin.ui.util.rememberAppearProgress
 import kotlinx.coroutines.launch
 import kotlin.time.Duration
 
@@ -313,9 +315,11 @@ fun SubtitleChoiceBottomDialog(
             window.setDimAmount(0f) // Remove dimmed background of ongoing playback
         }
 
+        val appearProgress = rememberAppearProgress()
         Box(
             modifier =
                 Modifier
+                    .appear(appearProgress)
                     .wrapContentSize()
                     .padding(8.dp)
                     .background(
@@ -471,9 +475,11 @@ fun StreamChoiceBottomDialog(
             window.setDimAmount(0f) // Remove dimmed background of ongoing playback
         }
 
+        val appearProgress = rememberAppearProgress()
         Box(
             modifier =
                 Modifier
+                    .appear(appearProgress)
                     .wrapContentSize()
                     .padding(8.dp)
                     .background(

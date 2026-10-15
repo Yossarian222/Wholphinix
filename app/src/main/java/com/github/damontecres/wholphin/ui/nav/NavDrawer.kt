@@ -3,9 +3,7 @@ package com.github.damontecres.wholphin.ui.nav
 import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.animateIntOffsetAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.focusGroup
@@ -83,11 +81,11 @@ import com.github.damontecres.wholphin.ui.ifElse
 import com.github.damontecres.wholphin.ui.launchDefault
 import com.github.damontecres.wholphin.ui.preferences.PreferenceScreenOption
 import com.github.damontecres.wholphin.ui.setup.UserIconCardImage
-import com.github.damontecres.wholphin.ui.spacedByWithFooter
 import com.github.damontecres.wholphin.ui.theme.LocalNavScale
 import com.github.damontecres.wholphin.ui.theme.LocalTheme
 import com.github.damontecres.wholphin.ui.toServerString
 import com.github.damontecres.wholphin.ui.tryRequestFocus
+import com.github.damontecres.wholphin.ui.util.Motion
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -352,11 +350,8 @@ fun NavDrawer(
                     },
                 y = 0,
             ),
-        animationSpec =
-            spring(
-                stiffness = DrawerAnimationStiffness,
-                visibilityThreshold = IntOffset.VisibilityThreshold,
-            ),
+        // Same timing as the drawer width (DrawerSheet), so the content moves together with it
+        animationSpec = Motion.drawer(),
     )
 
     ModalNavigationDrawer(
@@ -365,7 +360,7 @@ fun NavDrawer(
         drawerContent = { drawerValue ->
             val isOpen = drawerValue.isOpen
             val spacedBy = 4.dp
-            // The first item in the list (Home), focused when entering the list from above
+            // Home (second item, below Settings), focused when entering the list from above
             val searchFocusRequester = remember { FocusRequester() }
 
             ProvideTextStyle(MaterialTheme.typography.labelMedium) {
@@ -419,7 +414,7 @@ fun NavDrawer(
                         state = navDrawerListState,
                         contentPadding = PaddingValues(0.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedByWithFooter(spacedBy),
+                        verticalArrangement = Arrangement.spacedBy(spacedBy),
                         modifier =
                             Modifier
                                 .focusGroup()
@@ -435,6 +430,25 @@ fun NavDrawer(
                                 }.fillMaxHeight(),
                     ) {
                         // Search is in the top right corner (magnifier next to the clock), not in the drawer
+                        // Settings right above Home: one press up from Home opens them (#51)
+                        item {
+                            val interactionSource = remember { MutableInteractionSource() }
+                            IconNavItem(
+                                text = stringResource(R.string.settings),
+                                icon = Icons.Default.Settings,
+                                selected = false,
+                                drawerOpen = isOpen,
+                                interactionSource = interactionSource,
+                                onClick = {
+                                    viewModel.navigationManager.navigateTo(
+                                        Destination.Settings(
+                                            PreferenceScreenOption.BASIC,
+                                        ),
+                                    )
+                                },
+                                modifier = Modifier,
+                            )
+                        }
                         item {
                             val interactionSource = remember { MutableInteractionSource() }
                             IconNavItem(
@@ -533,24 +547,6 @@ fun NavDrawer(
                                             ),
                                 )
                             }
-                        }
-                        item {
-                            val interactionSource = remember { MutableInteractionSource() }
-                            IconNavItem(
-                                text = stringResource(R.string.settings),
-                                icon = Icons.Default.Settings,
-                                selected = false,
-                                drawerOpen = isOpen,
-                                interactionSource = interactionSource,
-                                onClick = {
-                                    viewModel.navigationManager.navigateTo(
-                                        Destination.Settings(
-                                            PreferenceScreenOption.BASIC,
-                                        ),
-                                    )
-                                },
-                                modifier = Modifier,
-                            )
                         }
                     }
                 }

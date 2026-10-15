@@ -1,6 +1,8 @@
 package com.github.damontecres.wholphin.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -33,6 +35,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.github.damontecres.wholphin.services.TvMessage
 import com.github.damontecres.wholphin.services.TvMessageService
+import com.github.damontecres.wholphin.ui.util.Motion
 
 /** Claude's terracotta, for the badge */
 private val ClaudeAccent = Color(0xFFD97757)
@@ -57,8 +60,10 @@ fun TvMessageOverlay(
     Box(modifier = modifier, contentAlignment = Alignment.TopEnd) {
         AnimatedVisibility(
             visible = current != null,
-            enter = fadeIn() + slideInHorizontally { it / 3 },
-            exit = fadeOut() + slideOutHorizontally { it / 3 },
+            enter =
+                fadeIn(tween(Motion.DIALOG_MILLIS)) +
+                    slideInHorizontally(tween(Motion.DIALOG_MILLIS + 80, easing = FastOutSlowInEasing)) { it / 3 },
+            exit = fadeOut(tween(Motion.DIALOG_MILLIS)) + slideOutHorizontally(tween(Motion.DIALOG_MILLIS)) { it / 3 },
             modifier = Modifier.padding(top = 32.dp, end = 40.dp),
         ) {
             shown?.let { TvMessageCard(it) }

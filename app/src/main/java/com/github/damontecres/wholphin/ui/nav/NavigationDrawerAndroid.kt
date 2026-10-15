@@ -22,10 +22,7 @@
 package com.github.damontecres.wholphin.ui.nav
 
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -49,7 +46,6 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.DrawerState
 import androidx.tv.material3.DrawerValue
@@ -60,6 +56,7 @@ import androidx.tv.material3.NavigationDrawerItemDefaults
 import androidx.tv.material3.NavigationDrawerScope
 import androidx.tv.material3.rememberDrawerState
 import com.github.damontecres.wholphin.ui.theme.LocalNavScale
+import com.github.damontecres.wholphin.ui.util.Motion
 
 /**
  * This is a re-implementation of [androidx.tv.material3.ModalNavigationDrawer].
@@ -108,13 +105,8 @@ private fun DrawerSheet(
     val internalModifier =
         Modifier
             .focusRequester(focusRequester)
-            .animateContentSize(
-                animationSpec =
-                    spring(
-                        stiffness = DrawerAnimationStiffness,
-                        visibilityThreshold = IntSize.VisibilityThreshold,
-                    ),
-            ).fillMaxHeight()
+            .animateContentSize(animationSpec = Motion.drawer())
+            .fillMaxHeight()
             // adding passed-in modifier here to ensure animateContentSize is called before other
             // size based modifiers.
             .then(modifier)
@@ -150,7 +142,6 @@ internal val CollapsedDrawerItemWidth = 64.dp
 internal val ExpandedDrawerItemWidth = 224.dp
 internal val DrawerIconSize = 24.dp
 internal val DrawerIconPadding = (ListItemDefaults.IconSize - DrawerIconSize) / 2
-internal val DrawerAnimationStiffness = Spring.StiffnessMedium
 
 @Composable
 internal fun NavigationDrawerScope.NavigationDrawerItem(
