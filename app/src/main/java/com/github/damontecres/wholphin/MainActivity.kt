@@ -60,6 +60,7 @@ import com.github.damontecres.wholphin.services.tvprovider.TvProviderSchedulerSe
 import com.github.damontecres.wholphin.ui.CoilConfig
 import com.github.damontecres.wholphin.ui.LocalImageUrlService
 import com.github.damontecres.wholphin.ui.collectLatestIn
+import com.github.damontecres.wholphin.ui.components.IntroVideo
 import com.github.damontecres.wholphin.ui.components.LoadingPage
 import com.github.damontecres.wholphin.ui.launchDefault
 import com.github.damontecres.wholphin.ui.nav.Destination
@@ -168,6 +169,7 @@ class MainActivity : AppCompatActivity() {
 
     private var signInAuto = true
     private var playerBackend: PlayerBackend? = null
+    private var showIntro by mutableStateOf(false)
 
     private val json =
         Json {
@@ -243,6 +245,8 @@ class MainActivity : AppCompatActivity() {
             playerBackend = prefs.playbackPreferences.playerBackend
         }
 
+        // Intro only on a fresh launch from the launcher, not on restore or external play intents
+        showIntro = savedInstanceState == null && intent?.action == Intent.ACTION_MAIN
         viewModel.appStart(intent)
         setContent {
             MaterialTheme(colorScheme = PurpleThemeColors.darkScheme) {
@@ -304,6 +308,9 @@ class MainActivity : AppCompatActivity() {
                             }
                         }
                     }
+                    if (showIntro) {
+                        IntroVideo(onFinished = { showIntro = false })
+                    }
                 }
             }
         }
@@ -311,6 +318,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         claudeCompanionService.onUserActivity()
+        if (showIntro) {
+            // Any key skips the intro; swallow it so it doesn't reach the UI underneath
+            if (event.action == KeyEvent.ACTION_UP) showIntro = false
+            return true
+        }
         if (screensaverService.state.value.run { show || showDim }) {
             screensaverService.stop(false)
             screensaverService.pulse()
