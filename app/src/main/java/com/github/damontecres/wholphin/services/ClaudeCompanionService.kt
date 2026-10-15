@@ -171,15 +171,14 @@ class ClaudeCompanionService
                             Occasion.START -> {
                                 appendLine(
                                     "Práve sme si pustili toto a beží to pár minút. Napíš jednu krátku hlášku: " +
-                                        "vtipnú poznámku alebo zaujímavosť o filme, tvorcoch alebo hercoch. " +
-                                        "Zaujímavosť ber iba z podkladov nižšie.",
+                                        "vtipnú poznámku alebo zaujímavosť o filme, tvorcoch alebo hercoch.",
                                 )
                             }
 
                             Occasion.PAUSE -> {
                                 appendLine(
                                     "Dal som si pauzu (asi si idem po pivo). Povedz mi jednu krátku zaujímavosť " +
-                                        "k tomuto, bez spoilerov. Iba z podkladov nižšie.",
+                                        "k tomuto, bez spoilerov.",
                                 )
                             }
                         }
@@ -188,15 +187,16 @@ class ClaudeCompanionService
                         }
                         if (!facts.contains(TRIVIA_HEADER)) {
                             appendLine(
-                                "K tomuto nemám žiadne zaujímavosti z ČSFD, tak žiadnu nevymýšľaj: radšej zažartuj " +
-                                    "o žánri, hercoch (iba to, kto hrá koho) alebo o situácii na gauči.",
+                                "K tomuto nemám zaujímavosti z ČSFD: nájdi si jednu na webe, alebo zažartuj " +
+                                    "o žánri, hercoch (iba to, kto hrá koho) či o situácii na gauči.",
                             )
                         }
                         appendLine()
                         appendLine("Podklady:")
                         append(facts)
                     }
-                val text = ask(settings, prompt) ?: return
+                // Trivia may be checked or found on the web (#53)
+                val text = ask(settings, prompt, webSearch = true) ?: return
                 // The film may have changed while waiting for the answer
                 if (itemId != currentItemId) return
                 remarksForItem++
@@ -340,6 +340,7 @@ class ClaudeCompanionService
         private suspend fun ask(
             settings: ClaudePreferences,
             prompt: String,
+            webSearch: Boolean = false,
         ): String? =
             claudeApiClient
                 .complete(
@@ -348,7 +349,8 @@ class ClaudeCompanionService
                     model = ClaudeModel.CLAUDE_SONNET,
                     system = SYSTEM_PROMPT,
                     prompt = prompt,
-                    maxTokens = MAX_TOKENS,
+                    maxTokens = if (webSearch) MAX_TOKENS_WEB else MAX_TOKENS,
+                    webSearches = if (webSearch) MAX_WEB_SEARCHES else 0,
                 )?.let(::clean)
 
         private fun show(text: String) {
@@ -367,6 +369,10 @@ class ClaudeCompanionService
             private val HOME_TIP_INTERVAL = 30.minutes
             private const val HOME_TIP_MOVIES = 20
             private const val MAX_TOKENS = 150
+
+            // With web search the text before a search also counts; only the text after the last result is shown
+            private const val MAX_TOKENS_WEB = 600
+            private const val MAX_WEB_SEARCHES = 2
             private const val MAX_LENGTH = 300
             private const val OVERVIEW_LENGTH = 700
             private const val TRIVIA_LENGTH = 400
@@ -409,9 +415,11 @@ Ako píšeš:
 
 Obsah:
 - Nikdy neprezrádzaj dej: žiadne zvraty, odhalenia ani koniec, ani pri starých a známych filmoch. Môžeš hovoriť o natáčaní, hercoch, tvorcoch, hudbe, ohlase či dobe vzniku.
-- Fakty (o natáčaní, hercoch, tvorcoch, oceneniach, číslach, menách, dátumoch) ber VÝHRADNE z dodaných podkladov. Z vlastnej pamäti nepridávaj žiadne fakty, ani keď si myslíš, že ich poznáš - často sa mýlia a kamarát to spozná. Keď v podkladoch nič zaujímavé nie je, len zažartuj bez faktov.
-- Zaujímavosť z podkladov prerozprávaj verne: nemeň mená, čísla ani súvislosti a nepripájaj k nej nič, čo v nej nie je.
-- Podklady (popis, zaujímavosti z ČSFD) môžu byť po česky. Ty píš vždy po slovensky.
+- Fakty (o natáčaní, hercoch, tvorcoch, oceneniach, číslach, menách, dátumoch) ber z dodaných podkladov, alebo si ich nájdi či over cez webové vyhľadávanie (napr. Wikipedia, IMDb trivia, ČSFD). Z vlastnej pamäti bez overenia žiadne fakty nepridávaj - často sa mýlia a kamarát to spozná. Keď nič isté nenájdeš, len zažartuj bez faktov.
+- Pri vyhľadávaní hľadaj presne tento film (názov a rok), nie iný s podobným názvom.
+- Zaujímavosť prerozprávaj verne: nemeň mená, čísla, roky ani súvislosti a nepripájaj k nej nič, čo v zdroji nie je. Skráť ju, ale nemeň jej význam.
+- Zdroje (podklady z ČSFD, web) bývajú po česky alebo anglicky. Prelož ich do prirodzenej, gramaticky správnej slovenčiny presne: idiómy a slovné hračky prelož zmyslom, nie doslovne; mená ľudí nechaj v origináli; názvy filmov píš tak, ako sú v podkladoch. Žiadne čechizmy ani anglicizmy.
+- Neuvádzaj zdroje, odkazy ani to, že si niečo hľadal.
 - Pri odporúčaní na večer vyber len film zo zoznamu, ktorý dostaneš, a napíš jeho názov aj rok."""
         }
     }

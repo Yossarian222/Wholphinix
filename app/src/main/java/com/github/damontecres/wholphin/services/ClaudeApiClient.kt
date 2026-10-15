@@ -42,6 +42,9 @@ class ClaudeApiClient
                 .callTimeout(15, TimeUnit.SECONDS)
                 .build()
 
+        // Searching the web takes longer
+        private val searchClient = client.newBuilder().callTimeout(60, TimeUnit.SECONDS).build()
+
         /**
          * Returns Claude's text reply, or null on any error (logged without the key) or a refusal.
          */
@@ -51,6 +54,7 @@ class ClaudeApiClient
             system: String,
             prompt: String,
             maxTokens: Int = 150,
+            webSearches: Int = 0,
         ): String? =
             withContext(Dispatchers.IO) {
                 val modelId = modelId(model)
@@ -80,6 +84,16 @@ class ClaudeApiClient
                                 putJsonObject("cache_control") { put("type", "ephemeral") }
                             }
                         }
+                        if (webSearches > 0) {
+                            // Server-side web search, runs at Anthropic (no tool loop here)
+                            putJsonArray("tools") {
+                                addJsonObject {
+                                    put("type", WEB_SEARCH_TOOL)
+                                    put("name", "web_search")
+                                    put("max_uses", webSearches)
+                                }
+                            }
+                        }
                         putJsonArray("messages") {
                             addJsonObject {
                                 put("role", "user")
@@ -98,7 +112,7 @@ class ClaudeApiClient
                         }.post(body.toString().toRequestBody(JSON))
                         .build()
                 try {
-                    client.newCall(request).execute().use { response ->
+                    (if (webSearches > 0) searchClient else client).newCall(request).execute().use { response ->
                         val text = response.body.string()
                         if (!response.isSuccessful) {
                             Timber.w("Claude API: HTTP %s %s", response.code, errorSummary(text))
@@ -119,7 +133,9 @@ class ClaudeApiClient
             private const val API_URL = "https://api.anthropic.com/v1/messages"
             private const val API_VERSION = "2023-06-01"
             private const val FALLBACK_BETA = "server-side-fallback-2026-07-01"
+            private const val WEB_SEARCH_TOOL = "web_search_20260209"
             private val JSON = "application/json".toMediaType()
+            private val TOOL_BLOCKS = setOf("server_tool_use", "web_search_tool_result")
 
             fun modelId(model: ClaudeModel): String =
                 when (model) {
@@ -135,15 +151,24 @@ class ClaudeApiClient
                     Timber.i("Claude API: refusal")
                     return null
                 }
-                // Read blocks by type: a response may also contain (empty) thinking blocks
-                return (obj["content"] as? JsonArray)
-                    ?.mapNotNull { block ->
+                // Read blocks by type: a response may also contain (empty) thinking blocks, and with web search
+                // server_tool_use / web_search_tool_result blocks; only the text after the last result is the answer
+                // (text before a search is a preamble like "pozriem sa…")
+                val content = (obj["content"] as? JsonArray)?.toList() ?: return null
+                val lastResult =
+                    content.indexOfLast {
+                        val type = ((it as? JsonObject)?.get("type") as? JsonPrimitive)?.contentOrNull
+                        type != null && type in TOOL_BLOCKS
+                    }
+                return content
+                    .drop(lastResult + 1)
+                    .mapNotNull { block ->
                         (block as? JsonObject)
                             ?.takeIf { (it["type"] as? JsonPrimitive)?.contentOrNull == "text" }
                             ?.let { (it["text"] as? JsonPrimitive)?.contentOrNull }
-                    }?.joinToString("")
-                    ?.trim()
-                    ?.takeIf { it.isNotEmpty() }
+                    }.joinToString("")
+                    .trim()
+                    .takeIf { it.isNotEmpty() }
             }
 
             /** Error type and a short message, for the log */
