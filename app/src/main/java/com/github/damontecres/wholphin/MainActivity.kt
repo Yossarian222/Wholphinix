@@ -1,9 +1,12 @@
 package com.github.damontecres.wholphin
 
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.res.Configuration
 import android.os.Bundle
+import android.os.PowerManager
 import android.view.KeyEvent
 import android.view.WindowManager
 import android.widget.Toast
@@ -22,7 +25,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.core.content.ContextCompat
 import androidx.datastore.core.DataStore
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewModelScope
@@ -60,7 +65,7 @@ import com.github.damontecres.wholphin.services.tvprovider.TvProviderSchedulerSe
 import com.github.damontecres.wholphin.ui.CoilConfig
 import com.github.damontecres.wholphin.ui.LocalImageUrlService
 import com.github.damontecres.wholphin.ui.collectLatestIn
-import com.github.damontecres.wholphin.ui.components.IntroVideo
+import com.github.damontecres.wholphin.ui.components.IntroHost
 import com.github.damontecres.wholphin.ui.components.LoadingPage
 import com.github.damontecres.wholphin.ui.launchDefault
 import com.github.damontecres.wholphin.ui.nav.Destination
@@ -171,6 +176,22 @@ class MainActivity : AppCompatActivity() {
     private var playerBackend: PlayerBackend? = null
     private var showIntro by mutableStateOf(false)
 
+    // Set when the screen turns off (TV switched off via CEC), so the intro replays on wake
+    private var screenWentOff = false
+    private val screenOffReceiver =
+        object : BroadcastReceiver() {
+            override fun onReceive(
+                context: Context,
+                intent: Intent,
+            ) {
+                // Only if we were on screen; a screen off while another app is in front must not
+                // replay the intro on a later ordinary switch back
+                val visible = lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+                Timber.d("Screen off, visible=%s", visible)
+                if (visible) screenWentOff = true
+            }
+        }
+
     private val json =
         Json {
             classDiscriminator = "_type"
@@ -183,6 +204,13 @@ class MainActivity : AppCompatActivity() {
         instance = this
         Timber.i("MainActivity.onCreate: savedInstanceState is null=${savedInstanceState == null}")
         lifecycle.addObserver(playbackLifecycleObserver)
+        // ACTION_SCREEN_OFF is only delivered to runtime-registered receivers
+        ContextCompat.registerReceiver(
+            this,
+            screenOffReceiver,
+            IntentFilter(Intent.ACTION_SCREEN_OFF),
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
 
         val backStackStr = savedInstanceState?.getString(KEY_BACK_STACK)
         val restoredBackStack =
@@ -252,64 +280,63 @@ class MainActivity : AppCompatActivity() {
             MaterialTheme(colorScheme = PurpleThemeColors.darkScheme) {
                 Surface(Modifier.fillMaxSize()) {
                     val userPreferences by userPreferencesService.flow.collectAsState(null)
-                    if (userPreferences == null) {
-                        // Show loading page if it is taking a while to get app preferences
-                        var showLoading by remember { mutableStateOf(false) }
-                        LaunchedEffect(Unit) {
-                            delay(500.milliseconds)
-                            Timber.i("Showing loading page")
-                            showLoading = true
-                        }
-                        if (showLoading) {
-                            Box(
-                                modifier =
-                                    Modifier
-                                        .fillMaxSize()
-                                        .background(Color.Black),
-                            ) {
-                                LoadingPage()
+                    IntroHost(active = showIntro, onFinished = { showIntro = false }) {
+                        if (userPreferences == null) {
+                            // Show loading page if it is taking a while to get app preferences
+                            var showLoading by remember { mutableStateOf(false) }
+                            LaunchedEffect(Unit) {
+                                delay(500.milliseconds)
+                                Timber.i("Showing loading page")
+                                showLoading = true
                             }
-                        }
-                    } else {
-                        userPreferences?.let { userPreferences ->
-                            val appPreferences = userPreferences.appPreferences
-                            CoilConfig(
-                                prefs = appPreferences,
-                                okHttpClient = okHttpClient,
-                                debugLogging = false,
-                                enableCache = true,
-                            )
-                            LaunchedEffect(appPreferences.debugLogging) {
-                                DebugLogTree.INSTANCE.enabled = appPreferences.debugLogging
-                            }
-                            CompositionLocalProvider(LocalImageUrlService provides imageUrlService) {
-                                WholphinTheme(
-                                    true,
-                                    appThemeColors = appPreferences.interfacePreferences.appThemeColors,
+                            if (showLoading) {
+                                Box(
+                                    modifier =
+                                        Modifier
+                                            .fillMaxSize()
+                                            .background(Color.Black),
                                 ) {
-                                    ProvideUiScale(
-                                        fontScalePercent = appPreferences.interfacePreferences.fontScalePercent,
-                                        navScalePercent = appPreferences.interfacePreferences.navScalePercent,
+                                    LoadingPage()
+                                }
+                            }
+                        } else {
+                            userPreferences?.let { userPreferences ->
+                                val appPreferences = userPreferences.appPreferences
+                                CoilConfig(
+                                    prefs = appPreferences,
+                                    okHttpClient = okHttpClient,
+                                    debugLogging = false,
+                                    enableCache = true,
+                                )
+                                LaunchedEffect(appPreferences.debugLogging) {
+                                    DebugLogTree.INSTANCE.enabled = appPreferences.debugLogging
+                                }
+                                CompositionLocalProvider(LocalImageUrlService provides imageUrlService) {
+                                    WholphinTheme(
+                                        true,
+                                        appThemeColors = appPreferences.interfacePreferences.appThemeColors,
                                     ) {
-                                        ProvideLocalClock {
-                                            MainContent(
-                                                backStack = setupNavigationManager.backStack,
-                                                navigationManager = navigationManager,
-                                                userPreferences = userPreferences,
-                                                backdropService = backdropService,
-                                                screensaverService = screensaverService,
-                                                tvMessageService = tvMessageService,
-                                                dlnaRendererService = dlnaRendererService,
-                                                modifier = Modifier.fillMaxSize(),
-                                            )
+                                        ProvideUiScale(
+                                            fontScalePercent = appPreferences.interfacePreferences.fontScalePercent,
+                                            navScalePercent = appPreferences.interfacePreferences.navScalePercent,
+                                        ) {
+                                            ProvideLocalClock {
+                                                MainContent(
+                                                    backStack = setupNavigationManager.backStack,
+                                                    navigationManager = navigationManager,
+                                                    userPreferences = userPreferences,
+                                                    backdropService = backdropService,
+                                                    screensaverService = screensaverService,
+                                                    tvMessageService = tvMessageService,
+                                                    dlnaRendererService = dlnaRendererService,
+                                                    modifier = Modifier.fillMaxSize(),
+                                                )
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
-                    }
-                    if (showIntro) {
-                        IntroVideo(onFinished = { showIntro = false })
                     }
                 }
             }
@@ -342,6 +369,15 @@ class MainActivity : AppCompatActivity() {
         }
         claudeCompanionService.onUserActivity()
         dlnaRendererService.onAppResumed()
+        // Checked here (not onRestart) because some devices only pause on screen off.
+        // onRestart has already left non-external playback by now.
+        if (screenWentOff) {
+            screenWentOff = false
+            if (!playExternalViewModel.launched.value && !navigationManager.backStack.lastOrNull().isPlayback) {
+                Timber.i("Woke from screen off, replaying intro")
+                showIntro = true
+            }
+        }
     }
 
     override fun onRestart() {
@@ -361,6 +397,8 @@ class MainActivity : AppCompatActivity() {
     override fun onStop() {
         super.onStop()
         Timber.d("onStop")
+        // The stop may land before the SCREEN_OFF broadcast; non-interactive here means sleep
+        if (!getSystemService(PowerManager::class.java).isInteractive) screenWentOff = true
         screensaverService.stop(true)
         tvProviderSchedulerService.launchOneTimeRefresh()
         claudeCompanionService.onAppHidden()
@@ -414,6 +452,7 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         Timber.d("onDestroy")
+        unregisterReceiver(screenOffReceiver)
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
