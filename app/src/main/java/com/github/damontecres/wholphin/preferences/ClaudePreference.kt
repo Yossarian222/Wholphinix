@@ -103,7 +103,7 @@ val claudePreferenceGroups =
                         listOf(
                             ClaudePreference.ApiKey,
                             ClaudePreference.Frequency,
-                            ClaudePreference.Model,
+                            // No model choice any more: Jean always uses Sonnet (#53)
                         ),
                     ),
                 ),

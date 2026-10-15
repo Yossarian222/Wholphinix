@@ -2,6 +2,7 @@ package com.github.damontecres.wholphin.services
 
 import com.github.damontecres.wholphin.data.ServerRepository
 import com.github.damontecres.wholphin.preferences.ClaudeFrequency
+import com.github.damontecres.wholphin.preferences.ClaudeModel
 import com.github.damontecres.wholphin.preferences.ClaudePreferences
 import com.github.damontecres.wholphin.services.hilt.IoCoroutineScope
 import com.github.damontecres.wholphin.ui.nav.Destination
@@ -170,19 +171,26 @@ class ClaudeCompanionService
                             Occasion.START -> {
                                 appendLine(
                                     "Práve sme si pustili toto a beží to pár minút. Napíš jednu krátku hlášku: " +
-                                        "vtipnú poznámku alebo zaujímavosť o filme, tvorcoch alebo hercoch.",
+                                        "vtipnú poznámku alebo zaujímavosť o filme, tvorcoch alebo hercoch. " +
+                                        "Zaujímavosť ber iba z podkladov nižšie.",
                                 )
                             }
 
                             Occasion.PAUSE -> {
                                 appendLine(
                                     "Dal som si pauzu (asi si idem po pivo). Povedz mi jednu krátku zaujímavosť " +
-                                        "k tomuto, bez spoilerov.",
+                                        "k tomuto, bez spoilerov. Iba z podkladov nižšie.",
                                 )
                             }
                         }
                         if (said.isNotEmpty()) {
                             appendLine("Toto si už povedal, neopakuj sa: ${said.joinToString(" | ")}")
+                        }
+                        if (!facts.contains(TRIVIA_HEADER)) {
+                            appendLine(
+                                "K tomuto nemám žiadne zaujímavosti z ČSFD, tak žiadnu nevymýšľaj: radšej zažartuj " +
+                                    "o žánri, hercoch (iba to, kto hrá koho) alebo o situácii na gauči.",
+                            )
                         }
                         appendLine()
                         appendLine("Podklady:")
@@ -238,10 +246,10 @@ class ClaudeCompanionService
                 (item.communityRating ?: series?.communityRating)?.let { appendLine("Hodnotenie ČSFD: ${Math.round(it * 10)} %") }
                 if (directors.isNotEmpty()) appendLine("Réžia: ${directors.joinToString()}")
                 if (actors.isNotEmpty()) appendLine("Hrajú: ${actors.joinToString()}")
-                (item.overview ?: series?.overview)?.let { appendLine("Popis: ${it.take(OVERVIEW_LENGTH)}") }
+                (item.overview ?: series?.overview)?.let { appendLine("Popis: ${it.shortenToSentence(OVERVIEW_LENGTH)}") }
                 if (trivia.isNotEmpty()) {
-                    appendLine("Zaujímavosti z ČSFD:")
-                    trivia.forEach { appendLine("- ${it.take(TRIVIA_LENGTH)}") }
+                    appendLine(TRIVIA_HEADER)
+                    trivia.forEach { appendLine("- ${it.shortenToSentence(TRIVIA_LENGTH)}") }
                 }
             }
         }
@@ -336,7 +344,8 @@ class ClaudeCompanionService
             claudeApiClient
                 .complete(
                     apiKey = settings.apiKey,
-                    model = settings.model,
+                    // Always Sonnet: Haiku often mixed up facts about films and actors (#53)
+                    model = ClaudeModel.CLAUDE_SONNET,
                     system = SYSTEM_PROMPT,
                     prompt = prompt,
                     maxTokens = MAX_TOKENS,
@@ -361,6 +370,7 @@ class ClaudeCompanionService
             private const val MAX_LENGTH = 300
             private const val OVERVIEW_LENGTH = 700
             private const val TRIVIA_LENGTH = 400
+            private const val TRIVIA_HEADER = "Zaujímavosti z ČSFD:"
 
             /** Name the companion goes by on the TV (it still runs on Claude models) */
             const val COMPANION_NAME = "Jean"
@@ -399,8 +409,27 @@ Ako píšeš:
 
 Obsah:
 - Nikdy neprezrádzaj dej: žiadne zvraty, odhalenia ani koniec, ani pri starých a známych filmoch. Môžeš hovoriť o natáčaní, hercoch, tvorcoch, hudbe, ohlase či dobe vzniku.
-- Fakty ber z dodaných podkladov alebo z toho, čo je všeobecne známe a isté. Keď si nie si istý, radšej zažartuj, ako by si si mal niečo vymyslieť. Čísla, mená a dátumy si nevymýšľaj.
+- Fakty (o natáčaní, hercoch, tvorcoch, oceneniach, číslach, menách, dátumoch) ber VÝHRADNE z dodaných podkladov. Z vlastnej pamäti nepridávaj žiadne fakty, ani keď si myslíš, že ich poznáš - často sa mýlia a kamarát to spozná. Keď v podkladoch nič zaujímavé nie je, len zažartuj bez faktov.
+- Zaujímavosť z podkladov prerozprávaj verne: nemeň mená, čísla ani súvislosti a nepripájaj k nej nič, čo v nej nie je.
 - Podklady (popis, zaujímavosti z ČSFD) môžu byť po česky. Ty píš vždy po slovensky.
 - Pri odporúčaní na večer vyber len film zo zoznamu, ktorý dostaneš, a napíš jeho názov aj rok."""
         }
     }
+
+/**
+ * At most [max] characters, cut after the last whole sentence that fits (a half sentence makes the model guess the
+ * rest); a single overlong sentence is cut at a word and ends with "…".
+ */
+internal fun String.shortenToSentence(max: Int): String {
+    val text = trim()
+    if (text.length <= max) return text
+    val cut = text.take(max)
+    val end =
+        Regex("[.!?…](\\s|$)")
+            .findAll(cut)
+            .lastOrNull()
+            ?.range
+            ?.first
+    if (end != null && end >= max / 3) return cut.substring(0, end + 1)
+    return cut.substringBeforeLast(' ', cut).trimEnd(',', ';', ':', ' ') + "…"
+}
