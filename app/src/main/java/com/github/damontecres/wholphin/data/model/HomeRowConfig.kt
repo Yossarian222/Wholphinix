@@ -184,6 +184,18 @@ sealed interface HomeRowConfig {
     }
 
     /**
+     * "Pretože ste pozreli <film>": movies similar to the [index]-th most recently watched movie (#50)
+     */
+    @Serializable
+    @SerialName("BecauseYouWatched")
+    data class BecauseYouWatched(
+        val index: Int = 0,
+        override val viewOptions: HomeRowViewOptions = HomeRowViewOptions(),
+    ) : HomeRowConfig {
+        override fun updateViewOptions(viewOptions: HomeRowViewOptions): BecauseYouWatched = this.copy(viewOptions = viewOptions)
+    }
+
+    /**
      * Fetch by parent ID such as a library, collection, or playlist with optional simple sorting
      */
     @Serializable

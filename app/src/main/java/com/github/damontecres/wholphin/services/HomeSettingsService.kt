@@ -102,6 +102,7 @@ class HomeSettingsService
         private val suggestionService: SuggestionService,
         private val displayPreferencesService: DisplayPreferencesService,
         private val csfdTvTipsService: CsfdTvTipsService,
+        private val becauseYouWatchedService: BecauseYouWatchedService,
     ) {
         @OptIn(ExperimentalSerializationApi::class)
         val jsonParser =
@@ -245,9 +246,10 @@ class HomeSettingsService
             val resolvedSettings =
                 if (settings != null) {
                     Timber.v("Found settings")
+                    val withNewRows = addBecauseYouWatchedOnce(userId, settings)
                     // Resolve
                     val resolvedRows =
-                        settings.rows.mapIndexed { index, config ->
+                        withNewRows.rows.mapIndexed { index, config ->
                             resolve(index, config)
                         }
                     HomePageResolvedSettings(userId, resolvedRows)
@@ -256,6 +258,32 @@ class HomeSettingsService
                 }
 
             currentSettings.update { resolvedSettings }
+        }
+
+        /**
+         * Rows "Pretože ste pozreli …" were added in 1.0.9 (#50): add them once to the end of an already saved layout.
+         * Saved locally right away, so a user who removes them later does not get them back.
+         */
+        private suspend fun addBecauseYouWatchedOnce(
+            userId: UUID,
+            settings: HomePageSettings,
+        ): HomePageSettings {
+            val prefs = context.getSharedPreferences(MIGRATIONS_PREFS, Context.MODE_PRIVATE)
+            val key = "because_you_watched_added_${userId.toServerString()}"
+            if (prefs.getBoolean(key, false)) return settings
+            val updated =
+                if (settings.rows.any { it is HomeRowConfig.BecauseYouWatched }) {
+                    settings
+                } else {
+                    settings.copy(rows = settings.rows + becauseYouWatchedConfigs())
+                }
+            try {
+                if (updated !== settings) saveToLocal(userId, updated)
+                prefs.edit().putBoolean(key, true).apply()
+            } catch (ex: Exception) {
+                Timber.w(ex, "Could not save the home page with the new rows")
+            }
+            return updated
         }
 
         /**
@@ -332,7 +360,16 @@ class HomeSettingsService
                         config = HomeRowConfig.CsfdWatchlist(),
                     ),
                 )
-            val rowConfig = csfdTipsRow + continueWatchingRow + includedIds
+            // "Pretože ste pozreli …" for now last (#50)
+            val becauseYouWatchedRows =
+                becauseYouWatchedConfigs().mapIndexed { index, config ->
+                    HomeRowConfigDisplay(
+                        id = includedIds.size + 4 + index,
+                        title = ResArgStringProvider(R.string.because_you_watched_row, (index + 1).toString()),
+                        config = config,
+                    )
+                }
+            val rowConfig = csfdTipsRow + continueWatchingRow + includedIds + becauseYouWatchedRows
             return HomePageResolvedSettings(userId, rowConfig)
         }
 
@@ -581,6 +618,14 @@ class HomeSettingsService
                     HomeRowConfigDisplay(
                         id = id,
                         title = ResStringProvider(R.string.csfd_watchlist),
+                        config,
+                    )
+                }
+
+                is HomeRowConfig.BecauseYouWatched -> {
+                    HomeRowConfigDisplay(
+                        id = id,
+                        title = ResArgStringProvider(R.string.because_you_watched_row, (config.index + 1).toString()),
                         config,
                     )
                 }
@@ -1228,6 +1273,17 @@ class HomeSettingsService
                     Success(ResStringProvider(R.string.csfd_watchlist), items, row.viewOptions, rowType = row)
                 }
 
+                is HomeRowConfig.BecauseYouWatched -> {
+                    val result = becauseYouWatchedService.getRow(userDto.id, row.index, isRefresh)
+                    // No watched movie or nothing similar left: an empty row is not shown on the home page
+                    Success(
+                        ResArgStringProvider(R.string.home_because_you_watched, result?.watched?.name ?: ""),
+                        result?.items.orEmpty(),
+                        row.viewOptions,
+                        rowType = row,
+                    )
+                }
+
                 is HomeRowConfig.Suggestions -> {
                     val library =
                         api.userLibraryApi
@@ -1382,3 +1438,9 @@ fun viewOptionsForCollectionType(collectionType: CollectionType?): HomeRowViewOp
             HomeRowViewOptions()
         }
     }
+
+private const val MIGRATIONS_PREFS = "wholphinix_migrations"
+
+/** The rows "Pretože ste pozreli …" for the 3 most recently watched movies, from the most recent one */
+fun becauseYouWatchedConfigs(): List<HomeRowConfig.BecauseYouWatched> =
+    List(BecauseYouWatchedService.MAX_ROWS) { HomeRowConfig.BecauseYouWatched(index = it) }

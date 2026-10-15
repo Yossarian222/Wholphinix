@@ -812,6 +812,9 @@
     <string name="csfd_rating_prompt_trash_confirm">Naozaj odpad?</string>
     <!-- ČSFD watchlist -->
     <string name="csfd_watchlist">Chcem vidieť (ČSFD)</string>
+    <string name="home_because_you_watched">Pretože ste pozreli %1$s</string>
+    <string name="because_you_watched_row">Pretože ste pozreli… (%1$s)</string>
+    <string name="because_you_watched_rows">Pretože ste pozreli (3 riadky)</string>
     <!-- Claude -->
     <string name="claude_settings">Jean</string>
     <string name="claude_settings_summary">Jean na gauči: zaujímavosti a tipy na TV</string>

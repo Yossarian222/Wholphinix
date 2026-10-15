@@ -31,6 +31,7 @@ import com.github.damontecres.wholphin.services.NavDrawerService
 import com.github.damontecres.wholphin.services.SeerrServerRepository
 import com.github.damontecres.wholphin.services.UnsupportedHomeSettingsVersionException
 import com.github.damontecres.wholphin.services.UserPreferencesService
+import com.github.damontecres.wholphin.services.becauseYouWatchedConfigs
 import com.github.damontecres.wholphin.services.getRecentlyAddedTitle
 import com.github.damontecres.wholphin.services.hilt.IoCoroutineScope
 import com.github.damontecres.wholphin.services.tvAccess
@@ -223,6 +224,25 @@ class HomeSettingsViewModel
 
         fun addRow(type: MetaRowType): Job =
             viewModelScope.launchIO {
+                if (type == MetaRowType.BECAUSE_YOU_WATCHED) {
+                    // All three rows "Pretože ste pozreli …" at once, each can be removed or moved separately
+                    val newRows =
+                        becauseYouWatchedConfigs().map { config ->
+                            HomeRowConfigDisplay(
+                                id = idCounter++,
+                                title = ResArgStringProvider(R.string.because_you_watched_row, (config.index + 1).toString()),
+                                config = config,
+                            )
+                        }
+                    updateState {
+                        it.copy(
+                            loading = LoadingState.Loading,
+                            rows = it.rows + newRows,
+                        )
+                    }
+                    fetchRowData()
+                    return@launchIO
+                }
                 val id = idCounter++
                 val newRow =
                     when (type) {
@@ -266,6 +286,7 @@ class HomeSettingsViewModel
                             )
                         }
 
+                        MetaRowType.BECAUSE_YOU_WATCHED,
                         MetaRowType.FAVORITES,
                         MetaRowType.COLLECTION,
                         MetaRowType.PLAYLIST,
@@ -765,6 +786,7 @@ class HomeSettingsViewModel
 
                                 is HomeRowConfig.CsfdTvTips,
                                 is HomeRowConfig.CsfdWatchlist,
+                                is HomeRowConfig.BecauseYouWatched,
                                 -> {
                                     // Keep ČSFD rows small regardless of the preset
                                     it.config

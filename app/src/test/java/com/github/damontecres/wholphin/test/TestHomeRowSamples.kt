@@ -44,6 +44,7 @@ class TestHomeRowSamples {
                     viewOptions = HomeRowViewOptions(),
                 ),
                 HomeRowConfig.Studios(parentId = UUID.randomUUID()),
+                HomeRowConfig.BecauseYouWatched(index = 1),
                 HomeRowConfig.ContinueWatching(
                     viewOptions = HomeRowViewOptions(),
                 ),
@@ -103,6 +104,7 @@ class TestHomeRowSamples {
                 is HomeRowConfig.TvChannels -> foundTypes.add(it::class)
                 is HomeRowConfig.CsfdTvTips -> foundTypes.add(it::class)
                 is HomeRowConfig.CsfdWatchlist -> foundTypes.add(it::class)
+                is HomeRowConfig.BecauseYouWatched -> foundTypes.add(it::class)
                 is HomeRowConfig.Studios -> foundTypes.add(it::class)
             }
         }
@@ -137,6 +139,7 @@ class TestHomeRowSamples {
                 suggestionService = mockk(),
                 displayPreferencesService = mockk(),
                 csfdTvTipsService = mockk(),
+                becauseYouWatchedService = mockk(),
             )
 
         val str = """{
