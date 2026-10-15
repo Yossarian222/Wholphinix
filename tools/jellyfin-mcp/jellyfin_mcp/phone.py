@@ -7,6 +7,8 @@ endpoint; open it in Chrome on the phone and "Add to home screen".
 - POST /app/chat            {"text", "conversation"} -> {"reply"}  (shared Claude agent, agent.py)
 - POST /app/reset           {"conversation"} -> forget that conversation's history
 - GET  /app/status          whats_playing, for the "now playing" card
+- GET  /app/device          the TV's device status as last stored by Wholphinix (temperature,
+                            CPU; no request to the TV), for the "Stav TV" line
 - GET  /app/image/<id>      poster of a library item, proxied from Jellyfin (the API key stays
                             on the server)
 - POST /app/control         {"action", "seconds"?} -> the control tool directly (remote buttons,
@@ -79,6 +81,12 @@ Podrobný postup pre nástroje (anglicky, platí aj tu; odpovedaj ale vždy po s
 
 class PhoneAgent(ChatAgent):
     label = "Phone"
+
+    async def context_note(self) -> str | None:
+        # Jean's last bubbles on the TV, so "čo si tým myslel?" / "povedz viac" works (#47)
+        from .server import recent_bubbles_note  # late import: server imports this module
+
+        return await recent_bubbles_note()
 
 
 _mcp: Any = None
@@ -207,6 +215,19 @@ async def status(request: Request) -> Response:
         return _json({"connected": None, "message": str(ex)[:200]})
 
 
+async def device(request: Request) -> Response:
+    if not enabled():
+        return _not_found()
+    from .server import DEVICE_STATUS_KEY, _telemetry_value, client, summarize_device
+
+    try:
+        status = _telemetry_value(await client().telemetry(), DEVICE_STATUS_KEY)
+    except Exception as ex:
+        log.info("Phone: device failed: %s", type(ex).__name__)
+        return _json({})
+    return _json(summarize_device(status) if isinstance(status, dict) else {})
+
+
 async def image(request: Request) -> Response:
     if not enabled():
         return _not_found()
@@ -255,6 +276,7 @@ def register(mcp: Any, instructions: str) -> None:
     mcp.custom_route("/app/chat", methods=["POST"])(chat)
     mcp.custom_route("/app/reset", methods=["POST"])(reset)
     mcp.custom_route("/app/status", methods=["GET"])(status)
+    mcp.custom_route("/app/device", methods=["GET"])(device)
     mcp.custom_route("/app/control", methods=["POST"])(control)
     mcp.custom_route("/app/image/{item_id}", methods=["GET"])(image)
     mcp.custom_route("/app/{name}", methods=["GET"])(static)

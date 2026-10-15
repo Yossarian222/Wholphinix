@@ -154,6 +154,10 @@ sealed class Destination(
     @Serializable
     data object CsfdWatchlist : Destination(false)
 
+    /** History of Jean's bubbles (#47), from the Jean settings */
+    @Serializable
+    data object JeanHistory : Destination(false)
+
     @Serializable
     data class DiscoveredItem(
         val item: DiscoverItem,

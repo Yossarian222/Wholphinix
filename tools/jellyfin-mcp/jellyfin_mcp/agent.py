@@ -36,6 +36,7 @@ FALLBACK_MODELS = {"claude-sonnet-5-5", "claude-opus-5-5", "claude-opus-5", "cla
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
 
 DEFAULT_TIMEZONE = "Europe/Bratislava"
+CONTEXT_NOTE_TIMEOUT = 3.0
 DAYS = ("pondelok", "utorok", "streda", "štvrtok", "piatok", "sobota", "nedeľa")
 
 ERROR_REPLY = "Prepáč, niečo sa pokazilo a nepodarilo sa mi to vybaviť 😕 Skús to o chvíľu znova."
@@ -191,10 +192,12 @@ class ChatAgent:
             messages.append({"role": "assistant", "content": assistant_text})
         # The time goes into the new message, not the system prompt, so the cached prefix stays
         # the same; history keeps only the plain text
-        messages.append({"role": "user", "content": [
-            {"type": "text", "text": time_note(self.now())},
-            {"type": "text", "text": text},
-        ]})
+        content = [{"type": "text", "text": time_note(self.now())}]
+        note = await self._safe_context_note()
+        if note:
+            content.append({"type": "text", "text": note})
+        content.append({"type": "text", "text": text})
+        messages.append({"role": "user", "content": content})
 
         for _ in range(MAX_TOOL_ROUNDS):
             try:
@@ -238,6 +241,17 @@ class ChatAgent:
             return reply or "👍"
         log.warning("%s: gave up after %d tool rounds", self.label, MAX_TOOL_ROUNDS)
         return TOO_LONG_REPLY
+
+    async def context_note(self) -> str | None:
+        """Extra context for the new message (e.g. what the TV showed lately); None = nothing."""
+        return None
+
+    async def _safe_context_note(self) -> str | None:
+        try:
+            return await asyncio.wait_for(self.context_note(), CONTEXT_NOTE_TIMEOUT)
+        except Exception as ex:  # the chat works without it
+            log.info("%s: context note failed: %s", self.label, type(ex).__name__)
+            return None
 
     async def answer(self, key: str, text: str) -> str:
         conv = self.memory.get(key)

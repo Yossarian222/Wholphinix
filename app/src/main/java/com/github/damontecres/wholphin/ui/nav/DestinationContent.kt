@@ -27,6 +27,7 @@ import com.github.damontecres.wholphin.ui.detail.CsfdWatchlistPage
 import com.github.damontecres.wholphin.ui.detail.DebugPage
 import com.github.damontecres.wholphin.ui.detail.FavoritesPage
 import com.github.damontecres.wholphin.ui.detail.HomeRowGrid
+import com.github.damontecres.wholphin.ui.detail.JeanHistoryPage
 import com.github.damontecres.wholphin.ui.detail.PersonPage
 import com.github.damontecres.wholphin.ui.detail.PlaylistDetails
 import com.github.damontecres.wholphin.ui.detail.collection.CollectionDetails
@@ -388,6 +389,12 @@ fun DestinationContent(
         Destination.CsfdWatchlist -> {
             LaunchedEffect(Unit) { onClearBackdrop.invoke() }
             CsfdWatchlistPage(
+                modifier = modifier,
+            )
+        }
+
+        Destination.JeanHistory -> {
+            JeanHistoryPage(
                 modifier = modifier,
             )
         }

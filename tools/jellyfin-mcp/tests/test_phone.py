@@ -183,3 +183,32 @@ def test_poster_missing_and_invalid(app, jf_images):
     assert httpx.get(f"{app}/image/not-a-guid").status_code == 404
     assert httpx.get(f"{app}/image/..%2F..%2FUsers").status_code == 404
     assert all(p.startswith("/Items/") for p, _, _ in jf_images)
+
+
+def test_chat_gets_recent_tv_bubbles(app, jf):
+    import json
+    import time
+
+    jf.telemetry["jean_history"] = json.dumps([
+        {"time": int(time.time() * 1000) - 60_000, "title": "Jean", "source": "jean",
+         "text": "Tarantino tu hrá aj sám seba.", "media": "Pulp Fiction (1994)"},
+    ])
+    agent = fake_agent([resp("end_turn", text("Myslel som tú scénu v byte 🙂"))])
+    httpx.post(f"{app}/chat", json={"text": "čo si tým myslel?", "conversation": CONV}, timeout=10)
+    blocks = agent.anthropic.requests[-1]["messages"][-1]["content"]
+    assert [b["type"] for b in blocks] == ["text", "text", "text"]
+    assert "Tarantino tu hrá aj sám seba." in blocks[1]["text"] and blocks[2]["text"] == "čo si tým myslel?"
+
+
+def test_device(app, jf):
+    import json
+    import time
+
+    assert httpx.get(f"{app}/device").json() == {}
+    jf.telemetry["device_status"] = json.dumps(
+        {"time": int(time.time() * 1000), "temp_c": 82.0, "cpu_percent": 40.0, "throttled": False}
+    )
+    d = httpx.get(f"{app}/device").json()
+    assert d["temp_c"] == 82.0 and d["verdict"].startswith("horúce")
+    # Only reads what the TV stored, never asks the TV
+    assert not any(c[3] and c[3].get("Name") == "SendString" for c in jf.calls)

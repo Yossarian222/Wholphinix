@@ -812,6 +812,11 @@
     <string name="csfd_rating_prompt_trash_confirm">Naozaj odpad?</string>
     <!-- ČSFD watchlist -->
     <string name="csfd_watchlist">Chcem vidieť (ČSFD)</string>
+    <string name="jean_history">História hlášok</string>
+    <string name="jean_history_summary">Posledných 30 bublín od Jeana a správ z Telky</string>
+    <string name="jean_history_empty">Jean zatiaľ nič nepovedal</string>
+    <string name="jean_history_from_jean">Jean</string>
+    <string name="jean_history_from_telka">Telka</string>
     <string name="home_because_you_watched">Pretože ste pozreli %1$s</string>
     <string name="because_you_watched_row">Pretože ste pozreli… (%1$s)</string>
     <string name="because_you_watched_rows">Pretože ste pozreli (3 riadky)</string>

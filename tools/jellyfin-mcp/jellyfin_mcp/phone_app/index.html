@@ -116,6 +116,9 @@
   .remote button.main { background: var(--accent); color: var(--accent-ink); }
   .remote button:active { transform: scale(.94); }
   .now.idle .remote, .now.idle .progress { display: none; }
+  .now .dev { color: var(--muted); font-size: 13px; margin-top: 8px; }
+  .now .dev:empty { display: none; }
+  .now .dev.hot { color: #ff6b5b; }
 
   main { flex: 1; overflow-y: auto; padding: 14px 16px 6px; display: flex; flex-direction: column; gap: 8px; }
   .msg {
@@ -210,6 +213,7 @@
     <button data-act="next" aria-label="Ďalšia epizóda"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg></button>
     <button data-act="stop" aria-label="Zastaviť"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2"/></svg></button>
   </div>
+  <div class="dev" id="nowDev" title="Stav TV (RPi)"></div>
 </section>
 
 <main id="log">

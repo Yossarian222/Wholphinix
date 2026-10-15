@@ -168,6 +168,12 @@ def summarize_item(item: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+# Written by Wholphinix (TelemetryService / JeanHistoryService / DeviceStatusService), keep in sync
+TELEMETRY_PREFS_ID = "wholphinix-telemetry"
+TELEMETRY_CLIENT = "Wholphinix"
+DEVICE_REPORT_REQUEST = "wholphinix:device_status"
+
+
 class JellyfinClient:
     def __init__(
         self,
@@ -357,6 +363,23 @@ class JellyfinClient:
             "DisplayMessage",
             {"Header": header, "Text": text, "TimeoutMs": str(int(timeout_ms))},
         )
+
+    # ---- State shared by Wholphinix (Jean's bubbles, device status) ----
+
+    async def telemetry(self) -> dict[str, str]:
+        """Custom display preferences Wholphinix writes for us (see TelemetryService in the app):
+        key -> JSON string. Empty if the app never wrote any."""
+        data = await self._get(
+            f"/DisplayPreferences/{TELEMETRY_PREFS_ID}",
+            userId=await self.user_id(),
+            client=TELEMETRY_CLIENT,
+        )
+        prefs = (data or {}).get("CustomPrefs") or {}
+        return {k: v for k, v in prefs.items() if isinstance(v, str)}
+
+    async def request_device_report(self, session_id: str) -> None:
+        """Ask Wholphinix to store its device status right now (it does so every minute anyway)."""
+        await self.general_command(session_id, "SendString", {"String": DEVICE_REPORT_REQUEST})
 
     # ---- ČSFD plugin / recommendations ----
 

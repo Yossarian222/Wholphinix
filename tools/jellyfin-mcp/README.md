@@ -28,6 +28,10 @@ Claude (cloud) ──HTTPS──▶ Tailscale Funnel ──▶ jellyfin-mcp (NAS
 | `watch_history` | čo si naposledy pozeral (miestny dátum a čas, dopozerané alebo koľko %) |
 | `library_stats` | počty filmov, seriálov a epizód, pozreté/nepozreté filmy, zoznam žánrov |
 | `request_on_seerr` | vyžiada film/seriál, ktorý nemáš, cez Seerr/Jellyseerr (len ak sú nastavené `SEERR_URL` a `SEERR_API_KEY`) |
+| `jean_history` | čo naposledy ukázal Jean (bubliny na TV) a správy z Telky – čas, počas akého filmu, text; posledné hlášky z 3 h dostane chat v Telke automaticky, aby „čo si tým myslel?“ fungovalo |
+| `device_status` | stav RPi s Wholphinixom: CPU (aj po jadrách), teplota, frekvencia a škrtenie výkonu, RAM, uptime, ako sa prehráva video (direct play / transkódovanie, kodek, zahodené snímky), min/priemer/max za 30 min a zhodnotenie |
+
+`jean_history` a `device_status` čítajú to, čo Wholphinix (od verzie 1.0.9) ukladá do Jellyfinu ako vlastné nastavenia zobrazenia používateľa (`DisplayPreferences` `wholphinix-telemetry`, klient `Wholphinix`) – netreba žiadnu ďalšiu adresu ani kľúč. Stav zariadenia appka ukladá každú minútu a `device_status` si navyše vyžiada čerstvé meranie (príkaz `SendString`).
 
 `tv_tips_today` potrebuje na Jellyfine plugin ČSFD vo verzii, ktorá pri `/Csfd/TvTips` prijme parameter `userId` (volanie s API kľúčom nemá používateľa).
 

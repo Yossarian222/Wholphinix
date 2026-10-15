@@ -54,6 +54,14 @@ object ClaudePreference {
 
     val ApiKey = ClaudeApiKeyPreference()
 
+    /** The last bubbles of Jean and the messages from Telka (#47) */
+    val History =
+        AppDestinationPreference<AppPreferences>(
+            title = R.string.jean_history,
+            summary = R.string.jean_history_summary,
+            destination = Destination.JeanHistory,
+        )
+
     /** In the UI: Never, Sometimes, Often */
     private val frequencies = listOf(ClaudeFrequency.CLAUDE_NEVER, ClaudeFrequency.CLAUDE_SOMETIMES, ClaudeFrequency.CLAUDE_OFTEN)
 
@@ -99,5 +107,9 @@ val claudePreferenceGroups =
                         ),
                     ),
                 ),
+        ),
+        PreferenceGroup(
+            title = R.string.jean_history,
+            preferences = listOf(ClaudePreference.History),
         ),
     )

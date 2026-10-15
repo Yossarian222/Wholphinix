@@ -43,6 +43,10 @@ class FakeJellyfin:
         self.tips_status = 200
         self.tips_params: dict = {}
         self.items_params: dict = {}
+        # What Wholphinix stores in Jellyfin (key -> JSON string)
+        self.telemetry: dict[str, str] = {}
+        # Status the "TV" stores when asked for a fresh report (None: the TV does not answer)
+        self.device_on_request: dict | None = None
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path
@@ -50,7 +54,13 @@ class FakeJellyfin:
         body = json.loads(request.content) if request.content else None
         if request.method == "POST":
             self.calls.append((request.method, path, params, body))
+            if body and body.get("Name") == "SendString" and self.device_on_request is not None:
+                fresh = dict(self.device_on_request, time=int(time.time() * 1000))
+                self.telemetry["device_status"] = json.dumps(fresh)
             return httpx.Response(204)
+        if path == "/DisplayPreferences/wholphinix-telemetry":
+            assert params == {"userId": USER, "client": "Wholphinix"}
+            return httpx.Response(200, json={"Id": "x", "CustomPrefs": self.telemetry})
         if path == "/Users":
             return httpx.Response(200, json=[{"Name": "Roman", "Id": USER},
                                              {"Name": "Kids", "Id": OTHER_USER}])
@@ -243,7 +253,7 @@ def test_lists_tools(base_url, fake):
     names = run(go())
     assert {"search_library", "play", "play_episode", "set_subtitles", "set_audio",
             "control", "whats_playing", "continue_watching", "show_message", "tv_tips_today",
-            "recommend_tonight", "request_on_seerr"} <= names
+            "recommend_tonight", "request_on_seerr", "jean_history", "device_status"} <= names
 
 
 def test_search_and_play_resumes(base_url, fake):
@@ -441,3 +451,73 @@ def test_request_on_seerr(base_url, fake, fake_seerr):
     out = run(_call(base_url, "request_on_seerr", {"title": "Cosy Dens", "year": 1970}))
     assert out["requested"] is False and "not found" in out["message"]
     assert len(fake_seerr.requests) == 2
+
+
+def _bubbles(now_ms: int) -> list[dict]:
+    return [
+        {"time": now_ms - 60_000, "title": "Jean", "text": "Tarantino tu hrá aj sám seba.", "source": "jean",
+         "media": "Pulp Fiction (1994)"},
+        {"time": now_ms - 3_600_000, "title": "Jean", "text": "Večera je hotová!", "source": "telka"},
+        {"time": now_ms - 30 * 3_600_000, "title": "Jean", "text": "Stará hláška", "source": "jean"},
+    ]
+
+
+def test_jean_history(base_url, fake):
+    assert run(_call(base_url, "jean_history", {})) == {"bubbles": [], "total": 0}
+    fake.telemetry["jean_history"] = json.dumps(_bubbles(int(time.time() * 1000)))
+    out = run(_call(base_url, "jean_history", {"limit": 2}))
+    assert out["total"] == 3
+    assert [b["text"] for b in out["bubbles"]] == ["Tarantino tu hrá aj sám seba.", "Večera je hotová!"]
+    assert out["bubbles"][0]["from"] == "Jean" and out["bubbles"][0]["during"] == "Pulp Fiction (1994)"
+    assert out["bubbles"][1]["from"] == "Telka" and "during" not in out["bubbles"][1]
+
+
+def test_recent_bubbles_note(fake):
+    assert run(server.recent_bubbles_note()) is None
+    fake.telemetry["jean_history"] = json.dumps(_bubbles(int(time.time() * 1000)))
+    note = run(server.recent_bubbles_note())
+    # Only the last 3 hours, oldest first
+    assert "Stará hláška" not in note
+    assert note.index("Večera") < note.index("Tarantino")
+    assert "počas Pulp Fiction (1994)" in note
+    fake.telemetry["jean_history"] = "not json"
+    assert run(server.recent_bubbles_note()) is None
+
+
+DEVICE = {
+    "cpu_percent": 35.0, "cpu_cores": [30, 40, 35, 35], "temp_c": 64.5, "freq_mhz": 2400,
+    "max_freq_mhz": 2400, "throttled": False, "ram_free_mb": 2100, "ram_total_mb": 8000, "uptime_min": 90,
+    "playback": {"title": "Pulp Fiction", "method": "Direct play", "video": "HEVC 3840×2160"},
+}
+
+
+def test_device_status_fresh_report(base_url, fake):
+    now = int(time.time() * 1000)
+    fake.device_on_request = dict(DEVICE, samples=[[now - 120_000, 20, 60], [now - 60_000, 50, 66],
+                                                   [now - 3 * 3_600_000, 99, 90]])
+    out = run(_call(base_url, "device_status", {}))
+    assert fake.calls[-1][1:] == (f"/Sessions/{SESSION}/Command", {},
+                                  {"Name": "SendString", "Arguments": {"String": "wholphinix:device_status"}})
+    assert out["verdict"] == "pohoda" and out["temp_c"] == 64.5 and out["age_seconds"] <= 2
+    # Samples older than 30 minutes are left out
+    assert out["last_30_min"] == {"cpu_percent": {"min": 20.0, "avg": 35.0, "max": 50.0},
+                                  "temp_c": {"min": 60.0, "avg": 63.0, "max": 66.0}, "samples": 2}
+    assert out["playback"]["method"] == "Direct play"
+    assert "note" not in out
+
+
+def test_device_status_stale_or_missing(base_url, fake, monkeypatch):
+    monkeypatch.setattr(server, "DEVICE_REPORT_WAIT_SECONDS", 0.6)
+    assert "error" in run(_call(base_url, "device_status", {}))
+    fake.telemetry["device_status"] = json.dumps(dict(DEVICE, time=int(time.time() * 1000) - 600_000))
+    out = run(_call(base_url, "device_status", {}))
+    assert out["age_seconds"] >= 600 and "note" in out
+
+
+def test_device_verdict():
+    assert server.device_verdict(50, False, 20) == "pohoda"
+    assert server.device_verdict(72, False, 20) == "zahrieva sa"
+    assert server.device_verdict(81, False, 20).startswith("horúce")
+    assert server.device_verdict(60, True, 20).startswith("škrtí")
+    assert server.device_verdict(50, False, 95) == "vyťažené"
+    assert server.device_verdict(None, False, None) == "pohoda"

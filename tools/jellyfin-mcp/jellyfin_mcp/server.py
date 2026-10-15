@@ -7,8 +7,11 @@ and never commit it.
 
 from __future__ import annotations
 
+import asyncio
 import hmac
+import json
 import logging
+import time
 import os
 import re
 from datetime import datetime
@@ -62,6 +65,10 @@ Workflow:
   (overall counts). Always look it up with a tool, never answer about the library from memory.
 - "Stiahni / chcem / objednaj film X" for something not in the library: request_on_seerr.
   Confirm the title and year first if it is ambiguous.
+- "Čo si mi ukazoval / čo to bola za hláška na TV?": jean_history (Jean = the funny companion
+  bubbles on the TV). The last few bubbles are also given in the chat context.
+- "Ako zvláda telka / RPi / je horúca / prečo to seká?": device_status (temperature, CPU, throttling,
+  how the video plays). Say the verdict and the key numbers in one or two sentences.
 - If a tool says Wholphinix is not connected, tell the user to open the app on the TV.
 Reply in Slovak, informally (tykanie), and keep replies short - they are often read aloud.
 """
@@ -353,6 +360,162 @@ async def show_message(
     session = await c.target_session()
     await c.display_message(session["Id"], text, header=title, timeout_ms=int(seconds * 1000))
     return {"shown": True, "seconds": seconds}
+
+
+# ---- Jean's bubbles and the TV's device status (stored by Wholphinix in Jellyfin) ----
+
+JEAN_HISTORY_KEY = "jean_history"
+DEVICE_STATUS_KEY = "device_status"
+# A fresh report is asked from the TV and waited for this long
+DEVICE_REPORT_WAIT_SECONDS = 5.0
+DEVICE_REPORT_POLL_SECONDS = 0.5
+DEVICE_STALE_SECONDS = 180
+DEVICE_WINDOW_SECONDS = 30 * 60
+HOT_C = 80
+WARM_C = 70
+
+
+def _telemetry_value(prefs: dict[str, str], key: str) -> Any:
+    raw = prefs.get(key)
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except ValueError:
+        log.info("Bad %s from Wholphinix", key)
+        return None
+
+
+def _local_epoch(ms: Any) -> str | None:
+    """Epoch millis -> local '15. 10. 21:05'."""
+    try:
+        when = datetime.fromtimestamp(float(ms) / 1000, local_timezone())
+    except (TypeError, ValueError, OverflowError, OSError):
+        return None
+    return f"{when.day}. {when.month}. {when:%H:%M}"
+
+
+def _bubble(entry: dict[str, Any]) -> dict[str, Any]:
+    out = {
+        "time": _local_epoch(entry.get("time")),
+        "from": "Telka" if entry.get("source") == "telka" else (entry.get("title") or "Jean"),
+        "during": entry.get("media"),
+        "text": entry.get("text"),
+    }
+    return {k: v for k, v in out.items() if v}
+
+
+async def jean_bubbles() -> list[dict[str, Any]]:
+    """Jean's bubbles and Telka's messages shown on the TV, newest first (raw entries)."""
+    data = _telemetry_value(await client().telemetry(), JEAN_HISTORY_KEY)
+    return [e for e in data if isinstance(e, dict) and e.get("text")] if isinstance(data, list) else []
+
+
+async def recent_bubbles_note(max_items: int = 5, max_age_hours: float = 3) -> str | None:
+    """For the Telka chat: what the TV showed lately, so "čo si tým myslel?" has its context."""
+    cutoff = (time.time() - max_age_hours * 3600) * 1000
+    recent = [e for e in await jean_bubbles() if (e.get("time") or 0) >= cutoff][:max_items]
+    if not recent:
+        return None
+    lines = []
+    for e in reversed(recent):  # oldest first, like a chat
+        b = _bubble(e)
+        where = f", počas {b['during']}" if b.get("during") else ""
+        lines.append(f"- {b.get('time', '?')} ({b.get('from')}{where}): {b['text']}")
+    return "[Na TV si naposledy ukázal (bubliny Jeana / správy z Telky):\n" + "\n".join(lines) + "]"
+
+
+@mcp.tool()
+async def jean_history(limit: int = 10) -> dict[str, Any]:
+    """What Jean (the funny companion on the TV) and Telka messages showed on the TV lately, newest first:
+    time, who, during which film, text. For "čo si mi ukazoval počas filmu?", "čo to bola za hláška?",
+    "zopakuj, čo si písal na telku". The last few are also in the chat context automatically."""
+    entries = await jean_bubbles()
+    return {"bubbles": [_bubble(e) for e in entries[: max(1, min(limit, 30))]], "total": len(entries)}
+
+
+def _stats(values: list[float]) -> dict[str, float] | None:
+    if not values:
+        return None
+    return {"min": round(min(values), 1), "avg": round(sum(values) / len(values), 1), "max": round(max(values), 1)}
+
+
+def device_verdict(temp: float | None, throttled: bool, cpu: float | None) -> str:
+    """One word summary for Claude: 'škrtí výkon', 'horúce', 'zahrieva sa', 'vyťažené' or 'pohoda'."""
+    if throttled:
+        return "škrtí výkon (prehriate - chladič/vetranie)"
+    if temp is not None and temp >= HOT_C:
+        return "horúce (blízko škrtenia výkonu)"
+    if temp is not None and temp >= WARM_C:
+        return "zahrieva sa"
+    if cpu is not None and cpu >= 85:
+        return "vyťažené"
+    return "pohoda"
+
+
+async def _device_report(fresh: bool) -> dict[str, Any] | None:
+    c = client()
+    asked_at = time.time()
+    if fresh:
+        try:
+            session = await c.target_session()
+            await c.request_device_report(session["Id"])
+        except (NoTargetSession, JellyfinError) as ex:
+            log.info("Device report not requested: %s", type(ex).__name__)
+            fresh = False
+    deadline = asked_at + (DEVICE_REPORT_WAIT_SECONDS if fresh else 0)
+    while True:
+        status = _telemetry_value(await c.telemetry(), DEVICE_STATUS_KEY)
+        newest = (status or {}).get("time") or 0
+        if not fresh or newest / 1000 >= asked_at - 2 or time.time() >= deadline:
+            return status if isinstance(status, dict) else None
+        await asyncio.sleep(DEVICE_REPORT_POLL_SECONDS)
+
+
+def summarize_device(status: dict[str, Any], now: float | None = None) -> dict[str, Any]:
+    now = time.time() if now is None else now
+    age = max(0, round(now - (status.get("time") or 0) / 1000))
+    cutoff = (now - DEVICE_WINDOW_SECONDS) * 1000
+    samples = [s for s in status.get("samples") or [] if isinstance(s, list) and len(s) >= 3 and s[0] >= cutoff]
+    temp = status.get("temp_c")
+    cpu = status.get("cpu_percent")
+    throttled = bool(status.get("throttled"))
+    out: dict[str, Any] = {
+        "verdict": device_verdict(temp, throttled, cpu),
+        "measured": _local_epoch(status.get("time")),
+        "age_seconds": age,
+        "cpu_percent": cpu,
+        "cpu_cores_percent": status.get("cpu_cores"),
+        "temp_c": temp,
+        "cpu_mhz": status.get("freq_mhz"),
+        "cpu_max_mhz": status.get("max_freq_mhz"),
+        "throttled": throttled,
+        "ram_free_mb": status.get("ram_free_mb"),
+        "ram_total_mb": status.get("ram_total_mb"),
+        "uptime_hours": round(status["uptime_min"] / 60, 1) if status.get("uptime_min") is not None else None,
+        "playback": status.get("playback"),
+        "last_30_min": {
+            "cpu_percent": _stats([float(s[1]) for s in samples if s[1] is not None]),
+            "temp_c": _stats([float(s[2]) for s in samples if s[2] is not None]),
+            "samples": len(samples),
+        },
+    }
+    if age > DEVICE_STALE_SECONDS:
+        out["note"] = "Údaje sú staré - Wholphinix na TV asi nebeží (alebo je TV uspatá)."
+    return {k: v for k, v in out.items() if v is not None}
+
+
+@mcp.tool()
+async def device_status() -> dict[str, Any]:
+    """How the TV box (Raspberry Pi 5 with Wholphinix) is doing: CPU load (total and per core), SoC
+    temperature, CPU frequency and whether it is throttling because of heat, free RAM, uptime, and for
+    a playing video how it plays (direct play / transcoding, codec, resolution, dropped frames), plus
+    min/avg/max over the last 30 minutes and a one-word verdict.
+    For "ako zvláda telka / RPi?", "je horúca?", "prečo to seká?"."""
+    status = await _device_report(fresh=True)
+    if not status:
+        return {"error": "Wholphinix ešte neposlal stav zariadenia (treba novú verziu appky a zapnutú TV)."}
+    return summarize_device(status)
 
 
 def _short(text: Any, limit: int = 220) -> str | None:

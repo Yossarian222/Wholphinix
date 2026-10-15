@@ -53,6 +53,7 @@ class ClaudeCompanionService
         private val csfdTvTipsService: CsfdTvTipsService,
         private val tvMessageService: TvMessageService,
         private val claudeApiClient: ClaudeApiClient,
+        private val jeanHistoryService: JeanHistoryService,
         @param:IoCoroutineScope private val scope: CoroutineScope,
     ) {
         // Playback state, only touched from the main thread (player callbacks) and the jobs below
@@ -100,6 +101,7 @@ class ClaudeCompanionService
         ) {
             if (type != BaseItemKind.MOVIE && type != BaseItemKind.EPISODE) return
             if (itemId == currentItemId) return
+            jeanHistoryService.setNowPlaying(itemId)
             cancelPlaybackJobs()
             currentItemId = itemId
             // It is about to play; a pause is reported by onPlayingChanged
@@ -140,6 +142,7 @@ class ClaudeCompanionService
         fun onPlaybackStopped() {
             cancelPlaybackJobs()
             currentItemId = null
+            jeanHistoryService.setNowPlaying(null)
             playing.value = false
             onUserActivity()
         }
@@ -341,7 +344,7 @@ class ClaudeCompanionService
 
         private fun show(text: String) {
             lastRemarkAt = TimeSource.Monotonic.markNow()
-            tvMessageService.show(title = COMPANION_NAME, text = text, timeoutMs = displayMs(text))
+            tvMessageService.show(title = COMPANION_NAME, text = text, timeoutMs = displayMs(text), source = TvMessageSource.JEAN)
         }
 
         companion object {

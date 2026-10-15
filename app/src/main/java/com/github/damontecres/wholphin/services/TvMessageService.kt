@@ -34,6 +34,7 @@ class TvMessageService
     @Inject
     constructor(
         @param:DefaultCoroutineScope private val scope: CoroutineScope,
+        private val jeanHistoryService: JeanHistoryService,
     ) {
         private val _current = MutableStateFlow<TvMessage?>(null)
 
@@ -57,11 +58,13 @@ class TvMessageService
 
         /**
          * Queue a message. [timeoutMs] defaults to [DEFAULT_DURATION] and is capped at [MAX_DURATION].
+         * Messages with a [source] (Jean, Telka) are kept in [JeanHistoryService].
          */
         fun show(
             title: String?,
             text: String,
             timeoutMs: Long? = null,
+            source: TvMessageSource? = null,
         ) {
             val body = text.trim().take(MAX_TEXT_LENGTH)
             if (body.isEmpty()) return
@@ -77,6 +80,8 @@ class TvMessageService
                 )
             if (queue.trySend(message).isFailure) {
                 Timber.w("Too many TV messages queued, dropping one")
+            } else if (source != null) {
+                jeanHistoryService.record(source, message.title, message.text)
             }
         }
 

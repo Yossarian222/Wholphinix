@@ -266,9 +266,24 @@
     };
     poster.src = BASE + "image/" + ids[0];
   }
+  // "Stav TV": temperature and CPU of the RPi, as last reported by Wholphinix (no request to the TV)
+  function renderDevice() {
+    var el = $("nowDev");
+    api("device")
+      .then(function (d) {
+        if (!d || d.temp_c == null || d.age_seconds > 300) { el.textContent = ""; return; }
+        var parts = ["🌡 " + Math.round(d.temp_c) + " °C"];
+        if (d.cpu_percent != null) parts.push("CPU " + Math.round(d.cpu_percent) + " %");
+        if (d.verdict) parts.push(d.verdict.split(" (")[0]);
+        el.textContent = "Stav TV: " + parts.join(" · ");
+        el.classList.toggle("hot", d.temp_c >= 80 || !!d.throttled);
+      })
+      .catch(function () { el.textContent = ""; });
+  }
   var refreshTimer;
   function refresh() {
     clearTimeout(refreshTimer);
+    renderDevice();
     return api("status")
       .then(render)
       .catch(function () { render({ connected: null, message: "Server neodpovedá" }); })
