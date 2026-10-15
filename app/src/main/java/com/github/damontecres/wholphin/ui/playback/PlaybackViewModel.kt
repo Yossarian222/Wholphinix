@@ -59,6 +59,7 @@ import com.github.damontecres.wholphin.services.RefreshRateService
 import com.github.damontecres.wholphin.services.ScreensaverService
 import com.github.damontecres.wholphin.services.StreamChoiceService
 import com.github.damontecres.wholphin.services.UserPreferencesService
+import com.github.damontecres.wholphin.services.hilt.AuthOkHttpClient
 import com.github.damontecres.wholphin.ui.formatBitrate
 import com.github.damontecres.wholphin.ui.gt
 import com.github.damontecres.wholphin.ui.isNotNullOrBlank
@@ -102,6 +103,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.mediaInfoApi
 import org.jellyfin.sdk.api.client.extensions.mediaSegmentsApi
@@ -166,6 +169,7 @@ class PlaybackViewModel
         private val musicService: MusicService,
         private val pendingRatingService: PendingRatingService,
         private val claudeCompanionService: ClaudeCompanionService,
+        @param:AuthOkHttpClient private val authOkHttpClient: OkHttpClient,
         @Assisted private val destination: Destination,
     ) : ViewModel(),
         Player.Listener,
@@ -630,6 +634,7 @@ class PlaybackViewModel
                         sourceId = mediaSource?.id,
                         enableDirectPlay = !forceTranscoding,
                         enableDirectStream = !forceTranscoding,
+                        deferExtractedSubtitle = true,
                     )
                     player.prepare()
                     player.play()
@@ -690,6 +695,40 @@ class PlaybackViewModel
         }
 
         /**
+         * Turns on an embedded subtitle that was held back at start (see [changeStreams]). It is fetched
+         * first so the server has extracted (and cached) it; the switch then only rebuffers briefly
+         * instead of the whole start waiting for the extraction.
+         */
+        private suspend fun enableSubtitleWhenReady(
+            item: BaseItem,
+            subtitleIndex: Int,
+            deliveryUrl: String,
+        ) {
+            Timber.i("Waiting for server to extract subtitle %s", subtitleIndex)
+            try {
+                authOkHttpClient
+                    .newCall(Request.Builder().url(api.createUrl(deliveryUrl)).build())
+                    .execute()
+                    .close()
+            } catch (ex: Exception) {
+                Timber.w(ex, "Prefetching subtitle %s failed", subtitleIndex)
+            }
+            val current = state.value.currentPlayback
+            // Skip if playback moved on or the user picked subtitles meanwhile
+            if (current?.item?.id != item.id || current.subtitleIndex != TrackIndex.DISABLED) return
+            Timber.i("Enabling deferred subtitle %s", subtitleIndex)
+            _state.update { it.copy(currentPlayback = it.currentPlayback?.copy(subtitleIndex = subtitleIndex)) }
+            changeStreams(
+                item = item,
+                sourceId = current.mediaSourceInfo.id,
+                audioIndex = current.audioIndex,
+                subtitleIndex = subtitleIndex,
+                positionMs = onMain { player.currentPosition },
+                enableDirectPlay = true,
+            )
+        }
+
+        /**
          * Change which streams (ie audio or subtitle) are active
          */
         @OptIn(UnstableApi::class)
@@ -701,6 +740,7 @@ class PlaybackViewModel
             positionMs: Long = 0,
             enableDirectPlay: Boolean = !this.forceTranscoding,
             enableDirectStream: Boolean = !this.forceTranscoding,
+            deferExtractedSubtitle: Boolean = false,
         ): Unit =
             withContext(WholphinDispatchers.IO) {
                 val itemId = item.id
@@ -814,6 +854,14 @@ class PlaybackViewModel
                             else -> throw Exception("No supported playback method")
                         }
                     Timber.i("Playback decision for $itemId: $transcodeType")
+
+                    // An embedded subtitle the server first has to extract from the whole file would
+                    // block the start, so start without it and turn it on once it's ready
+                    val deferredSubtitle =
+                        source
+                            .findExternalSubtitle(subtitleIndex)
+                            ?.takeIf { deferExtractedSubtitle && !it.isExternal && it.deliveryUrl != null }
+                    val subtitleIndex = if (deferredSubtitle != null) null else subtitleIndex
 
                     val externalSubtitleCount = source.externalSubtitlesCount
 
@@ -957,6 +1005,9 @@ class PlaybackViewModel
 
                         if (subtitleIndex != null) {
                             viewModelScope.launchIO { loadSubtitleDelay() }
+                        }
+                        deferredSubtitle?.let {
+                            viewModelScope.launchIO { enableSubtitleWhenReady(item, it.index, it.deliveryUrl!!) }
                         }
                     }
                 }
