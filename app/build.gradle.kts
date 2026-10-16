@@ -83,6 +83,18 @@ configure<ApplicationExtension> {
         testInstrumentationRunner = "com.github.damontecres.wholphin.test.WholphinTestRunner"
 
         buildConfigField("long", "BUILD_TIME", System.currentTimeMillis().toString())
+
+        // TIDAL device-login client, from local.properties or the CI secrets (not in the repo)
+        val localProps =
+            Properties().apply {
+                rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+            }
+        fun secret(
+            prop: String,
+            env: String,
+        ) = (localProps.getProperty(prop) ?: System.getenv(env)).orEmpty()
+        buildConfigField("String", "TIDAL_CLIENT_ID", "\"${secret("tidal.device.clientid", "TIDAL_CLIENT_ID")}\"")
+        buildConfigField("String", "TIDAL_CLIENT_SECRET", "\"${secret("tidal.device.clientsecret", "TIDAL_CLIENT_SECRET")}\"")
     }
 
     signingConfigs {

@@ -165,6 +165,13 @@ class NavDrawerViewModel
                     )
                 }
 
+                NavDrawerItem.Tidal -> {
+                    setIndex(index)
+                    navigationManager.navigateToFromDrawer(
+                        Destination.Tidal,
+                    )
+                }
+
                 NavDrawerItem.Audiobookshelf -> {
                     setIndex(index)
                     navigationManager.navigateToFromDrawer(
@@ -204,6 +211,7 @@ class NavDrawerViewModel
                             is NavDrawerItem.Favorites -> Destination.Favorites
                             is NavDrawerItem.Discover -> Destination.Discover
                             is NavDrawerItem.Audiobookshelf -> Destination.Audiobookshelf
+                            is NavDrawerItem.Tidal -> Destination.Tidal
                             is NavDrawerItem.CsfdWatchlist -> Destination.CsfdWatchlist
                             else -> null
                         }
@@ -278,6 +286,13 @@ sealed interface NavDrawerItem {
             get() = "a_discover"
 
         override fun name(context: Context): String = context.getString(R.string.discover)
+    }
+
+    object Tidal : NavDrawerItem {
+        override val id: String
+            get() = "a_tidal"
+
+        override fun name(context: Context): String = context.getString(R.string.tidal)
     }
 
     object Audiobookshelf : NavDrawerItem {
@@ -726,6 +741,10 @@ fun NavigationDrawerScope.NavItem(
 
                 NavDrawerItem.Audiobookshelf -> {
                     R.string.fa_podcast
+                }
+
+                NavDrawerItem.Tidal -> {
+                    R.string.fa_music
                 }
 
                 NavDrawerItem.CsfdWatchlist -> {

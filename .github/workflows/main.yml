@@ -51,6 +51,8 @@ jobs:
           KEY_PASSWORD: "${{ secrets.KEY_PASSWORD }}"
           KEY_STORE_PASSWORD: "${{ secrets.KEY_STORE_PASSWORD }}"
           SIGNING_KEY: "${{ secrets.SIGNING_KEY }}"
+          TIDAL_CLIENT_ID: "${{ secrets.TIDAL_CLIENT_ID }}"
+          TIDAL_CLIENT_SECRET: "${{ secrets.TIDAL_CLIENT_SECRET }}"
         run: |
           ./gradlew clean assembleDefaultDebug
           ./gradlew assembleDefaultRelease

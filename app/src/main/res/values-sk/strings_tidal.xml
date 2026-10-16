@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tidal_not_configured">Táto verzia nemá TIDAL client ID.</string>
+    <string name="tidal_login_step1">Na mobile alebo počítači otvor</string>
+    <string name="tidal_login_step2">a zadaj tento kód</string>
+    <string name="tidal_login_waiting">Čakám na potvrdenie…</string>
+    <string name="tidal_login_failed">Kód vypršal alebo prihlásenie zlyhalo.</string>
+    <string name="tidal_login_retry">Získať nový kód</string>
+    <string name="tidal_my_collection">Moja kolekcia</string>
+    <string name="tidal_logout">Odhlásiť</string>
+    <string name="tidal_playlists">Playlisty</string>
+    <string name="tidal_albums">Albumy</string>
+    <string name="tidal_tracks">Skladby</string>
+    <string name="tidal_loading">Načítavam…</string>
+    <string name="tidal_empty">Zatiaľ tu nič nie je</string>
+    <string name="tidal_col_title">Názov</string>
+    <string name="tidal_col_album">Album</string>
+    <string name="tidal_col_time">Čas</string>
+    <string name="tidal_album">Album</string>
+    <string name="tidal_playlist">Playlist</string>
+    <string name="tidal_minutes">%1$d min</string>
+    <string name="tidal_play">Prehrať</string>
+    <string name="tidal_shuffle">Náhodne</string>
+    <string name="tidal_queue">Fronta</string>
+    <string name="tidal_lyrics">Text</string>
+    <string name="tidal_no_lyrics">K tejto skladbe nie je text</string>
+    <plurals name="tidal_track_count">
+        <item quantity="one">%d skladba</item>
+        <item quantity="few">%d skladby</item>
+        <item quantity="many">%d skladby</item>
+        <item quantity="other">%d skladieb</item>
+    </plurals>
+</resources>

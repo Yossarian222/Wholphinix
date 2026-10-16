@@ -206,6 +206,7 @@ class NavDrawerService
                     // Always shown: the connection is configured on the Audiobookshelf page itself,
                     // which would be unreachable if the item only appeared once configured
                     add(NavDrawerItem.Audiobookshelf)
+                    add(NavDrawerItem.Tidal)
                 }
             val allLibraries = getAllUserLibraries(user.id, userDto.tvAccess)
             val libraries =

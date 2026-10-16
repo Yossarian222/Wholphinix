@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tidal" translatable="false">TIDAL</string>
+    <string name="tidal_not_configured">This build has no TIDAL client ID.</string>
+    <string name="tidal_login_step1">On your phone or computer, go to</string>
+    <string name="tidal_login_step2">and enter this code</string>
+    <string name="tidal_login_waiting">Waiting for confirmation…</string>
+    <string name="tidal_login_failed">The code expired or login failed.</string>
+    <string name="tidal_login_retry">Get a new code</string>
+    <string name="tidal_my_collection">My Collection</string>
+    <string name="tidal_logout">Log out</string>
+    <string name="tidal_playlists">Playlists</string>
+    <string name="tidal_albums">Albums</string>
+    <string name="tidal_tracks">Tracks</string>
+    <string name="tidal_loading">Loading…</string>
+    <string name="tidal_empty">Nothing here yet</string>
+    <string name="tidal_col_title">Title</string>
+    <string name="tidal_col_album">Album</string>
+    <string name="tidal_col_time">Time</string>
+    <string name="tidal_album">Album</string>
+    <string name="tidal_playlist">Playlist</string>
+    <string name="tidal_minutes">%1$d min</string>
+    <string name="tidal_play">Play</string>
+    <string name="tidal_shuffle">Shuffle</string>
+    <string name="tidal_queue">Play queue</string>
+    <string name="tidal_lyrics">Lyrics</string>
+    <string name="tidal_no_lyrics">No lyrics for this track</string>
+    <plurals name="tidal_track_count">
+        <item quantity="one">%d track</item>
+        <item quantity="other">%d tracks</item>
+    </plurals>
+</resources>

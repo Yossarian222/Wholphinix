@@ -152,6 +152,9 @@ sealed class Destination(
     data object Audiobookshelf : Destination(false)
 
     @Serializable
+    data object Tidal : Destination(false)
+
+    @Serializable
     data object CsfdWatchlist : Destination(false)
 
     /** History of Jean's bubbles (#47), from the Jean settings */
