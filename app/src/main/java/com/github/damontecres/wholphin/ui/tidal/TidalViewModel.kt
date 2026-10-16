@@ -24,6 +24,7 @@ import com.github.damontecres.wholphin.services.tidal.TidalMix
 import com.github.damontecres.wholphin.services.tidal.TidalPlaylist
 import com.github.damontecres.wholphin.services.tidal.TidalService
 import com.github.damontecres.wholphin.services.tidal.TidalSession
+import com.github.damontecres.wholphin.services.tidal.TidalSettings
 import com.github.damontecres.wholphin.services.tidal.TidalTrack
 import com.github.damontecres.wholphin.services.tidal.TidalTrackShelf
 import com.github.damontecres.wholphin.R
@@ -83,6 +84,8 @@ data class TidalUiState(
     val addToPlaylist: TidalTrack? = null,
     /** Short notice, e.g. that a track was added to a playlist */
     val message: String? = null,
+    val settings: TidalSettings = TidalSettings(),
+    val showSettings: Boolean = false,
 )
 
 data class TidalPlayerState(
@@ -145,6 +148,9 @@ class TidalViewModel
         private var lyricsJob: Job? = null
         private val qualities = ConcurrentHashMap<Long, String>()
 
+        /** Read on the player's loading thread, so kept outside the state */
+        @Volatile private var streamQuality: String = TidalSettings().quality
+
         // Stream URLs expire, so each track's URL is fetched only when the player opens it
         private val exoPlayer: ExoPlayer =
             ExoPlayer
@@ -154,7 +160,7 @@ class TidalViewModel
                         ResolvingDataSource.Factory(DefaultDataSource.Factory(context)) { spec ->
                             val id = spec.uri.lastPathSegment?.toLongOrNull() ?: return@Factory spec
                             // Runs on the player's loading thread
-                            val stream = runBlocking { service.call { service.api.streamUrl(it, id) } }
+                            val stream = runBlocking { service.call { service.api.streamUrl(it, id, streamQuality) } }
                             stream.audioQuality?.let { q ->
                                 qualities[id] = q
                                 _player.update { if (it.current?.id == id) it.copy(quality = q) else it }
@@ -222,6 +228,12 @@ class TidalViewModel
                 }
             }
             viewModelScope.launch {
+                service.settings.collect { settings ->
+                    streamQuality = settings.quality
+                    _state.update { it.copy(settings = settings) }
+                }
+            }
+            viewModelScope.launch {
                 service.session.distinctUntilChangedBy { it.isLoggedIn }.collect { session ->
                     _state.update { it.copy(loggedIn = session.isLoggedIn) }
                     if (session.isLoggedIn) loadCollection() else startLogin()
@@ -244,7 +256,16 @@ class TidalViewModel
                 }
         }
 
+        fun showSettings(show: Boolean) = _state.update { it.copy(showSettings = show) }
+
+        fun updateSettings(change: (TidalSettings) -> TidalSettings) {
+            val updated = change(_state.value.settings)
+            _state.update { it.copy(settings = updated) }
+            viewModelScope.launch { service.saveSettings(updated) }
+        }
+
         fun logout() {
+            _state.update { it.copy(showSettings = false) }
             exoPlayer.stop()
             exoPlayer.clearMediaItems()
             _player.value = TidalPlayerState()
@@ -306,6 +327,7 @@ class TidalViewModel
                     subtitle = "",
                     imageUrl = TidalApi.imageUrl(playlist.squareImage ?: playlist.image, 640),
                     playlistUuid = playlist.uuid,
+                    newestFirst = _state.value.settings.newestFirst,
                 ),
             )
 

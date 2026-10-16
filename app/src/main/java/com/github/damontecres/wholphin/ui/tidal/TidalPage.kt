@@ -2,6 +2,8 @@ package com.github.damontecres.wholphin.ui.tidal
 
 import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
+import androidx.annotation.StringRes
+import androidx.compose.runtime.SideEffect
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.runtime.setValue
@@ -71,15 +73,37 @@ import com.github.damontecres.wholphin.ui.FontAwesome
 import com.github.damontecres.wholphin.ui.tryRequestFocus
 
 /** TIDAL's own dark palette, used instead of the Wholphin theme so the page looks like the TIDAL app */
+private enum class TidalTheme(
+    @StringRes val label: Int,
+    val background: Color,
+    val bar: Color,
+    val elevated: Color,
+    val focused: Color,
+    val divider: Color,
+    val accent: Color,
+) {
+    BLACK(R.string.tidal_theme_black, Color(0xFF000000), Color(0xFF0D0D0E), Color(0xFF1E1E21), Color(0xFF2B2B30), Color(0xFF26262B), Color(0xFF33FFEE)),
+    GRAPHITE(R.string.tidal_theme_graphite, Color(0xFF17171A), Color(0xFF202024), Color(0xFF2C2C31), Color(0xFF3A3A41), Color(0xFF34343A), Color(0xFF33FFEE)),
+    MIDNIGHT(R.string.tidal_theme_midnight, Color(0xFF070B18), Color(0xFF0D1324), Color(0xFF18213A), Color(0xFF243052), Color(0xFF1C2742), Color(0xFF7AA7FF)),
+    AMBER(R.string.tidal_theme_amber, Color(0xFF000000), Color(0xFF0E0C0A), Color(0xFF221E1A), Color(0xFF332C25), Color(0xFF2A2520), Color(0xFFFFB547)),
+    ;
+
+    companion object {
+        fun of(name: String) = entries.firstOrNull { it.name == name } ?: BLACK
+    }
+}
+
+/** The page's colours, from the theme picked in the TIDAL settings (TIDAL's own black by default) */
 private object Tidal {
-    val background = Color(0xFF000000)
-    val bar = Color(0xFF0D0D0E)
-    val elevated = Color(0xFF1E1E21)
-    val focused = Color(0xFF2B2B30)
+    var theme by mutableStateOf(TidalTheme.BLACK)
+    val background get() = theme.background
+    val bar get() = theme.bar
+    val elevated get() = theme.elevated
+    val focused get() = theme.focused
     val text = Color(0xFFFFFFFF)
     val secondary = Color(0xFFA6A6AD)
-    val divider = Color(0xFF26262B)
-    val accent = Color(0xFF33FFEE)
+    val divider get() = theme.divider
+    val accent get() = theme.accent
 }
 
 @Composable
@@ -92,6 +116,8 @@ fun TidalPage(
 
     // The player lives with this page, so leaving the app pauses it (same as Audiobookshelf)
     LifecycleStartEffect(Unit) { onStopOrDispose { viewModel.pause() } }
+    SideEffect { Tidal.theme = TidalTheme.of(state.settings.theme) }
+    BackHandler(enabled = state.showSettings) { viewModel.showSettings(false) }
     BackHandler(enabled = player.showNowPlaying && state.addToPlaylist == null) { viewModel.showNowPlaying(false) }
     BackHandler(enabled = !player.showNowPlaying && state.detail != null && state.addToPlaylist == null) { viewModel.closeDetail() }
     BackHandler(enabled = state.addToPlaylist != null) { viewModel.pickPlaylistFor(null) }
@@ -114,11 +140,114 @@ fun TidalPage(
                     if (player.current != null) PlayerBar(player, viewModel)
                 }
         }
-        if (player.showNowPlaying && player.current != null) NowPlaying(player, viewModel)
+        if (player.showNowPlaying && player.current != null) NowPlaying(player, viewModel, state.settings.lyricsFirst)
+        if (state.showSettings) SettingsScreen(state.settings, viewModel)
         state.addToPlaylist?.let { PlaylistPicker(it, state.playlists, onPick = viewModel::addToPlaylist) }
         state.message?.let { Notice(it, Modifier.align(Alignment.TopEnd)) }
     }
 }
+
+/** TIDAL settings: look, stream quality, playlist order, lyrics, logout */
+@Composable
+private fun SettingsScreen(
+    settings: com.github.damontecres.wholphin.services.tidal.TidalSettings,
+    viewModel: TidalViewModel,
+) {
+    val focus = remember { FocusRequester() }
+    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .8f)), contentAlignment = Alignment.Center) {
+        LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier =
+                Modifier
+                    .width(640.dp)
+                    .fillMaxHeight(.9f)
+                    .background(Tidal.bar, RoundedCornerShape(8.dp))
+                    .padding(28.dp),
+        ) {
+            item {
+                Text(stringResource(R.string.tidal_settings), color = Tidal.text, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+            }
+            item { SettingLabel(stringResource(R.string.tidal_setting_theme)) }
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    TidalTheme.entries.forEachIndexed { index, theme ->
+                        PillButton(
+                            stringResource(theme.label),
+                            primary = settings.theme == theme.name,
+                            onClick = { viewModel.updateSettings { it.copy(theme = theme.name) } },
+                            modifier = if (index == 0) Modifier.focusRequester(focus) else Modifier,
+                        )
+                    }
+                }
+            }
+            item { SettingLabel(stringResource(R.string.tidal_setting_quality)) }
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    listOf(
+                        "LOW" to R.string.tidal_quality_low,
+                        "HIGH" to R.string.tidal_quality_high,
+                        "LOSSLESS" to R.string.tidal_quality_lossless,
+                    ).forEach { (quality, label) ->
+                        PillButton(
+                            stringResource(label),
+                            primary = settings.quality == quality,
+                            onClick = { viewModel.updateSettings { it.copy(quality = quality) } },
+                        )
+                    }
+                }
+            }
+            item {
+                Text(stringResource(R.string.tidal_quality_hint), color = Tidal.secondary, fontSize = 12.sp)
+            }
+            item { SettingLabel(stringResource(R.string.tidal_setting_playlist_order)) }
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    PillButton(
+                        stringResource(R.string.tidal_sort_newest),
+                        primary = settings.newestFirst,
+                        onClick = { viewModel.updateSettings { it.copy(newestFirst = true) } },
+                    )
+                    PillButton(
+                        stringResource(R.string.tidal_sort_playlist),
+                        primary = !settings.newestFirst,
+                        onClick = { viewModel.updateSettings { it.copy(newestFirst = false) } },
+                    )
+                }
+            }
+            item { SettingLabel(stringResource(R.string.tidal_setting_now_playing)) }
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    PillButton(
+                        stringResource(R.string.tidal_queue),
+                        primary = !settings.lyricsFirst,
+                        onClick = { viewModel.updateSettings { it.copy(lyricsFirst = false) } },
+                    )
+                    PillButton(
+                        stringResource(R.string.tidal_lyrics),
+                        primary = settings.lyricsFirst,
+                        onClick = { viewModel.updateSettings { it.copy(lyricsFirst = true) } },
+                    )
+                }
+            }
+            item { SettingLabel(stringResource(R.string.tidal_setting_account)) }
+            item {
+                PillButton(stringResource(R.string.tidal_logout), primary = false, onClick = viewModel::logout)
+            }
+        }
+    }
+    LaunchedEffect(Unit) { focus.tryRequestFocus() }
+}
+
+@Composable
+private fun SettingLabel(text: String) =
+    Text(
+        text.uppercase(),
+        color = Tidal.secondary,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Bold,
+        letterSpacing = 2.sp,
+        modifier = Modifier.padding(top = 14.dp),
+    )
 
 /** A mix or a recommended track list, shown together under "For you" */
 private sealed interface ForYouItem {
@@ -283,7 +412,12 @@ private fun CollectionScreen(
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.weight(1f),
             )
-            PillButton(stringResource(R.string.tidal_logout), primary = false, onClick = viewModel::logout)
+            PillButton(
+                stringResource(R.string.tidal_settings),
+                primary = false,
+                faIcon = R.string.fa_sliders,
+                onClick = { viewModel.showSettings(true) },
+            )
         }
         Spacer(Modifier.height(16.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -805,10 +939,11 @@ private fun ProgressRow(
 private fun NowPlaying(
     player: TidalPlayerState,
     viewModel: TidalViewModel,
+    lyricsFirst: Boolean,
 ) {
     val track = player.current ?: return
     val playFocus = remember { FocusRequester() }
-    var showLyrics by rememberSaveable { mutableStateOf(false) }
+    var showLyrics by rememberSaveable { mutableStateOf(lyricsFirst) }
     val cover = TidalApi.imageUrl(track.album?.cover, 1280)
     Box(Modifier.fillMaxSize().background(Tidal.background)) {
         AsyncImage(

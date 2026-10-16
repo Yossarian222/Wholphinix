@@ -397,13 +397,14 @@ class TidalApi
         suspend fun streamUrl(
             s: TidalSession,
             trackId: Long,
+            quality: String = "LOSSLESS",
         ): TidalStream {
             val info =
                 json.decodeFromString<PlaybackInfo>(
                     get(
                         s,
                         "tracks/$trackId/playbackinfopostpaywall",
-                        "audioquality" to "LOSSLESS",
+                        "audioquality" to quality,
                         "playbackmode" to "STREAM",
                         "assetpresentation" to "FULL",
                     ),

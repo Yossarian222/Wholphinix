@@ -6,8 +6,22 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.Serializable
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/** What the user set on the TIDAL settings screen */
+@Serializable
+data class TidalSettings(
+    /** One of [TidalTheme] names */
+    val theme: String = "BLACK",
+    /** LOW, HIGH or LOSSLESS, as TIDAL calls them */
+    val quality: String = "LOSSLESS",
+    /** Playlists open newest added first */
+    val newestFirst: Boolean = true,
+    /** Now playing opens with the lyrics instead of the play queue */
+    val lyricsFirst: Boolean = false,
+)
 
 /** Keeps the TIDAL login and runs API calls with it, refreshing the access token when it expires */
 @Singleton
@@ -19,7 +33,12 @@ class TidalService
     ) {
         companion object {
             private const val KEY = "tidal_session"
+            private const val SETTINGS_KEY = "tidal_settings"
         }
+
+        val settings: Flow<TidalSettings> = keyValueService.get(SETTINGS_KEY, TidalSettings())
+
+        suspend fun saveSettings(settings: TidalSettings) = keyValueService.save(SETTINGS_KEY, settings)
 
         val session: Flow<TidalSession> = keyValueService.get(KEY, TidalSession())
         private val refreshLock = Mutex()
