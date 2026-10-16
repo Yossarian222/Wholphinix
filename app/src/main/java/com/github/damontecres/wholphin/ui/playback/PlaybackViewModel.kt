@@ -848,6 +848,8 @@ class PlaybackViewModel
             stopLocalSubtitle()
             localSubtitleJob =
                 viewModelScope.launch(WholphinDispatchers.Main) {
+                    // Only these cues are shown; the player's own captions would fight with them
+                    disablePlayerText()
                     var shown: List<Cue> = emptyList()
                     try {
                         while (isActive) {
@@ -872,6 +874,16 @@ class PlaybackViewModel
                         if (shown.isNotEmpty()) _state.update { it.copy(subtitleCues = emptyList()) }
                     }
                 }
+        }
+
+        /** Turns off ExoPlayer's own text tracks (closed captions, subtitles in the stream) */
+        private fun disablePlayerText() {
+            player.trackSelectionParameters =
+                player.trackSelectionParameters
+                    .buildUpon()
+                    .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                    .build()
         }
 
         private fun stopLocalSubtitle() {
@@ -1187,6 +1199,11 @@ class PlaybackViewModel
                                 loading = LoadingState.Success,
                                 currentPlayback = playback,
                             )
+                        }
+                        if (deferredSubtitle != null && currentPlayer.value?.backend == PlayerBackend.EXO_PLAYER) {
+                            // Until the deferred subtitle is on, ExoPlayer must not pick a text track by itself,
+                            // e.g. English closed captions carried in the H264 stream (#60)
+                            disablePlayerText()
                         }
                         player.setMediaItem(
                             mediaItem,
