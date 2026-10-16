@@ -25,6 +25,15 @@
     <string name="tidal_queue">Play queue</string>
     <string name="tidal_lyrics">Lyrics</string>
     <string name="tidal_no_lyrics">No lyrics for this track</string>
+    <string name="tidal_for_you">For you</string>
+    <string name="tidal_mix">Mix</string>
+    <string name="tidal_sort_newest">Newest added first</string>
+    <string name="tidal_sort_playlist">Playlist order</string>
+    <string name="tidal_add_to_playlist">Add to playlist</string>
+    <string name="tidal_no_playlists">You have no playlists yet</string>
+    <string name="tidal_long_press_hint">Hold OK on a track to add it to a playlist</string>
+    <string name="tidal_added_to_playlist">Added %1$s to %2$s</string>
+    <string name="tidal_add_failed">Could not add to playlist: %1$s</string>
     <plurals name="tidal_track_count">
         <item quantity="one">%d track</item>
         <item quantity="other">%d tracks</item>

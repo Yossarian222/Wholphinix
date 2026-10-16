@@ -24,6 +24,15 @@
     <string name="tidal_queue">Fronta</string>
     <string name="tidal_lyrics">Text</string>
     <string name="tidal_no_lyrics">K tejto skladbe nie je text</string>
+    <string name="tidal_for_you">Pre teba</string>
+    <string name="tidal_mix">Mix</string>
+    <string name="tidal_sort_newest">Najnovšie pridané</string>
+    <string name="tidal_sort_playlist">Poradie playlistu</string>
+    <string name="tidal_add_to_playlist">Pridať do playlistu</string>
+    <string name="tidal_no_playlists">Zatiaľ nemáš žiadne playlisty</string>
+    <string name="tidal_long_press_hint">Podrž OK na skladbe a pridáš ju do playlistu</string>
+    <string name="tidal_added_to_playlist">%1$s pridaná do %2$s</string>
+    <string name="tidal_add_failed">Do playlistu sa nepodarilo pridať: %1$s</string>
     <plurals name="tidal_track_count">
         <item quantity="one">%d skladba</item>
         <item quantity="few">%d skladby</item>

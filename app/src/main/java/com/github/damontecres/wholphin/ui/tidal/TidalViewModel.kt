@@ -20,10 +20,13 @@ import com.github.damontecres.wholphin.services.tidal.TidalAlbum
 import com.github.damontecres.wholphin.services.tidal.TidalApi
 import com.github.damontecres.wholphin.services.tidal.TidalAuthException
 import com.github.damontecres.wholphin.services.tidal.TidalDeviceCode
+import com.github.damontecres.wholphin.services.tidal.TidalMix
 import com.github.damontecres.wholphin.services.tidal.TidalPlaylist
 import com.github.damontecres.wholphin.services.tidal.TidalService
 import com.github.damontecres.wholphin.services.tidal.TidalSession
 import com.github.damontecres.wholphin.services.tidal.TidalTrack
+import com.github.damontecres.wholphin.services.tidal.TidalTrackShelf
+import com.github.damontecres.wholphin.R
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
@@ -40,18 +43,26 @@ import java.util.concurrent.ConcurrentHashMap
 import timber.log.Timber
 import javax.inject.Inject
 
-enum class TidalTab { PLAYLISTS, ALBUMS, TRACKS }
+enum class TidalTab { PLAYLISTS, FOR_YOU, ALBUMS, TRACKS }
 
-/** An opened album or playlist */
+enum class TidalDetailKind { ALBUM, PLAYLIST, MIX, SHELF }
+
+/** An opened album, playlist, mix or recommended track list */
 data class TidalDetail(
-    val isAlbum: Boolean,
+    val kind: TidalDetailKind,
     val title: String,
     val subtitle: String,
     val imageUrl: String?,
     val tracks: List<TidalTrack> = emptyList(),
     val loading: Boolean = true,
     val error: String? = null,
-)
+    /** Set for a playlist, so its tracks can be reordered */
+    val playlistUuid: String? = null,
+    /** Playlist shown newest added first instead of in its own order */
+    val newestFirst: Boolean = true,
+) {
+    val isAlbum: Boolean get() = kind == TidalDetailKind.ALBUM
+}
 
 data class TidalUiState(
     /** Null until the saved login was read */
@@ -64,7 +75,14 @@ data class TidalUiState(
     val playlists: List<TidalPlaylist> = emptyList(),
     val albums: List<TidalAlbum> = emptyList(),
     val tracks: List<TidalTrack> = emptyList(),
+    val mixes: List<TidalMix> = emptyList(),
+    val shelves: List<TidalTrackShelf> = emptyList(),
+    val forYouLoading: Boolean = false,
     val detail: TidalDetail? = null,
+    /** Track the user is picking a playlist for */
+    val addToPlaylist: TidalTrack? = null,
+    /** Short notice, e.g. that a track was added to a playlist */
+    val message: String? = null,
 )
 
 data class TidalPlayerState(
@@ -112,7 +130,7 @@ internal fun parseLrc(lrc: String?): List<LyricLine> =
 class TidalViewModel
     @Inject
     constructor(
-        @param:ApplicationContext context: Context,
+        @param:ApplicationContext private val context: Context,
         private val service: TidalService,
     ) : ViewModel() {
         private val _state = MutableStateFlow(TidalUiState())
@@ -250,6 +268,22 @@ class TidalViewModel
                     _state.update { it.copy(loading = false, error = ex.message) }
                 }
             }
+            loadForYou()
+        }
+
+        /** Mixes and recommended tracks; failing here must not hide the rest of the collection */
+        private fun loadForYou() {
+            viewModelScope.launch {
+                _state.update { it.copy(forYouLoading = true) }
+                try {
+                    val forYou = service.call { service.api.forYou(it) }
+                    Timber.i("TIDAL for you: %d mixes, %d track lists", forYou.mixes.size, forYou.shelves.size)
+                    _state.update { it.copy(mixes = forYou.mixes, shelves = forYou.shelves, forYouLoading = false) }
+                } catch (ex: Exception) {
+                    Timber.w(ex, "Loading TIDAL mixes failed")
+                    _state.update { it.copy(forYouLoading = false) }
+                }
+            }
         }
 
         fun selectTab(tab: TidalTab) = _state.update { it.copy(tab = tab) }
@@ -257,7 +291,7 @@ class TidalViewModel
         fun openAlbum(album: TidalAlbum) =
             openDetail(
                 TidalDetail(
-                    isAlbum = true,
+                    kind = TidalDetailKind.ALBUM,
                     title = album.title,
                     subtitle = album.artist?.name.orEmpty(),
                     imageUrl = TidalApi.imageUrl(album.cover, 640),
@@ -265,14 +299,88 @@ class TidalViewModel
             ) { service.api.albumTracks(it, album.id) }
 
         fun openPlaylist(playlist: TidalPlaylist) =
-            openDetail(
+            openPlaylistDetail(
                 TidalDetail(
-                    isAlbum = false,
+                    kind = TidalDetailKind.PLAYLIST,
                     title = playlist.title,
                     subtitle = "",
                     imageUrl = TidalApi.imageUrl(playlist.squareImage ?: playlist.image, 640),
+                    playlistUuid = playlist.uuid,
                 ),
-            ) { service.api.playlistTracks(it, playlist.uuid) }
+            )
+
+        private fun openPlaylistDetail(detail: TidalDetail) {
+            val uuid = detail.playlistUuid ?: return
+            openDetail(detail) { session ->
+                val tracks = service.api.playlistTracks(session, uuid, detail.newestFirst)
+                // In case TIDAL ignores the order, sort by the dates it sends with playlist tracks
+                if (detail.newestFirst && tracks.any { it.dateAdded != null }) {
+                    tracks.sortedByDescending { it.dateAdded.orEmpty() }
+                } else {
+                    tracks
+                }
+            }
+        }
+
+        /** Switches an opened playlist between newest added first and its own order */
+        fun toggleNewestFirst() {
+            val detail = _state.value.detail?.takeIf { it.playlistUuid != null } ?: return
+            openPlaylistDetail(detail.copy(newestFirst = !detail.newestFirst, loading = true, error = null, tracks = emptyList()))
+        }
+
+        fun openMix(mix: TidalMix) =
+            openDetail(
+                TidalDetail(
+                    kind = TidalDetailKind.MIX,
+                    title = mix.title,
+                    subtitle = mix.subTitle,
+                    imageUrl = mix.imageUrl,
+                ),
+            ) { service.api.mixTracks(it, mix.id) }
+
+        fun openShelf(shelf: TidalTrackShelf) {
+            detailJob?.cancel()
+            _state.update {
+                it.copy(
+                    detail =
+                        TidalDetail(
+                            kind = TidalDetailKind.SHELF,
+                            title = shelf.title,
+                            subtitle = "",
+                            imageUrl = TidalApi.imageUrl(shelf.tracks.firstOrNull()?.album?.cover, 640),
+                            tracks = shelf.tracks,
+                            loading = false,
+                        ),
+                )
+            }
+        }
+
+        /** Asks which playlist [track] should go to */
+        fun pickPlaylistFor(track: TidalTrack?) = _state.update { it.copy(addToPlaylist = track) }
+
+        fun addToPlaylist(playlist: TidalPlaylist) {
+            val track = _state.value.addToPlaylist ?: return
+            _state.update { it.copy(addToPlaylist = null) }
+            viewModelScope.launch {
+                val message =
+                    try {
+                        service.call { service.api.addToPlaylist(it, playlist.uuid, track.id) }
+                        // Refresh the counts on the playlist covers
+                        runCatching { service.call { service.api.playlists(it) } }.getOrNull()?.let { playlists ->
+                            _state.update { it.copy(playlists = playlists) }
+                        }
+                        // An opened copy of that playlist gets the track too
+                        _state.value.detail?.takeIf { it.playlistUuid == playlist.uuid }?.let { openPlaylistDetail(it) }
+                        context.getString(R.string.tidal_added_to_playlist, track.title, playlist.title)
+                    } catch (ex: Exception) {
+                        Timber.w(ex, "Adding to TIDAL playlist failed")
+                        context.getString(R.string.tidal_add_failed, ex.message.orEmpty())
+                    }
+                _state.update { it.copy(message = message) }
+                delay(4000)
+                _state.update { if (it.message == message) it.copy(message = null) else it }
+            }
+        }
 
         private fun openDetail(
             detail: TidalDetail,

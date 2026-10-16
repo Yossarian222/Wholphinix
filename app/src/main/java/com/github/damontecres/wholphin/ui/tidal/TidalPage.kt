@@ -63,7 +63,10 @@ import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import com.github.damontecres.wholphin.R
 import com.github.damontecres.wholphin.services.tidal.TidalApi
+import com.github.damontecres.wholphin.services.tidal.TidalMix
+import com.github.damontecres.wholphin.services.tidal.TidalPlaylist
 import com.github.damontecres.wholphin.services.tidal.TidalTrack
+import com.github.damontecres.wholphin.services.tidal.TidalTrackShelf
 import com.github.damontecres.wholphin.ui.FontAwesome
 import com.github.damontecres.wholphin.ui.tryRequestFocus
 
@@ -89,8 +92,9 @@ fun TidalPage(
 
     // The player lives with this page, so leaving the app pauses it (same as Audiobookshelf)
     LifecycleStartEffect(Unit) { onStopOrDispose { viewModel.pause() } }
-    BackHandler(enabled = player.showNowPlaying) { viewModel.showNowPlaying(false) }
-    BackHandler(enabled = !player.showNowPlaying && state.detail != null) { viewModel.closeDetail() }
+    BackHandler(enabled = player.showNowPlaying && state.addToPlaylist == null) { viewModel.showNowPlaying(false) }
+    BackHandler(enabled = !player.showNowPlaying && state.detail != null && state.addToPlaylist == null) { viewModel.closeDetail() }
+    BackHandler(enabled = state.addToPlaylist != null) { viewModel.pickPlaylistFor(null) }
 
     Box(modifier = modifier.fillMaxSize().background(Tidal.background)) {
         when {
@@ -111,6 +115,104 @@ fun TidalPage(
                 }
         }
         if (player.showNowPlaying && player.current != null) NowPlaying(player, viewModel)
+        state.addToPlaylist?.let { PlaylistPicker(it, state.playlists, onPick = viewModel::addToPlaylist) }
+        state.message?.let { Notice(it, Modifier.align(Alignment.TopEnd)) }
+    }
+}
+
+/** A mix or a recommended track list, shown together under "For you" */
+private sealed interface ForYouItem {
+    data class Mix(
+        val mix: TidalMix,
+    ) : ForYouItem
+
+    data class Shelf(
+        val shelf: TidalTrackShelf,
+    ) : ForYouItem
+}
+
+/** Picks one of the user's playlists for [track] */
+@Composable
+private fun PlaylistPicker(
+    track: TidalTrack,
+    playlists: List<TidalPlaylist>,
+    onPick: (TidalPlaylist) -> Unit,
+) {
+    val focus = remember { FocusRequester() }
+    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .75f)), contentAlignment = Alignment.Center) {
+        Column(
+            modifier =
+                Modifier
+                    .width(520.dp)
+                    .fillMaxHeight(.8f)
+                    .background(Tidal.bar, RoundedCornerShape(8.dp))
+                    .padding(24.dp),
+        ) {
+            Text(stringResource(R.string.tidal_add_to_playlist), color = Tidal.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Text(
+                "${track.title} · ${track.artistNames}",
+                color = Tidal.secondary,
+                fontSize = 14.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(16.dp))
+            if (playlists.isEmpty()) {
+                Text(stringResource(R.string.tidal_no_playlists), color = Tidal.secondary, fontSize = 15.sp)
+            }
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                itemsIndexed(playlists, key = { _, p -> p.uuid }) { index, playlist ->
+                    Surface(
+                        onClick = { onPick(playlist) },
+                        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(4.dp)),
+                        scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
+                        colors =
+                            ClickableSurfaceDefaults.colors(
+                                containerColor = Color.Transparent,
+                                focusedContainerColor = Tidal.focused,
+                            ),
+                        modifier = Modifier.fillMaxWidth().then(if (index == 0) Modifier.focusRequester(focus) else Modifier),
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(8.dp)) {
+                            AsyncImage(
+                                model = TidalApi.imageUrl(playlist.squareImage ?: playlist.image, 160),
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.size(44.dp).clip(RoundedCornerShape(3.dp)).background(Tidal.elevated),
+                            )
+                            Spacer(Modifier.width(14.dp))
+                            Column {
+                                Text(playlist.title, color = Tidal.text, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(
+                                    pluralStringResource(R.plurals.tidal_track_count, playlist.numberOfTracks, playlist.numberOfTracks),
+                                    color = Tidal.secondary,
+                                    fontSize = 13.sp,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    LaunchedEffect(Unit) { focus.tryRequestFocus() }
+}
+
+@Composable
+private fun Notice(
+    text: String,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier =
+            modifier
+                .padding(24.dp)
+                .widthIn(max = 480.dp)
+                .background(Tidal.elevated, RoundedCornerShape(8.dp))
+                .border(1.dp, Tidal.accent, RoundedCornerShape(8.dp))
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+    ) {
+        Text(text, color = Tidal.text, fontSize = 15.sp)
     }
 }
 
@@ -189,6 +291,7 @@ private fun CollectionScreen(
                 val label =
                     when (tab) {
                         TidalTab.PLAYLISTS -> R.string.tidal_playlists
+                        TidalTab.FOR_YOU -> R.string.tidal_for_you
                         TidalTab.ALBUMS -> R.string.tidal_albums
                         TidalTab.TRACKS -> R.string.tidal_tracks
                     }
@@ -208,6 +311,37 @@ private fun CollectionScreen(
                         image = { TidalApi.imageUrl(it.squareImage ?: it.image) },
                         onClick = viewModel::openPlaylist,
                     )
+                state.tab == TidalTab.FOR_YOU ->
+                    CoverGrid(
+                        items = state.shelves.map { ForYouItem.Shelf(it) } + state.mixes.map { ForYouItem.Mix(it) },
+                        loading = state.forYouLoading,
+                        title = {
+                            when (it) {
+                                is ForYouItem.Mix -> it.mix.title
+                                is ForYouItem.Shelf -> it.shelf.title
+                            }
+                        },
+                        subtitle = {
+                            when (it) {
+                                is ForYouItem.Mix -> it.mix.subTitle
+                                is ForYouItem.Shelf ->
+                                    pluralStringResource(R.plurals.tidal_track_count, it.shelf.tracks.size, it.shelf.tracks.size)
+                            }
+                        },
+                        image = {
+                            when (it) {
+                                is ForYouItem.Mix -> it.mix.imageUrl
+                                is ForYouItem.Shelf -> TidalApi.imageUrl(it.shelf.tracks.firstOrNull()?.album?.cover)
+                            }
+                        },
+                        onClick = {
+                            when (it) {
+                                is ForYouItem.Mix -> viewModel.openMix(it.mix)
+                                is ForYouItem.Shelf -> viewModel.openShelf(it.shelf)
+                            }
+                        },
+                    )
+
                 state.tab == TidalTab.ALBUMS ->
                     CoverGrid(
                         items = state.albums,
@@ -222,6 +356,7 @@ private fun CollectionScreen(
                         tracks = state.tracks,
                         player = player,
                         onPlay = { viewModel.play(state.tracks, it) },
+                        onLongClick = viewModel::pickPlaylistFor,
                     )
             }
         }
@@ -282,6 +417,7 @@ private fun TrackList(
     onPlay: (Int) -> Unit,
     header: (@Composable () -> Unit)? = null,
     showCover: Boolean = true,
+    onLongClick: ((TidalTrack) -> Unit)? = null,
 ) {
     val focus = remember { FocusRequester() }
     LazyColumn(contentPadding = PaddingValues(bottom = 32.dp)) {
@@ -302,6 +438,7 @@ private fun TrackList(
                 playing = player.current?.id == track.id,
                 showCover = showCover,
                 onClick = { onPlay(index) },
+                onLongClick = onLongClick?.let { cb -> { cb(track) } },
                 modifier = if (index == 0) Modifier.focusRequester(focus) else Modifier,
             )
         }
@@ -325,9 +462,11 @@ private fun TrackRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     showAlbum: Boolean = true,
+    onLongClick: (() -> Unit)? = null,
 ) {
     Surface(
         onClick = onClick,
+        onLongClick = onLongClick,
         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(4.dp)),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
         colors =
@@ -412,6 +551,7 @@ private fun DetailScreen(
                 player = player,
                 showCover = !detail.isAlbum,
                 onPlay = { viewModel.play(detail.tracks, it) },
+                onLongClick = viewModel::pickPlaylistFor,
                 header = {
                     Row(
                         verticalAlignment = Alignment.Bottom,
@@ -426,7 +566,14 @@ private fun DetailScreen(
                         Spacer(Modifier.width(32.dp))
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text(
-                                stringResource(if (detail.isAlbum) R.string.tidal_album else R.string.tidal_playlist).uppercase(),
+                                stringResource(
+                                    when (detail.kind) {
+                                        TidalDetailKind.ALBUM -> R.string.tidal_album
+                                        TidalDetailKind.PLAYLIST -> R.string.tidal_playlist
+                                        TidalDetailKind.MIX -> R.string.tidal_mix
+                                        TidalDetailKind.SHELF -> R.string.tidal_for_you
+                                    },
+                                ).uppercase(),
                                 color = Tidal.secondary,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
@@ -461,7 +608,16 @@ private fun DetailScreen(
                                     faIcon = R.string.fa_shuffle,
                                     onClick = { viewModel.play(detail.tracks, shuffle = true) },
                                 )
+                                if (detail.playlistUuid != null) {
+                                    PillButton(
+                                        stringResource(if (detail.newestFirst) R.string.tidal_sort_newest else R.string.tidal_sort_playlist),
+                                        primary = false,
+                                        faIcon = R.string.fa_arrow_down_long,
+                                        onClick = viewModel::toggleNewestFirst,
+                                    )
+                                }
                             }
+                            Text(stringResource(R.string.tidal_long_press_hint), color = Tidal.secondary.copy(alpha = .7f), fontSize = 12.sp)
                         }
                     }
                 },
@@ -715,9 +871,15 @@ private fun NowPlaying(
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     PillButton(stringResource(R.string.tidal_queue), primary = !showLyrics, onClick = { showLyrics = false })
                     PillButton(stringResource(R.string.tidal_lyrics), primary = showLyrics, onClick = { showLyrics = true })
+                    PillButton(
+                        stringResource(R.string.tidal_add_to_playlist),
+                        primary = false,
+                        faIcon = R.string.fa_list_ul,
+                        onClick = { viewModel.pickPlaylistFor(track) },
+                    )
                 }
                 Spacer(Modifier.height(20.dp))
-                if (showLyrics) Lyrics(player) else Queue(player, onPlay = viewModel::playIndex)
+                if (showLyrics) Lyrics(player) else Queue(player, onPlay = viewModel::playIndex, onAdd = viewModel::pickPlaylistFor)
             }
         }
     }
@@ -753,6 +915,7 @@ private fun Badge(
 private fun Queue(
     player: TidalPlayerState,
     onPlay: (Int) -> Unit,
+    onAdd: (TidalTrack) -> Unit,
 ) {
     val listState = rememberLazyListState()
     LaunchedEffect(player.index) { if (player.index >= 0) listState.scrollToItem(player.index) }
@@ -765,6 +928,7 @@ private fun Queue(
                 showCover = true,
                 showAlbum = false,
                 onClick = { onPlay(index) },
+                onLongClick = { onAdd(track) },
             )
         }
     }
