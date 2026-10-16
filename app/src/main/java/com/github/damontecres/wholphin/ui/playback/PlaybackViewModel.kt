@@ -16,6 +16,7 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Tracks
+import androidx.media3.common.text.Cue
 import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.util.Util
@@ -23,6 +24,10 @@ import androidx.media3.exoplayer.DecoderCounters
 import androidx.media3.exoplayer.DecoderReuseEvaluation
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.analytics.AnalyticsListener
+import androidx.media3.extractor.text.CuesWithTiming
+import androidx.media3.extractor.text.SubtitleParser
+import androidx.media3.extractor.text.subrip.SubripParser
+import androidx.media3.extractor.text.webvtt.WebvttParser
 import androidx.media3.session.MediaSession
 import coil3.imageLoader
 import coil3.request.ImageRequest
@@ -487,6 +492,7 @@ class PlaybackViewModel
 
                 // New item, so we can clear the media segment tracker & subtitle cues
                 resetSegmentState()
+                stopLocalSubtitle()
                 _state.update { it.copy(subtitleCues = emptyList()) }
 
                 viewModelScope.launchIO {
@@ -767,6 +773,16 @@ class PlaybackViewModel
             // Skip if playback moved on or the user picked subtitles meanwhile
             if (current?.item?.id != item.id || current.subtitleIndex != TrackIndex.DISABLED) return
             _state.update { it.copy(currentPlayback = it.currentPlayback?.copy(subtitleIndex = subtitleIndex)) }
+            // Text subtitles are shown next to the player without touching it: replacing the media item
+            // re-prepares the whole stream, which stalled the film for a few seconds (#57)
+            val cues =
+                file?.takeIf { current.backend == PlayerBackend.EXO_PLAYER }?.let { parseTextSubtitle(it, deliveryUrl, stream.codec) }
+            if (cues != null) {
+                Timber.i("Deferred subtitle %s: showing %d cues without reloading", subtitleIndex, cues.size)
+                showLocalSubtitle(item.id, subtitleIndex, cues)
+                viewModelScope.launchIO { loadSubtitleDelay() }
+                return
+            }
             val addedInPlace =
                 file != null &&
                     current.backend == PlayerBackend.EXO_PLAYER &&
@@ -782,6 +798,85 @@ class PlaybackViewModel
                     enableDirectPlay = true,
                 )
             }
+        }
+
+        /**
+         * Parses a saved text subtitle (SubRip or WebVTT, by the delivery URL's extension or the codec).
+         * Returns null for other formats or if parsing fails, so the caller falls back to the player.
+         */
+        @OptIn(UnstableApi::class)
+        private fun parseTextSubtitle(
+            file: File,
+            deliveryUrl: String,
+            codec: String?,
+        ): List<CuesWithTiming>? {
+            val format =
+                deliveryUrl
+                    .substringBefore('?')
+                    .substringAfterLast('/')
+                    .substringAfterLast('.', "")
+                    .lowercase()
+                    .ifBlank { codec?.lowercase().orEmpty() }
+            val parser =
+                when (format) {
+                    "srt", "subrip" -> SubripParser()
+                    "vtt", "webvtt" -> WebvttParser()
+                    else -> return null
+                }
+            return try {
+                val result = mutableListOf<CuesWithTiming>()
+                parser.parse(file.readBytes(), SubtitleParser.OutputOptions.allCues()) { result.add(it) }
+                result.sortedBy { it.startTimeUs }.takeIf { it.isNotEmpty() }
+            } catch (ex: Exception) {
+                Timber.w(ex, "Deferred subtitle: parsing %s failed", format)
+                null
+            }
+        }
+
+        private var localSubtitleJob: Job? = null
+
+        /**
+         * Shows [cues] in sync with the player's position (minus the subtitle delay) until another item plays
+         * or the user picks different subtitles. The player itself keeps playing undisturbed.
+         */
+        @OptIn(UnstableApi::class)
+        private fun showLocalSubtitle(
+            itemId: UUID,
+            subtitleIndex: Int,
+            cues: List<CuesWithTiming>,
+        ) {
+            stopLocalSubtitle()
+            localSubtitleJob =
+                viewModelScope.launch(WholphinDispatchers.Main) {
+                    var shown: List<Cue> = emptyList()
+                    try {
+                        while (isActive) {
+                            val current = state.value.currentPlayback
+                            if (current?.item?.id != itemId || current.subtitleIndex != subtitleIndex) break
+                            val positionUs = (player.currentPosition - current.subtitleDelay.inWholeMilliseconds) * 1000
+                            val active =
+                                cues
+                                    .asSequence()
+                                    .takeWhile { it.startTimeUs <= positionUs }
+                                    .filter { it.endTimeUs == C.TIME_UNSET || positionUs < it.endTimeUs }
+                                    .flatMap { it.cues }
+                                    .toList()
+                            // The player reports its own (empty) cues on seeks, so compare with what's on screen
+                            if (active != shown || state.value.subtitleCues != active) {
+                                shown = active
+                                _state.update { it.copy(subtitleCues = active) }
+                            }
+                            delay(100)
+                        }
+                    } finally {
+                        if (shown.isNotEmpty()) _state.update { it.copy(subtitleCues = emptyList()) }
+                    }
+                }
+        }
+
+        private fun stopLocalSubtitle() {
+            localSubtitleJob?.cancel()
+            localSubtitleJob = null
         }
 
         /**
@@ -881,6 +976,7 @@ class PlaybackViewModel
             withContext(WholphinDispatchers.IO) {
                 val itemId = item.id
 
+                stopLocalSubtitle()
                 trackChangeListener?.let { onMain { player.removeListener(it) } }
                 trackChangeListener = null
 
