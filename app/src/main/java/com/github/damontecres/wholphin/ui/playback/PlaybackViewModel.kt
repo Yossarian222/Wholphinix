@@ -122,6 +122,7 @@ import org.jellyfin.sdk.model.api.GeneralCommandType
 import org.jellyfin.sdk.model.api.ImageType
 import org.jellyfin.sdk.model.api.MediaSegmentType
 import org.jellyfin.sdk.model.api.MediaSourceInfo
+import org.jellyfin.sdk.model.api.MediaStream
 import org.jellyfin.sdk.model.api.MediaStreamType
 import org.jellyfin.sdk.model.api.MediaType
 import org.jellyfin.sdk.model.api.PlayMethod
@@ -136,6 +137,7 @@ import org.jellyfin.sdk.model.extensions.inWholeTicks
 import org.jellyfin.sdk.model.extensions.ticks
 import org.jellyfin.sdk.model.serializer.toUUIDOrNull
 import timber.log.Timber
+import java.io.File
 import java.util.Date
 import java.util.UUID
 import kotlin.math.roundToInt
@@ -206,6 +208,9 @@ class PlaybackViewModel
         internal var forceTranscoding: Boolean = false
         private var activityListener: TrackActivityPlaybackListener? = null
         private var trackChangeListener: TracksChangedListener? = null
+
+        /** When the current item was asked to play, to log how long the start took (#56) */
+        private var startRequestedAtMs: Long? = null
         private val jobs = mutableListOf<Job>()
         private var subscribeJob: Job? = null
 
@@ -632,6 +637,7 @@ class PlaybackViewModel
                         trickPlayInfo = trickPlayInfo,
                     )
                 }
+                startRequestedAtMs = System.currentTimeMillis()
                 withContext(WholphinDispatchers.Main) {
                     changeStreams(
                         item = item,
@@ -702,37 +708,160 @@ class PlaybackViewModel
         }
 
         /**
-         * Turns on an embedded subtitle that was held back at start (see [changeStreams]). It is fetched
-         * first so the server has extracted (and cached) it; the switch then only rebuffers briefly
-         * instead of the whole start waiting for the extraction.
+         * Turns on an embedded subtitle that was held back at start (see [changeStreams]).
+         *
+         * The server reads the whole file from the NAS to extract it, which starves a transcode that is just
+         * starting (#56: the film played ~5 s and then stalled ~30 s). So the subtitle is asked for only once
+         * playback runs with a good buffer, it is saved locally and, with ExoPlayer, added to the current media
+         * item without a new playback info / transcode job (same stream URL, position kept).
          */
         private suspend fun enableSubtitleWhenReady(
             item: BaseItem,
-            subtitleIndex: Int,
+            stream: MediaStream,
             deliveryUrl: String,
         ) {
-            Timber.i("Waiting for server to extract subtitle %s", subtitleIndex)
-            try {
-                authOkHttpClient
-                    .newCall(Request.Builder().url(api.createUrl(deliveryUrl)).build())
-                    .execute()
-                    .close()
-            } catch (ex: Exception) {
-                Timber.w(ex, "Prefetching subtitle %s failed", subtitleIndex)
+            val subtitleIndex = stream.index
+            val waitStart = System.currentTimeMillis()
+            if (!awaitPlaybackBuffered(item.id)) {
+                Timber.i("Deferred subtitle %s: playback moved on, not enabling", subtitleIndex)
+                return
             }
+            Timber.i(
+                "Deferred subtitle %s: playback buffered after %d ms, fetching it",
+                subtitleIndex,
+                System.currentTimeMillis() - waitStart,
+            )
+            val fetchStart = System.currentTimeMillis()
+            val file =
+                try {
+                    authOkHttpClient
+                        .newCall(Request.Builder().url(api.createUrl(deliveryUrl)).build())
+                        .execute()
+                        .use { response ->
+                            if (!response.isSuccessful) {
+                                Timber.w("Deferred subtitle %s: HTTP %s", subtitleIndex, response.code)
+                                null
+                            } else {
+                                val dir = File(context.cacheDir, "deferred-subtitles").apply { mkdirs() }
+                                // Only the latest one is needed
+                                dir.listFiles()?.forEach { it.delete() }
+                                val ext = stream.codec?.lowercase()?.takeIf { it.all(Char::isLetterOrDigit) } ?: "srt"
+                                File(dir, "${item.id}-$subtitleIndex.$ext").also { out ->
+                                    response.body.byteStream().use { input ->
+                                        out.outputStream().use { input.copyTo(it) }
+                                    }
+                                }
+                            }
+                        }
+                } catch (ex: Exception) {
+                    Timber.w(ex, "Deferred subtitle %s: fetching failed", subtitleIndex)
+                    null
+                }
+            Timber.i(
+                "Deferred subtitle %s: fetched in %d ms (%s bytes)",
+                subtitleIndex,
+                System.currentTimeMillis() - fetchStart,
+                file?.length(),
+            )
             val current = state.value.currentPlayback
             // Skip if playback moved on or the user picked subtitles meanwhile
             if (current?.item?.id != item.id || current.subtitleIndex != TrackIndex.DISABLED) return
-            Timber.i("Enabling deferred subtitle %s", subtitleIndex)
             _state.update { it.copy(currentPlayback = it.currentPlayback?.copy(subtitleIndex = subtitleIndex)) }
-            changeStreams(
-                item = item,
-                sourceId = current.mediaSourceInfo.id,
-                audioIndex = current.audioIndex,
-                subtitleIndex = subtitleIndex,
-                positionMs = onMain { player.currentPosition },
-                enableDirectPlay = true,
-            )
+            val addedInPlace =
+                file != null &&
+                    current.backend == PlayerBackend.EXO_PLAYER &&
+                    onMain { addSubtitleInPlace(stream, file, current.mediaSourceInfo) }
+            if (!addedInPlace) {
+                Timber.i("Deferred subtitle %s: enabling via new playback info", subtitleIndex)
+                changeStreams(
+                    item = item,
+                    sourceId = current.mediaSourceInfo.id,
+                    audioIndex = current.audioIndex,
+                    subtitleIndex = subtitleIndex,
+                    positionMs = onMain { player.currentPosition },
+                    enableDirectPlay = true,
+                )
+            }
+        }
+
+        /**
+         * Waits until the item plays with enough buffered ahead (or long enough after it got ready).
+         * Returns false if another item is playing meanwhile.
+         */
+        private suspend fun awaitPlaybackBuffered(itemId: UUID): Boolean {
+            val start = System.currentTimeMillis()
+            var readySince: Long? = null
+            while (System.currentTimeMillis() - start < DEFERRED_SUBTITLE_MAX_WAIT_MS) {
+                val (sameItem, ready, bufferedMs) =
+                    onMain {
+                        Triple(
+                            state.value.currentPlayback
+                                ?.item
+                                ?.id == itemId,
+                            player.playbackState == Player.STATE_READY,
+                            player.totalBufferedDuration,
+                        )
+                    }
+                if (!sameItem) return false
+                if (ready) {
+                    val since = readySince ?: System.currentTimeMillis().also { readySince = it }
+                    if (bufferedMs >= DEFERRED_SUBTITLE_MIN_BUFFER_MS ||
+                        System.currentTimeMillis() - since >= DEFERRED_SUBTITLE_AFTER_READY_MS
+                    ) {
+                        Timber.d("Deferred subtitle: buffered %d ms", bufferedMs)
+                        return true
+                    }
+                }
+                delay(500)
+            }
+            return state.value.currentPlayback
+                ?.item
+                ?.id == itemId
+        }
+
+        /**
+         * Adds a locally saved [file] for [stream] to the current media item, keeping the stream URL (so the
+         * server's transcode keeps going) and the position. Returns false if there is nothing to add it to.
+         */
+        private fun addSubtitleInPlace(
+            stream: MediaStream,
+            file: File,
+            source: MediaSourceInfo,
+        ): Boolean {
+            val mediaItem = player.currentMediaItem ?: return false
+            var flags = 0
+            if (stream.isForced) flags = flags.or(C.SELECTION_FLAG_FORCED)
+            if (stream.isDefault) flags = flags.or(C.SELECTION_FLAG_DEFAULT)
+            val config =
+                MediaItem.SubtitleConfiguration
+                    .Builder(file.toUri())
+                    .setId("e:${stream.index}")
+                    .setMimeType(subtitleMimeTypes[stream.codec])
+                    .setLanguage(stream.language)
+                    .setLabel(stream.title)
+                    .setSelectionFlags(flags)
+                    .build()
+            val updated =
+                mediaItem
+                    .buildUpon()
+                    .setSubtitleConfigurations(listOf(config))
+                    .build()
+            trackChangeListener?.let { player.removeListener(it) }
+            val listener =
+                TracksChangedListener(
+                    player = player,
+                    audioIndex = null,
+                    subtitleIndex = stream.index,
+                    source = source,
+                    onFailure = { Timber.w("Deferred subtitle %s: could not select the track", stream.index) },
+                )
+            player.addListener(listener)
+            trackChangeListener = listener
+            val position = player.currentPosition
+            Timber.i("Deferred subtitle %s: adding in place at %d ms", stream.index, position)
+            player.setMediaItem(updated, position)
+            viewModelScope.launchIO { loadSubtitleDelay() }
+            return true
         }
 
         /**
@@ -1014,7 +1143,7 @@ class PlaybackViewModel
                             viewModelScope.launchIO { loadSubtitleDelay() }
                         }
                         deferredSubtitle?.let {
-                            viewModelScope.launchIO { enableSubtitleWhenReady(item, it.index, it.deliveryUrl!!) }
+                            viewModelScope.launchIO { enableSubtitleWhenReady(item, it, it.deliveryUrl!!) }
                         }
                     }
                 }
@@ -1234,6 +1363,14 @@ class PlaybackViewModel
             // Progress for the rating prompt; a loop is avoided so tests (Robolectric main looper) never spin forever
             runCatching { rememberProgress(player) }
             if (player.isPlaying) screensaverService.reportPlaybackActive(this)
+            if (playbackState == Player.STATE_READY) {
+                startRequestedAtMs?.let {
+                    Timber.i("Playback ready %d ms after start", System.currentTimeMillis() - it)
+                    startRequestedAtMs = null
+                }
+            } else if (playbackState == Player.STATE_BUFFERING && startRequestedAtMs == null) {
+                Timber.i("Playback buffering at %d ms", player.currentPosition)
+            }
             if (playbackState == Player.STATE_ENDED) {
                 Timber.v("Playback state is STATE_ENDED")
                 viewModelScope.launchDefault {
@@ -2022,6 +2159,10 @@ class PlaybackViewModel
             }
         }
     }
+
+private const val DEFERRED_SUBTITLE_MIN_BUFFER_MS = 40_000L
+private const val DEFERRED_SUBTITLE_AFTER_READY_MS = 30_000L
+private const val DEFERRED_SUBTITLE_MAX_WAIT_MS = 120_000L
 
 /** What [DeviceStatusService] reports about the video on screen: how it plays, codec and size, dropped frames */
 private fun PlaybackState.toDeviceSnapshot(): DeviceStatusService.PlaybackSnapshot? {

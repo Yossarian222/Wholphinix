@@ -22,7 +22,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -64,6 +69,7 @@ fun PlaybackController(
     onChangeState: (OverlayViewState) -> Unit,
     modifier: Modifier = Modifier,
     seekBarInteractionSource: MutableInteractionSource = remember { MutableInteractionSource() },
+    onOverviewHeight: (Dp) -> Unit = {},
 ) {
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -72,6 +78,8 @@ fun PlaybackController(
         Controller(
             title = item?.title,
             subtitle = item?.subtitleLong,
+            overview = item?.data?.overview,
+            onOverviewHeight = onOverviewHeight,
             player = player,
             controllerViewState = controllerViewState,
             showPlay = showPlay,
@@ -124,6 +132,8 @@ fun PlaybackController(
 
 internal val titleTextSize = 28.sp
 internal val subtitleTextSize = 18.sp
+internal val overviewTextSize = 15.sp
+internal val overviewLineHeight = 20.sp
 
 /**
  * A wrapper for the playback controls to show title and other information, plus the actual controls
@@ -149,6 +159,8 @@ fun Controller(
     modifier: Modifier = Modifier,
     subtitle: String? = null,
     seekBarInteractionSource: MutableInteractionSource = remember { MutableInteractionSource() },
+    overview: String? = null,
+    onOverviewHeight: (Dp) -> Unit = {},
 ) {
     val seekBarFocused by seekBarInteractionSource.collectIsFocusedAsState()
     val verticalOffset by animateDpAsState(
@@ -181,6 +193,32 @@ fun Controller(
                     overflow = TextOverflow.MiddleEllipsis,
                     modifier = Modifier.fillMaxWidth(.75f),
                 )
+            }
+            // The plot under the title (#54): only the letters over the picture, no panel behind them
+            val density = LocalDensity.current
+            val plot = overview?.trim()?.takeIf { it.isNotEmpty() }
+            if (plot != null) {
+                Text(
+                    text = plot,
+                    style =
+                        MaterialTheme.typography.bodyMedium.copy(
+                            shadow = Shadow(color = Color.Black, offset = Offset(1f, 2f), blurRadius = 6f),
+                        ),
+                    color = Color.White,
+                    fontSize = overviewTextSize,
+                    lineHeight = overviewLineHeight,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth(.6f)
+                            .onGloballyPositioned {
+                                // Plus the spacing to the next row
+                                onOverviewHeight(with(density) { it.size.height.toDp() } + 8.dp)
+                            },
+                )
+            } else {
+                LaunchedEffect(Unit) { onOverviewHeight(0.dp) }
             }
             Row(
                 horizontalArrangement = Arrangement.SpaceBetween,

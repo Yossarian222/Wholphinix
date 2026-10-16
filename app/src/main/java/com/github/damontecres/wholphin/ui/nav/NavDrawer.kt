@@ -83,6 +83,7 @@ import com.github.damontecres.wholphin.ui.components.CsfdRed
 import com.github.damontecres.wholphin.ui.components.TopRightHeader
 import com.github.damontecres.wholphin.ui.ifElse
 import com.github.damontecres.wholphin.ui.launchDefault
+import com.github.damontecres.wholphin.ui.launchIO
 import com.github.damontecres.wholphin.ui.preferences.PreferenceScreenOption
 import com.github.damontecres.wholphin.ui.setup.UserIconCardImage
 import com.github.damontecres.wholphin.ui.theme.LocalNavScale
@@ -91,15 +92,18 @@ import com.github.damontecres.wholphin.ui.toServerString
 import com.github.damontecres.wholphin.ui.tryRequestFocus
 import com.github.damontecres.wholphin.ui.util.Motion
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.imageApi
 import org.jellyfin.sdk.model.api.CollectionType
 import timber.log.Timber
 import java.util.UUID
 import javax.inject.Inject
+import kotlin.time.Duration.Companion.minutes
 
 @HiltViewModel
 class NavDrawerViewModel
@@ -115,8 +119,18 @@ class NavDrawerViewModel
     ) : ViewModel() {
         val serviceState = navDrawerService.state
 
-        /** A film from "Chcem vidieť" was downloaded and not seen yet: red dot at the item (#48) */
+        /** A film from "Chcem vidieť" was downloaded and not seen yet: red dot at the item (#48, #55) */
         val watchlistHasNew = watchlistArrivals.hasNew
+
+        init {
+            // Also without opening the home screen: Seerr is asked now and then while the app runs (#55)
+            viewModelScope.launchIO {
+                while (isActive) {
+                    watchlistArrivals.checkSeerr()
+                    delay(WATCHLIST_CHECK_INTERVAL)
+                }
+            }
+        }
 
         private val _state = MutableStateFlow(NavDrawerState())
         val state: StateFlow<NavDrawerState> = _state
@@ -301,6 +315,9 @@ data class ServerNavDrawerItem(
 }
 
 private const val HOME_INDEX = -1
+
+/** How often Seerr is asked for downloaded requests (#55) */
+private val WATCHLIST_CHECK_INTERVAL = 15.minutes
 private const val SEARCH_INDEX = -2
 private const val NOW_PLAYING_INDEX = -3
 

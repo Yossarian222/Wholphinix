@@ -45,6 +45,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.coerceAtLeast
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
 import coil3.compose.AsyncImage
@@ -113,6 +114,7 @@ fun PlaybackOverlay(
 
     // This will be calculated after composition
     var controllerHeight by remember { mutableStateOf(0.dp) }
+    var overviewHeight by remember(item?.id) { mutableStateOf(0.dp) }
     var state by remember(controllerViewState.controlsVisible) {
         mutableStateOf(if (controllerViewState.controlsVisible) OverlayViewState.CONTROLLER else OverlayViewState.HIDDEN)
     }
@@ -213,6 +215,7 @@ fun PlaybackOverlay(
                                     controllerHeight = with(density) { it.size.height.toDp() }
                                 },
                         seekBarInteractionSource = seekBarInteractionSource,
+                        onOverviewHeight = { overviewHeight = it },
                     )
                 }
 
@@ -284,7 +287,7 @@ fun PlaybackOverlay(
                                 .align(Alignment.BottomStart)
                                 .offsetByPercent(
                                     xPercentage = seekProgressPercent.coerceIn(0f, 1f),
-                                ).padding(bottom = controllerHeight - titleHeight - subtitleHeight),
+                                ).padding(bottom = (controllerHeight - titleHeight - subtitleHeight - overviewHeight).coerceAtLeast(0.dp)),
                     ) {
                         TrickplayPreview(
                             seekProgressMs = seekProgressMs,
