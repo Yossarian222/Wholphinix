@@ -250,6 +250,9 @@ fun <T : CardGridItem> CardGrid(
         }
     } else {
         var longPressing by remember { mutableStateOf(false) }
+        // Whether the Back press started here. Going back from a details page happens before the key is
+        // released, so the grid gets the trailing Back key up and must not treat it as "jump to top"
+        var backPressedHere by remember { mutableStateOf(false) }
         Row(
 //        horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier =
@@ -257,7 +260,19 @@ fun <T : CardGridItem> CardGrid(
                     .fillMaxSize()
                     .onKeyEvent {
                         if (DEBUG) Timber.d("onKeyEvent: ${it.nativeKeyEvent}")
-                        if (useBackToJump && it.key == Key.Back && it.nativeKeyEvent.isLongPress) {
+                        val isBack = it.key == Key.Back
+                        if (isBack && it.type == KeyEventType.KeyDown && it.nativeKeyEvent.repeatCount == 0) {
+                            backPressedHere = true
+                        }
+                        if (isBack && it.type == KeyEventType.KeyUp) {
+                            if (!backPressedHere) {
+                                // The release of a Back press from the previous page, ignore it
+                                longPressing = false
+                                return@onKeyEvent true
+                            }
+                            backPressedHere = false
+                        }
+                        if (useBackToJump && it.key == Key.Back && it.nativeKeyEvent.isLongPress && backPressedHere) {
                             longPressing = true
                             val newPosition = previouslyFocusedIndex
                             if (DEBUG) Timber.d("Back long pressed: newPosition=$newPosition")
