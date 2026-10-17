@@ -122,6 +122,9 @@ class CsfdTvTipsService
             /** The last loaded items of each home row, see [rowItems] */
             val rowResults = ConcurrentHashMap<String, RowResult>()
 
+            /** ČSFD id of each loaded row item (library ones may lack the provider id), for [removeFromWatchlist] */
+            val csfdIds = ConcurrentHashMap<UUID, Int>()
+
             /** The running loads of the home rows, shared by the callers */
             val rowLoads = ConcurrentHashMap<String, RowLoad>()
         }
@@ -305,6 +308,7 @@ class CsfdTvTipsService
                             .associateBy { it.id }
                     ids.mapNotNull { byId[it] }
                 }
+            tips.forEach { tip -> tip.itemId?.let { caches().csfdIds[it] = tip.csfdId } }
             val seerrActive = runCatching { seerrService.active.first() }.getOrDefault(false)
             val requestable =
                 if (seerrActive) {
@@ -341,10 +345,12 @@ class CsfdTvTipsService
                     seerrService
                         .createDiscoverItem(match)
                         .copy(csfdTitle = tip.title, csfdOverview = tip.overview)
+                val id = UUID.nameUUIDFromBytes("csfd:${tip.csfdId}".toByteArray())
+                caches().csfdIds[id] = tip.csfdId
                 return BaseItem(
                     data =
                         BaseItemDto(
-                            id = UUID.nameUUIDFromBytes("csfd:${tip.csfdId}".toByteArray()),
+                            id = id,
                             type = if (tip.isSeries) BaseItemKind.SERIES else BaseItemKind.MOVIE,
                             name = tip.title,
                             productionYear = tip.year,
@@ -469,6 +475,47 @@ class CsfdTvTipsService
                     }
                 } catch (ex: Exception) {
                     Timber.w(ex, "ČSFD rating failed")
+                    ex.localizedMessage ?: ex.toString()
+                }
+            }
+
+        /** ČSFD id of an item loaded into a ČSFD row, null if unknown */
+        fun csfdIdOf(itemId: UUID): Int? = caches().csfdIds[itemId]
+
+        /**
+         * Remove [csfdId] from the ČSFD watchlist through the plugin's account and from the loaded watchlist rows.
+         * Returns null on success, otherwise an error message.
+         */
+        suspend fun removeFromWatchlist(csfdId: Int): String? =
+            withContext(Dispatchers.IO) {
+                val baseUrl = api.baseUrl?.trimEnd('/') ?: return@withContext "No server"
+                val caches = caches()
+                try {
+                    val request =
+                        Request
+                            .Builder()
+                            .url("$baseUrl/Csfd/Watchlist/$csfdId")
+                            .delete()
+                            .build()
+                    slowClient.newCall(request).execute().use { response ->
+                        val obj = runCatching { Json.parseToJsonElement(response.body.string()) as? JsonObject }.getOrNull()
+                        if (response.isSuccessful && (obj?.field("Ok") as? JsonPrimitive)?.booleanOrNull == true) {
+                            caches.rowResults.replaceAll { key, result ->
+                                if (!key.startsWith("watchlist ")) {
+                                    result
+                                } else {
+                                    RowResult(result.time, result.items.filter { caches.csfdIds[it.id] != csfdId })
+                                }
+                            }
+                            null
+                        } else if (response.code == 404 || response.code == 405) {
+                            "ČSFD plugin je starý, aktualizuj ho"
+                        } else {
+                            obj?.string("Message") ?: "HTTP ${response.code}"
+                        }
+                    }
+                } catch (ex: Exception) {
+                    Timber.w(ex, "ČSFD watchlist removal failed")
                     ex.localizedMessage ?: ex.toString()
                 }
             }

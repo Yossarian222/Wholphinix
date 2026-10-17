@@ -861,4 +861,11 @@
     <string name="not_in_library">Nie je v knižnici</string>
     <string name="csfd_watchlist_empty">Zoznam Chcem vidieť je prázdny, alebo chýba ČSFD plugin či v ňom nie je nastavený ČSFD profil</string>
     <string name="csfd_watchlist_loading">Načítavam zoznam Chcem vidieť, prvé načítanie môže trvať aj pol minúty…</string>
+    <string name="csfd_watchlist_remove">Vyradiť „%1$s“ z Chcem vidieť?</string>
+    <string name="csfd_watchlist_remove_body">Titul sa vyradí z tvojho zoznamu na ČSFD.</string>
+    <string name="csfd_watchlist_removed">Vyradené z Chcem vidieť</string>
+    <string name="settings_appearance">Vzhľad</string>
+    <string name="settings_holidays">Sviatky a meniny</string>
+    <string name="settings_services">Služby</string>
+    <string name="settings_video_quality">Obraz a kvalita</string>
 </resources>

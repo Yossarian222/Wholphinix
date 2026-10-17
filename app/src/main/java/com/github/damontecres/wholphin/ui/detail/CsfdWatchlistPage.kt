@@ -1,5 +1,6 @@
 package com.github.damontecres.wholphin.ui.detail
 
+import android.content.Context
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,7 +12,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -33,12 +36,15 @@ import com.github.damontecres.wholphin.services.NavigationManager
 import com.github.damontecres.wholphin.services.WatchlistArrivalsService
 import com.github.damontecres.wholphin.ui.cards.GridCard
 import com.github.damontecres.wholphin.ui.components.CircularProgress
+import com.github.damontecres.wholphin.ui.components.ConfirmDialog
 import com.github.damontecres.wholphin.ui.components.ErrorMessage
 import com.github.damontecres.wholphin.ui.components.GridTitle
 import com.github.damontecres.wholphin.ui.launchIO
+import com.github.damontecres.wholphin.ui.showToast
 import com.github.damontecres.wholphin.ui.tryRequestFocus
 import com.github.damontecres.wholphin.util.DataLoadingState
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -50,6 +56,7 @@ import kotlin.time.Duration.Companion.seconds
 class CsfdWatchlistViewModel
     @Inject
     constructor(
+        @param:ApplicationContext private val context: Context,
         private val serverRepository: ServerRepository,
         private val csfdTvTipsService: CsfdTvTipsService,
         private val watchlistArrivals: WatchlistArrivalsService,
@@ -88,6 +95,27 @@ class CsfdWatchlistViewModel
             }
         }
 
+        /** Removes [item] from the ČSFD watchlist (plugin account) and from this page */
+        fun remove(item: BaseItem) {
+            val csfdId =
+                csfdTvTipsService.csfdIdOf(item.id)
+                    ?: item.data.providerIds
+                        ?.entries
+                        ?.firstOrNull { it.key.equals("Csfd", ignoreCase = true) }
+                        ?.value
+                        ?.toIntOrNull()
+                    ?: return
+            viewModelScope.launchIO {
+                val error = csfdTvTipsService.removeFromWatchlist(csfdId)
+                if (error == null) {
+                    _state.update { st ->
+                        if (st is DataLoadingState.Success) DataLoadingState.Success(st.data.filter { it.id != item.id }) else st
+                    }
+                }
+                showToast(context, error ?: context.getString(R.string.csfd_watchlist_removed))
+            }
+        }
+
         companion object {
             private const val LIMIT = 200
             private const val MISSING = 40
@@ -104,6 +132,7 @@ fun CsfdWatchlistPage(
 ) {
     val state by viewModel.state.collectAsState()
     val gridFocusRequester = remember { FocusRequester() }
+    var toRemove by remember { mutableStateOf<BaseItem?>(null) }
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = modifier,
@@ -134,8 +163,7 @@ fun CsfdWatchlistPage(
                     CardGrid(
                         pager = st.data,
                         onClickItem = { index, item -> viewModel.navigationManager.navigateTo(item.destination(index)) },
-                        // Same as a click: missing titles have no context menu and library ones open their details
-                        onLongClickItem = { index, item -> viewModel.navigationManager.navigateTo(item.destination(index)) },
+                        onLongClickItem = { _, item -> toRemove = item },
                         onClickPlay = { _, _ -> },
                         letterPosition = { 0 },
                         gridFocusRequester = gridFocusRequester,
@@ -162,6 +190,17 @@ fun CsfdWatchlistPage(
                 }
             }
         }
+    }
+    toRemove?.let { item ->
+        ConfirmDialog(
+            title = stringResource(R.string.csfd_watchlist_remove, item.name.orEmpty()),
+            body = stringResource(R.string.csfd_watchlist_remove_body),
+            onCancel = { toRemove = null },
+            onConfirm = {
+                toRemove = null
+                viewModel.remove(item)
+            },
+        )
     }
 }
 

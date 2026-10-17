@@ -1233,6 +1233,26 @@ sealed interface AppPreference<Pref, T> {
 val basicPreferences =
     listOf(
         PreferenceGroup(
+            title = R.string.settings_appearance,
+            preferences =
+                listOf(
+                    AppPreference.ThemeColors,
+                    AppPreference.FontScalePref,
+                    AppPreference.NavScalePref,
+                    AppPreference.SubtitleStyle,
+                    AppPreference.ScreensaverSettings,
+                ),
+        ),
+        PreferenceGroup(
+            title = R.string.settings_holidays,
+            preferences =
+                listOf(
+                    AppPreference.SeasonalThemesPref,
+                    AppPreference.SeasonalThemePreviewPref,
+                    AppPreference.NameDaysPref,
+                ),
+        ),
+        PreferenceGroup(
             title = R.string.ui_interface,
             preferences =
                 listOf(
@@ -1241,14 +1261,6 @@ val basicPreferences =
                     AppPreference.MovieLibraryTabOrder,
                     AppPreference.TvLibraryTabOrder,
                     AppPreference.PlayThemeMusic,
-                    AppPreference.SubtitleStyle,
-                    AppPreference.ThemeColors,
-                    AppPreference.FontScalePref,
-                    AppPreference.NavScalePref,
-                    AppPreference.SeasonalThemesPref,
-                    AppPreference.SeasonalThemePreviewPref,
-                    AppPreference.NameDaysPref,
-                    AppPreference.ScreensaverSettings,
                 ),
         ),
         PreferenceGroup(
@@ -1293,15 +1305,18 @@ val basicPreferences =
                 },
         ),
         PreferenceGroup(
-            title = R.string.more,
+            title = R.string.settings_services,
             preferences =
                 buildList {
                     if (BuildConfig.DISCOVER_ENABLED) {
                         add(AppPreference.SeerrIntegration)
                     }
                     add(ClaudePreference.Settings)
-                    add(AppPreference.AdvancedSettings)
                 },
+        ),
+        PreferenceGroup(
+            title = R.string.more,
+            preferences = listOf(AppPreference.AdvancedSettings),
         ),
     )
 
@@ -1381,11 +1396,19 @@ val advancedPreferences =
                     listOf(
                         AppPreference.OneClickPause,
                         AppPreference.ControllerTimeout,
+                        AppPreference.DpadSeekModePref,
+                        AppPreference.SkipSegments,
                         AppPreference.CinemaMode,
                         AppPreference.AutoForeignSubtitlesPref,
+                    ),
+            ),
+        )
+        add(
+            PreferenceGroup(
+                title = R.string.settings_video_quality,
+                preferences =
+                    listOf(
                         AppPreference.GlobalContentScale,
-                        AppPreference.SkipSegments,
-                        AppPreference.DpadSeekModePref,
                         AppPreference.MaxResolutionPref,
                         AppPreference.MaxBitrate,
                         AppPreference.RefreshRateSwitching,
