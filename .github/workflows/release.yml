@@ -25,6 +25,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      # Prebuilt ffmpeg (EAC3/DD+ audio, DTS, TrueHD) and libMPV come from GitHub Packages of wholphin-extensions
+      packages: read
     steps:
       - name: Checkout the code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -63,6 +65,9 @@ jobs:
           SIGNING_KEY: "${{ secrets.SIGNING_KEY }}"
           TIDAL_CLIENT_ID: "${{ secrets.TIDAL_CLIENT_ID }}"
           TIDAL_CLIENT_SECRET: "${{ secrets.TIDAL_CLIENT_SECRET }}"
+          # Without these Gradle silently builds without the ffmpeg decoder, and the RPi can't play DD+ (EAC3)
+          ORG_GRADLE_PROJECT_WholphinExtensionsUsername: "${{ github.actor }}"
+          ORG_GRADLE_PROJECT_WholphinExtensionsPassword: "${{ secrets.WHOLPHIN_EXTENSIONS_TOKEN || secrets.GITHUB_TOKEN }}"
         run: |
           if [[ -z "$SIGNING_KEY" ]]; then
             echo "::error::Release needs the signing secrets (SIGNING_KEY, KEY_ALIAS, KEY_PASSWORD, KEY_STORE_PASSWORD)"
@@ -72,6 +77,15 @@ jobs:
           # Separate Gradle runs: tests and R8 in parallel ran the runner out of memory.
           ./gradlew clean testDefaultDebugUnitTest --no-daemon
           ./gradlew assembleDefaultRelease --no-daemon
+      - name: Check the ffmpeg decoder is bundled
+        run: |
+          apk="$(find app/build/outputs/apk -name '*.apk' | head -1)"
+          echo "Native libraries in $apk:"
+          unzip -l "$apk" | grep '\.so$' | awk '{print $4}' | sort -u
+          if ! unzip -l "$apk" | grep -qi 'ffmpeg'; then
+            echo "::error::The APK has no ffmpeg decoder, DD+ (EAC3) audio would fall back to transcoding"
+            exit 1
+          fi
       - name: Verify signatures
         run: |
           echo "Verify APK signatures"
