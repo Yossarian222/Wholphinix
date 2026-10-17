@@ -9,6 +9,7 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -27,6 +28,7 @@ import com.github.damontecres.wholphin.services.tidal.TidalSession
 import com.github.damontecres.wholphin.services.tidal.TidalSettings
 import com.github.damontecres.wholphin.services.tidal.TidalTrack
 import com.github.damontecres.wholphin.services.tidal.TidalTrackShelf
+import com.github.damontecres.wholphin.services.tidal.TidalVideo
 import com.github.damontecres.wholphin.R
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -44,7 +46,7 @@ import java.util.concurrent.ConcurrentHashMap
 import timber.log.Timber
 import javax.inject.Inject
 
-enum class TidalTab { PLAYLISTS, FOR_YOU, ALBUMS, TRACKS }
+enum class TidalTab { PLAYLISTS, FOR_YOU, VIDEOS, ALBUMS, TRACKS }
 
 enum class TidalDetailKind { ALBUM, PLAYLIST, MIX, SHELF }
 
@@ -79,6 +81,13 @@ data class TidalUiState(
     val mixes: List<TidalMix> = emptyList(),
     val shelves: List<TidalTrackShelf> = emptyList(),
     val forYouLoading: Boolean = false,
+    /** Favourite music videos, then the ones TIDAL recommends */
+    val videos: List<TidalVideo> = emptyList(),
+    val recommendedVideos: List<TidalVideo> = emptyList(),
+    val videosLoading: Boolean = false,
+    /** Music video on screen */
+    val playingVideo: TidalVideo? = null,
+    val videoError: String? = null,
     val detail: TidalDetail? = null,
     /** Track the user is picking a playlist for */
     val addToPlaylist: TidalTrack? = null,
@@ -290,6 +299,95 @@ class TidalViewModel
                 }
             }
             loadForYou()
+            loadVideos()
+        }
+
+        private fun loadVideos() {
+            viewModelScope.launch {
+                _state.update { it.copy(videosLoading = true) }
+                try {
+                    val videos = service.call { service.api.favoriteVideos(it) }
+                    _state.update { it.copy(videos = videos, videosLoading = false) }
+                } catch (ex: Exception) {
+                    Timber.w(ex, "Loading TIDAL videos failed")
+                    _state.update { it.copy(videosLoading = false) }
+                }
+            }
+        }
+
+        /** Player for music videos; separate from the music queue so a clip doesn't replace it */
+        val videoPlayer: ExoPlayer by lazy {
+            ExoPlayer
+                .Builder(context)
+                .setAudioAttributes(
+                    AudioAttributes
+                        .Builder()
+                        .setUsage(C.USAGE_MEDIA)
+                        .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+                        .build(),
+                    true,
+                ).build()
+                .also { videoPlayerCreated = true }
+        }
+        private var videoPlayerCreated = false
+        private var videoJob: Job? = null
+
+        fun playVideo(video: TidalVideo) {
+            exoPlayer.pause()
+            _state.update { it.copy(playingVideo = video, videoError = null) }
+            videoJob?.cancel()
+            videoJob =
+                viewModelScope.launch {
+                    try {
+                        val url = service.call { service.api.videoStreamUrl(it, video.id) }
+                        videoPlayer.setMediaItem(
+                            MediaItem
+                                .Builder()
+                                .setUri(url)
+                                .setMimeType(MimeTypes.APPLICATION_M3U8)
+                                .build(),
+                        )
+                        videoPlayer.prepare()
+                        videoPlayer.play()
+                    } catch (ex: Exception) {
+                        Timber.w(ex, "TIDAL video failed")
+                        _state.update { it.copy(videoError = ex.message) }
+                    }
+                }
+        }
+
+        fun closeVideo() {
+            videoJob?.cancel()
+            if (videoPlayerCreated) videoPlayer.stop()
+            _state.update { it.copy(playingVideo = null, videoError = null) }
+        }
+
+        /** Looks up the music video of [track] and plays it, or says there is none */
+        fun playClipOf(track: TidalTrack) {
+            viewModelScope.launch {
+                val artist = track.artists.firstOrNull()?.name.orEmpty()
+                val baseTitle = track.title.substringBefore(" (").substringBefore(" - ").trim().lowercase()
+                val video =
+                    try {
+                        service
+                            .call { service.api.searchVideos(it, "$artist ${track.title}") }
+                            .firstOrNull { v ->
+                                v.title.lowercase().contains(baseTitle) &&
+                                    (artist.isBlank() || v.artistNames.contains(artist, ignoreCase = true))
+                            }
+                    } catch (ex: Exception) {
+                        Timber.w(ex, "TIDAL video search failed")
+                        null
+                    }
+                if (video != null) {
+                    playVideo(video)
+                } else {
+                    val message = context.getString(R.string.tidal_no_clip)
+                    _state.update { it.copy(message = message) }
+                    delay(4000)
+                    _state.update { if (it.message == message) it.copy(message = null) else it }
+                }
+            }
         }
 
         /** Mixes and recommended tracks; failing here must not hide the rest of the collection */
@@ -299,7 +397,9 @@ class TidalViewModel
                 try {
                     val forYou = service.call { service.api.forYou(it) }
                     Timber.i("TIDAL for you: %d mixes, %d track lists", forYou.mixes.size, forYou.shelves.size)
-                    _state.update { it.copy(mixes = forYou.mixes, shelves = forYou.shelves, forYouLoading = false) }
+                    _state.update {
+                        it.copy(mixes = forYou.mixes, shelves = forYou.shelves, recommendedVideos = forYou.videos, forYouLoading = false)
+                    }
                 } catch (ex: Exception) {
                     Timber.w(ex, "Loading TIDAL mixes failed")
                     _state.update { it.copy(forYouLoading = false) }
@@ -507,6 +607,7 @@ class TidalViewModel
         fun showNowPlaying(show: Boolean) = _player.update { it.copy(showNowPlaying = show) }
 
         override fun onCleared() {
+            if (videoPlayerCreated) videoPlayer.release()
             exoPlayer.release()
         }
 

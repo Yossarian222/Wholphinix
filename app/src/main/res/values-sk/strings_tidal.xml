@@ -47,6 +47,9 @@
     <string name="tidal_quality_high">Vysoká</string>
     <string name="tidal_quality_lossless">HiFi (bezstratová)</string>
     <string name="tidal_quality_hint">Platí od ďalšej skladby. HiFi potrebuje predplatné TIDAL, ktoré ho obsahuje.</string>
+    <string name="tidal_videos">Klipy</string>
+    <string name="tidal_clip">Klip</string>
+    <string name="tidal_no_clip">K tejto skladbe TIDAL nemá klip</string>
     <plurals name="tidal_track_count">
         <item quantity="one">%d skladba</item>
         <item quantity="few">%d skladby</item>

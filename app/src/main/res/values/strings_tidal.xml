@@ -48,6 +48,9 @@
     <string name="tidal_quality_high">High</string>
     <string name="tidal_quality_lossless">HiFi (lossless)</string>
     <string name="tidal_quality_hint">Applies to the next track. HiFi needs a TIDAL subscription that includes it.</string>
+    <string name="tidal_videos">Videos</string>
+    <string name="tidal_clip">Video</string>
+    <string name="tidal_no_clip">TIDAL has no video for this track</string>
     <plurals name="tidal_track_count">
         <item quantity="one">%d track</item>
         <item quantity="other">%d tracks</item>

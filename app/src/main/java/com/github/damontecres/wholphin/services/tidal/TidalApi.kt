@@ -114,6 +114,23 @@ data class TidalMix(
     val imageUrl: String? get() = (images["MEDIUM"] ?: images["LARGE"] ?: images["SMALL"])?.url?.takeIf { it.isNotBlank() }
 }
 
+/** A music video */
+@Serializable
+data class TidalVideo(
+    val id: Long,
+    val title: String = "",
+    val duration: Int = 0,
+    val imageId: String? = null,
+    val artists: List<TidalArtist> = emptyList(),
+    val artist: TidalArtist? = null,
+    val releaseDate: String? = null,
+) {
+    val artistNames: String get() = artists.ifEmpty { listOfNotNull(artist) }.joinToString(", ") { it.name }
+
+    /** 16:9 still of the video */
+    val imageUrl: String? get() = imageId?.let { "https://resources.tidal.com/images/${it.replace('-', '/')}/750x500.jpg" }
+}
+
 /** A list of tracks TIDAL recommends on its home page, e.g. "Suggested new tracks" */
 data class TidalTrackShelf(
     val title: String,
@@ -124,6 +141,7 @@ data class TidalTrackShelf(
 data class TidalForYou(
     val mixes: List<TidalMix>,
     val shelves: List<TidalTrackShelf>,
+    val videos: List<TidalVideo>,
 )
 
 @Serializable
@@ -261,6 +279,7 @@ class TidalApi
         suspend fun forYou(s: TidalSession): TidalForYou {
             val mixes = LinkedHashMap<String, TidalMix>()
             val shelves = mutableListOf<TidalTrackShelf>()
+            val videos = LinkedHashMap<Long, TidalVideo>()
             for (page in listOf("pages/my_collection_my_mixes", "pages/home", "pages/for_you")) {
                 val root =
                     try {
@@ -274,6 +293,13 @@ class TidalApi
                             .getOrNull()
                             ?.let { mixes.putIfAbsent(it.id, it) }
                     }
+                    if (obj.string("type") == "VIDEO_LIST") {
+                        ((obj["pagedList"] as? JsonObject)?.get("items") as? JsonArray)?.forEach { item ->
+                            runCatching { json.decodeFromJsonElement(TidalVideo.serializer(), item) }
+                                .getOrNull()
+                                ?.let { videos.putIfAbsent(it.id, it) }
+                        }
+                    }
                     if (obj.string("type") == "TRACK_LIST") {
                         val title = obj.string("title").orEmpty()
                         val paged = obj["pagedList"] as? JsonObject
@@ -284,7 +310,7 @@ class TidalApi
                     }
                 }
             }
-            return TidalForYou(mixes.values.toList(), shelves)
+            return TidalForYou(mixes.values.toList(), shelves, videos.values.toList())
         }
 
         /** Tracks of a page module: all of them via its data path when there is one, else the ones inlined */
@@ -387,6 +413,36 @@ class TidalApi
         }
 
         private fun JsonObject.string(key: String): String? = (this[key] as? JsonPrimitive)?.contentOrNull
+
+        suspend fun favoriteVideos(s: TidalSession): List<TidalVideo> =
+            pagedAll<Favorite<TidalVideo>>(s, "users/${s.userId}/favorites/videos", "order" to "DATE", "orderDirection" to "DESC")
+                .map { it.item }
+
+        suspend fun searchVideos(
+            s: TidalSession,
+            query: String,
+        ): List<TidalVideo> =
+            json.decodeFromString<Page<TidalVideo>>(get(s, "search/videos", "query" to query, "limit" to "10")).items
+
+        /** HLS playlist URL of a music video */
+        suspend fun videoStreamUrl(
+            s: TidalSession,
+            videoId: Long,
+        ): String {
+            val info =
+                json.decodeFromString<PlaybackInfo>(
+                    get(
+                        s,
+                        "videos/$videoId/playbackinfopostpaywall",
+                        "videoquality" to "HIGH",
+                        "playbackmode" to "STREAM",
+                        "assetpresentation" to "FULL",
+                    ),
+                )
+            // EMU (and BTS) manifests are base64 JSON with the stream URLs
+            val manifest = String(Base64.decode(info.manifest, Base64.DEFAULT))
+            return json.decodeFromString<BtsManifest>(manifest).urls.first()
+        }
 
         suspend fun albumTracks(
             s: TidalSession,

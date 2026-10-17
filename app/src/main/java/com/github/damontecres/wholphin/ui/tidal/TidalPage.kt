@@ -69,6 +69,9 @@ import com.github.damontecres.wholphin.services.tidal.TidalMix
 import com.github.damontecres.wholphin.services.tidal.TidalPlaylist
 import com.github.damontecres.wholphin.services.tidal.TidalTrack
 import com.github.damontecres.wholphin.services.tidal.TidalTrackShelf
+import com.github.damontecres.wholphin.services.tidal.TidalVideo
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.ui.PlayerView
 import com.github.damontecres.wholphin.ui.FontAwesome
 import com.github.damontecres.wholphin.ui.tryRequestFocus
 
@@ -121,6 +124,7 @@ fun TidalPage(
     BackHandler(enabled = player.showNowPlaying && state.addToPlaylist == null) { viewModel.showNowPlaying(false) }
     BackHandler(enabled = !player.showNowPlaying && state.detail != null && state.addToPlaylist == null) { viewModel.closeDetail() }
     BackHandler(enabled = state.addToPlaylist != null) { viewModel.pickPlaylistFor(null) }
+    BackHandler(enabled = state.playingVideo != null) { viewModel.closeVideo() }
 
     Box(modifier = modifier.fillMaxSize().background(Tidal.background)) {
         when {
@@ -142,6 +146,7 @@ fun TidalPage(
         }
         if (player.showNowPlaying && player.current != null) NowPlaying(player, viewModel, state.settings.lyricsFirst)
         if (state.showSettings) SettingsScreen(state.settings, viewModel)
+        state.playingVideo?.let { VideoScreen(it, state.videoError, viewModel) }
         state.addToPlaylist?.let { PlaylistPicker(it, state.playlists, onPick = viewModel::addToPlaylist) }
         state.message?.let { Notice(it, Modifier.align(Alignment.TopEnd)) }
     }
@@ -248,6 +253,38 @@ private fun SettingLabel(text: String) =
         letterSpacing = 2.sp,
         modifier = Modifier.padding(top = 14.dp),
     )
+
+/** A music video over the whole screen; the player's own controls work with the remote */
+@Composable
+private fun VideoScreen(
+    video: TidalVideo,
+    error: String?,
+    viewModel: TidalViewModel,
+) {
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        AndroidView(
+            factory = { context ->
+                PlayerView(context).apply {
+                    player = viewModel.videoPlayer
+                    useController = true
+                    controllerShowTimeoutMs = 3000
+                    isFocusable = true
+                    isFocusableInTouchMode = true
+                    requestFocus()
+                }
+            },
+            // Keys must reach the player view, not the page under it
+            update = { if (!it.hasFocus()) it.requestFocus() },
+            onRelease = { it.player = null },
+            modifier = Modifier.fillMaxSize(),
+        )
+        Column(Modifier.align(Alignment.TopStart).padding(32.dp)) {
+            Text(video.title, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Text(video.artistNames, color = Color.White.copy(alpha = .8f), fontSize = 16.sp)
+            error?.let { Text(it, color = Color(0xFFFF6B6B), fontSize = 14.sp) }
+        }
+    }
+}
 
 /** A mix or a recommended track list, shown together under "For you" */
 private sealed interface ForYouItem {
@@ -426,6 +463,7 @@ private fun CollectionScreen(
                     when (tab) {
                         TidalTab.PLAYLISTS -> R.string.tidal_playlists
                         TidalTab.FOR_YOU -> R.string.tidal_for_you
+                        TidalTab.VIDEOS -> R.string.tidal_videos
                         TidalTab.ALBUMS -> R.string.tidal_albums
                         TidalTab.TRACKS -> R.string.tidal_tracks
                     }
@@ -476,6 +514,18 @@ private fun CollectionScreen(
                         },
                     )
 
+                state.tab == TidalTab.VIDEOS ->
+                    CoverGrid(
+                        items = (state.videos + state.recommendedVideos).distinctBy { it.id },
+                        loading = state.videosLoading || state.forYouLoading,
+                        title = { it.title },
+                        subtitle = { it.artistNames },
+                        image = { it.imageUrl },
+                        onClick = viewModel::playVideo,
+                        columns = 4,
+                        aspectRatio = 16f / 9f,
+                    )
+
                 state.tab == TidalTab.ALBUMS ->
                     CoverGrid(
                         items = state.albums,
@@ -505,13 +555,15 @@ private fun <T> CoverGrid(
     subtitle: @Composable (T) -> String,
     image: (T) -> String?,
     onClick: (T) -> Unit,
+    columns: Int = 6,
+    aspectRatio: Float = 1f,
 ) {
     if (items.isEmpty()) {
         CenterMessage(stringResource(if (loading) R.string.tidal_loading else R.string.tidal_empty))
         return
     }
     LazyVerticalGrid(
-        columns = GridCells.Fixed(6),
+        columns = GridCells.Fixed(columns),
         horizontalArrangement = Arrangement.spacedBy(20.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp),
         contentPadding = PaddingValues(bottom = 32.dp, top = 8.dp),
@@ -527,7 +579,7 @@ private fun <T> CoverGrid(
                             focusedBorder = androidx.tv.material3.Border(BorderStroke(2.dp, Tidal.text)),
                         ),
                     colors = ClickableSurfaceDefaults.colors(containerColor = Tidal.elevated, focusedContainerColor = Tidal.elevated),
-                    modifier = Modifier.fillMaxWidth().aspectRatio(1f),
+                    modifier = Modifier.fillMaxWidth().aspectRatio(aspectRatio),
                 ) {
                     AsyncImage(
                         model = image(item),
@@ -1011,6 +1063,12 @@ private fun NowPlaying(
                         primary = false,
                         faIcon = R.string.fa_list_ul,
                         onClick = { viewModel.pickPlaylistFor(track) },
+                    )
+                    PillButton(
+                        stringResource(R.string.tidal_clip),
+                        primary = false,
+                        faIcon = R.string.fa_video,
+                        onClick = { viewModel.playClipOf(track) },
                     )
                 }
                 Spacer(Modifier.height(20.dp))
