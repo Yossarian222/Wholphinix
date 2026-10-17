@@ -54,6 +54,7 @@ import com.github.damontecres.wholphin.services.ClaudeCompanionService
 import com.github.damontecres.wholphin.services.DatePlayedService
 import com.github.damontecres.wholphin.services.DeviceProfileService
 import com.github.damontecres.wholphin.services.DeviceStatusService
+import com.github.damontecres.wholphin.services.PlaybackEvents
 import com.github.damontecres.wholphin.services.ImageUrlService
 import com.github.damontecres.wholphin.services.MusicService
 import com.github.damontecres.wholphin.services.NavigationManager
@@ -1098,6 +1099,14 @@ class PlaybackViewModel
                             else -> throw Exception("No supported playback method")
                         }
                     Timber.i("Playback decision for $itemId: $transcodeType")
+                    PlaybackEvents.add(
+                        "${item.title}: $transcodeType, audio=$audioIndex, sub=$subtitleIndex, from=${positionMs / 1000}s, " +
+                            "audio codecs=" +
+                            source.mediaStreams
+                                .orEmpty()
+                                .filter { it.type == MediaStreamType.AUDIO }
+                                .joinToString { "${it.index}:${it.codec}/${it.profile}/${it.channels}ch" },
+                    )
 
                     // An embedded subtitle the server first has to extract from the whole file would
                     // block the start, so start without it and turn it on once it's ready
@@ -1479,10 +1488,12 @@ class PlaybackViewModel
             if (playbackState == Player.STATE_READY) {
                 startRequestedAtMs?.let {
                     Timber.i("Playback ready %d ms after start", System.currentTimeMillis() - it)
+                    PlaybackEvents.add("ready after ${System.currentTimeMillis() - it} ms")
                     startRequestedAtMs = null
                 }
             } else if (playbackState == Player.STATE_BUFFERING && startRequestedAtMs == null) {
                 Timber.i("Playback buffering at %d ms", player.currentPosition)
+                PlaybackEvents.add("buffering at ${player.currentPosition / 1000}s")
             }
             if (playbackState == Player.STATE_ENDED) {
                 Timber.v("Playback state is STATE_ENDED")
@@ -1809,6 +1820,7 @@ class PlaybackViewModel
 
                         PlayMethod.DIRECT_STREAM, PlayMethod.DIRECT_PLAY -> {
                             Timber.w("Playback error during ${it.playMethod}, falling back to transcoding")
+                            PlaybackEvents.add("error during ${it.playMethod} → transcode: ${error.errorCodeName} ${error.cause?.message ?: error.message}")
                             val currentPlayback = state.value.currentPlayback
                             if (currentPlayback == null) {
                                 Timber.w("Playback error, currentPlayback is null")
@@ -2299,5 +2311,6 @@ private fun PlaybackState.toDeviceSnapshot(): DeviceStatusService.PlaybackSnapsh
         method = playback.playMethod.serialName,
         video = listOfNotNull(source.ifBlank { null }, transcoded?.let { "→ $it" }).joinToString(" ").ifBlank { null },
         droppedFrames = analyticsState.droppedFrames,
+        transcodeReasons = playback.transcodeInfo?.transcodeReasons.orEmpty().map { it.serialName },
     )
 }

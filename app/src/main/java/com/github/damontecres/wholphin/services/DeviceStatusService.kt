@@ -52,6 +52,7 @@ class DeviceStatusService
             val method: String,
             val video: String?,
             val droppedFrames: Int,
+            val transcodeReasons: List<String> = emptyList(),
         )
 
         private class Sample(
@@ -146,6 +147,8 @@ class DeviceStatusService
                             put("method", p.method)
                             put("video", p.video)
                             put("dropped_frames", p.droppedFrames)
+                            putJsonArray("transcode_reasons") { p.transcodeReasons.forEach { add(JsonPrimitive(it)) } }
+                            putJsonArray("events") { PlaybackEvents.all().forEach { add(JsonPrimitive(it)) } }
                         }
                     }
                     putJsonArray("samples") {
