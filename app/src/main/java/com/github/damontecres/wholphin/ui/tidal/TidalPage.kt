@@ -3,13 +3,8 @@ package com.github.damontecres.wholphin.ui.tidal
 import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
-import androidx.compose.runtime.SideEffect
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,13 +26,18 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -55,9 +55,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.media3.common.Player
+import androidx.media3.ui.PlayerView
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Icon
 import androidx.tv.material3.Surface
@@ -70,8 +72,6 @@ import com.github.damontecres.wholphin.services.tidal.TidalPlaylist
 import com.github.damontecres.wholphin.services.tidal.TidalTrack
 import com.github.damontecres.wholphin.services.tidal.TidalTrackShelf
 import com.github.damontecres.wholphin.services.tidal.TidalVideo
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.media3.ui.PlayerView
 import com.github.damontecres.wholphin.ui.FontAwesome
 import com.github.damontecres.wholphin.ui.tryRequestFocus
 
@@ -85,10 +85,42 @@ private enum class TidalTheme(
     val divider: Color,
     val accent: Color,
 ) {
-    BLACK(R.string.tidal_theme_black, Color(0xFF000000), Color(0xFF0D0D0E), Color(0xFF1E1E21), Color(0xFF2B2B30), Color(0xFF26262B), Color(0xFF33FFEE)),
-    GRAPHITE(R.string.tidal_theme_graphite, Color(0xFF17171A), Color(0xFF202024), Color(0xFF2C2C31), Color(0xFF3A3A41), Color(0xFF34343A), Color(0xFF33FFEE)),
-    MIDNIGHT(R.string.tidal_theme_midnight, Color(0xFF070B18), Color(0xFF0D1324), Color(0xFF18213A), Color(0xFF243052), Color(0xFF1C2742), Color(0xFF7AA7FF)),
-    AMBER(R.string.tidal_theme_amber, Color(0xFF000000), Color(0xFF0E0C0A), Color(0xFF221E1A), Color(0xFF332C25), Color(0xFF2A2520), Color(0xFFFFB547)),
+    BLACK(
+        R.string.tidal_theme_black,
+        Color(0xFF000000),
+        Color(0xFF0D0D0E),
+        Color(0xFF1E1E21),
+        Color(0xFF2B2B30),
+        Color(0xFF26262B),
+        Color(0xFF33FFEE),
+    ),
+    GRAPHITE(
+        R.string.tidal_theme_graphite,
+        Color(0xFF17171A),
+        Color(0xFF202024),
+        Color(0xFF2C2C31),
+        Color(0xFF3A3A41),
+        Color(0xFF34343A),
+        Color(0xFF33FFEE),
+    ),
+    MIDNIGHT(
+        R.string.tidal_theme_midnight,
+        Color(0xFF070B18),
+        Color(0xFF0D1324),
+        Color(0xFF18213A),
+        Color(0xFF243052),
+        Color(0xFF1C2742),
+        Color(0xFF7AA7FF),
+    ),
+    AMBER(
+        R.string.tidal_theme_amber,
+        Color(0xFF000000),
+        Color(0xFF0E0C0A),
+        Color(0xFF221E1A),
+        Color(0xFF332C25),
+        Color(0xFF2A2520),
+        Color(0xFFFFB547),
+    ),
     ;
 
     companion object {
@@ -128,10 +160,19 @@ fun TidalPage(
 
     Box(modifier = modifier.fillMaxSize().background(Tidal.background)) {
         when {
-            !viewModel.configured -> CenterMessage(stringResource(R.string.tidal_not_configured))
-            state.loggedIn == null -> Unit
-            state.loggedIn == false -> LoginScreen(state, onRetry = viewModel::startLogin)
-            else ->
+            !viewModel.configured -> {
+                CenterMessage(stringResource(R.string.tidal_not_configured))
+            }
+
+            state.loggedIn == null -> {
+                Unit
+            }
+
+            state.loggedIn == false -> {
+                LoginScreen(state, onRetry = viewModel::startLogin)
+            }
+
+            else -> {
                 Column(modifier = Modifier.fillMaxSize()) {
                     Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                         val detail = state.detail
@@ -143,6 +184,7 @@ fun TidalPage(
                     }
                     if (player.current != null) PlayerBar(player, viewModel)
                 }
+            }
         }
         if (player.showNowPlaying && player.current != null) NowPlaying(player, viewModel, state.settings.lyricsFirst)
         if (state.showSettings) SettingsScreen(state.settings, viewModel)
@@ -425,11 +467,18 @@ private fun LoginScreen(
             state.loginError != null -> {
                 Text(stringResource(R.string.tidal_login_failed), color = Tidal.text, fontSize = 18.sp)
                 Spacer(Modifier.height(16.dp))
-                PillButton(stringResource(R.string.tidal_login_retry), primary = true, onClick = onRetry, modifier = Modifier.focusRequester(focus))
+                PillButton(
+                    stringResource(R.string.tidal_login_retry),
+                    primary = true,
+                    onClick = onRetry,
+                    modifier = Modifier.focusRequester(focus),
+                )
                 LaunchedEffect(Unit) { focus.tryRequestFocus() }
             }
 
-            else -> Text(stringResource(R.string.tidal_login_waiting), color = Tidal.secondary)
+            else -> {
+                Text(stringResource(R.string.tidal_login_waiting), color = Tidal.secondary)
+            }
         }
     }
 }
@@ -473,8 +522,11 @@ private fun CollectionScreen(
         Spacer(Modifier.height(24.dp))
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when {
-                state.error != null -> CenterMessage(state.error)
-                state.tab == TidalTab.PLAYLISTS ->
+                state.error != null -> {
+                    CenterMessage(state.error)
+                }
+
+                state.tab == TidalTab.PLAYLISTS -> {
                     CoverGrid(
                         items = state.playlists,
                         loading = state.loading,
@@ -483,7 +535,9 @@ private fun CollectionScreen(
                         image = { TidalApi.imageUrl(it.squareImage ?: it.image) },
                         onClick = viewModel::openPlaylist,
                     )
-                state.tab == TidalTab.FOR_YOU ->
+                }
+
+                state.tab == TidalTab.FOR_YOU -> {
                     CoverGrid(
                         items = state.shelves.map { ForYouItem.Shelf(it) } + state.mixes.map { ForYouItem.Mix(it) },
                         loading = state.forYouLoading,
@@ -495,15 +549,29 @@ private fun CollectionScreen(
                         },
                         subtitle = {
                             when (it) {
-                                is ForYouItem.Mix -> it.mix.subTitle
-                                is ForYouItem.Shelf ->
+                                is ForYouItem.Mix -> {
+                                    it.mix.subTitle
+                                }
+
+                                is ForYouItem.Shelf -> {
                                     pluralStringResource(R.plurals.tidal_track_count, it.shelf.tracks.size, it.shelf.tracks.size)
+                                }
                             }
                         },
                         image = {
                             when (it) {
-                                is ForYouItem.Mix -> it.mix.imageUrl
-                                is ForYouItem.Shelf -> TidalApi.imageUrl(it.shelf.tracks.firstOrNull()?.album?.cover)
+                                is ForYouItem.Mix -> {
+                                    it.mix.imageUrl
+                                }
+
+                                is ForYouItem.Shelf -> {
+                                    TidalApi.imageUrl(
+                                        it.shelf.tracks
+                                            .firstOrNull()
+                                            ?.album
+                                            ?.cover,
+                                    )
+                                }
                             }
                         },
                         onClick = {
@@ -513,8 +581,9 @@ private fun CollectionScreen(
                             }
                         },
                     )
+                }
 
-                state.tab == TidalTab.VIDEOS ->
+                state.tab == TidalTab.VIDEOS -> {
                     CoverGrid(
                         items = (state.videos + state.recommendedVideos).distinctBy { it.id },
                         loading = state.videosLoading || state.forYouLoading,
@@ -525,8 +594,9 @@ private fun CollectionScreen(
                         columns = 4,
                         aspectRatio = 16f / 9f,
                     )
+                }
 
-                state.tab == TidalTab.ALBUMS ->
+                state.tab == TidalTab.ALBUMS -> {
                     CoverGrid(
                         items = state.albums,
                         loading = state.loading,
@@ -535,13 +605,16 @@ private fun CollectionScreen(
                         image = { TidalApi.imageUrl(it.cover) },
                         onClick = viewModel::openAlbum,
                     )
-                else ->
+                }
+
+                else -> {
                     TrackList(
                         tracks = state.tracks,
                         player = player,
                         onPlay = { viewModel.play(state.tracks, it) },
                         onLongClick = viewModel::pickPlaylistFor,
                     )
+                }
             }
         }
     }
@@ -589,7 +662,14 @@ private fun <T> CoverGrid(
                     )
                 }
                 Spacer(Modifier.height(10.dp))
-                Text(title(item), color = Tidal.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    title(item),
+                    color = Tidal.text,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
                 Text(subtitle(item), color = Tidal.secondary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
@@ -637,7 +717,14 @@ private fun TrackList(
 private fun ColumnLabel(
     text: String,
     modifier: Modifier,
-) = Text(text.uppercase(), color = Tidal.secondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp, modifier = modifier)
+) = Text(
+    text.uppercase(),
+    color = Tidal.secondary,
+    fontSize = 11.sp,
+    fontWeight = FontWeight.SemiBold,
+    letterSpacing = 1.sp,
+    modifier = modifier,
+)
 
 @Composable
 private fun TrackRow(
@@ -765,7 +852,14 @@ private fun DetailScreen(
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 2.sp,
                             )
-                            Text(detail.title, color = Tidal.text, fontSize = 40.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text(
+                                detail.title,
+                                color = Tidal.text,
+                                fontSize = 40.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
                             if (detail.subtitle.isNotBlank()) Text(detail.subtitle, color = Tidal.text, fontSize = 18.sp)
                             val minutes = detail.tracks.sumOf { it.duration } / 60
                             Text(
@@ -796,14 +890,20 @@ private fun DetailScreen(
                                 )
                                 if (detail.playlistUuid != null) {
                                     PillButton(
-                                        stringResource(if (detail.newestFirst) R.string.tidal_sort_newest else R.string.tidal_sort_playlist),
+                                        stringResource(
+                                            if (detail.newestFirst) R.string.tidal_sort_newest else R.string.tidal_sort_playlist,
+                                        ),
                                         primary = false,
                                         faIcon = R.string.fa_arrow_down_long,
                                         onClick = viewModel::toggleNewestFirst,
                                     )
                                 }
                             }
-                            Text(stringResource(R.string.tidal_long_press_hint), color = Tidal.secondary.copy(alpha = .7f), fontSize = 12.sp)
+                            Text(
+                                stringResource(R.string.tidal_long_press_hint),
+                                color = Tidal.secondary.copy(alpha = .7f),
+                                fontSize = 12.sp,
+                            )
                         }
                     }
                 },
@@ -878,7 +978,14 @@ private fun PlayerBar(
                     )
                     Spacer(Modifier.width(14.dp))
                     Column {
-                        Text(track.title, color = Tidal.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            track.title,
+                            color = Tidal.text,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                         Text(track.artistNames, color = Tidal.secondary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
@@ -1040,7 +1147,13 @@ private fun NowPlaying(
                     if (track.explicit) Badge("E", filled = true)
                     (player.quality ?: track.audioQuality)?.let { Badge(qualityLabel(it), filled = false) }
                 }
-                Text(track.artistNames, color = Tidal.text.copy(alpha = .85f), fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    track.artistNames,
+                    color = Tidal.text.copy(alpha = .85f),
+                    fontSize = 18.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
                 track.album?.title?.let {
                     Text(it, color = Tidal.secondary, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }

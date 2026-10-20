@@ -87,8 +87,13 @@ configure<ApplicationExtension> {
         // TIDAL device-login client, from local.properties or the CI secrets (not in the repo)
         val localProps =
             Properties().apply {
-                rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+                rootProject
+                    .file("local.properties")
+                    .takeIf { it.exists() }
+                    ?.inputStream()
+                    ?.use { load(it) }
             }
+
         fun secret(
             prop: String,
             env: String,
