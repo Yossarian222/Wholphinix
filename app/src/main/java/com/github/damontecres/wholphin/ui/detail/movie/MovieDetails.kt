@@ -571,4 +571,7 @@ fun MovieDetailsContent(
 /**
  * Wholphinix: versions of a movie the user can actually pick (same filter the version dialog uses)
  */
-private fun playableSources(movie: BaseItem) = movie.data.mediaSources.orEmpty().filter { it.id.isNotNullOrBlank() }
+private fun playableSources(movie: BaseItem) =
+    movie.data.mediaSources
+        .orEmpty()
+        .filter { it.id.isNotNullOrBlank() }
