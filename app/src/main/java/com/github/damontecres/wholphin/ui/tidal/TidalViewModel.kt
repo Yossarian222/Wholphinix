@@ -17,6 +17,7 @@ import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import com.github.damontecres.wholphin.R
 import com.github.damontecres.wholphin.services.tidal.TidalAlbum
 import com.github.damontecres.wholphin.services.tidal.TidalApi
 import com.github.damontecres.wholphin.services.tidal.TidalAuthException
@@ -29,7 +30,6 @@ import com.github.damontecres.wholphin.services.tidal.TidalSettings
 import com.github.damontecres.wholphin.services.tidal.TidalTrack
 import com.github.damontecres.wholphin.services.tidal.TidalTrackShelf
 import com.github.damontecres.wholphin.services.tidal.TidalVideo
-import com.github.damontecres.wholphin.R
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
@@ -42,8 +42,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import java.util.concurrent.ConcurrentHashMap
 import timber.log.Timber
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
 enum class TidalTab { PLAYLISTS, FOR_YOU, VIDEOS, ALBUMS, TRACKS }
@@ -365,8 +365,17 @@ class TidalViewModel
         /** Looks up the music video of [track] and plays it, or says there is none */
         fun playClipOf(track: TidalTrack) {
             viewModelScope.launch {
-                val artist = track.artists.firstOrNull()?.name.orEmpty()
-                val baseTitle = track.title.substringBefore(" (").substringBefore(" - ").trim().lowercase()
+                val artist =
+                    track.artists
+                        .firstOrNull()
+                        ?.name
+                        .orEmpty()
+                val baseTitle =
+                    track.title
+                        .substringBefore(" (")
+                        .substringBefore(" - ")
+                        .trim()
+                        .lowercase()
                 val video =
                     try {
                         service
@@ -469,7 +478,14 @@ class TidalViewModel
                             kind = TidalDetailKind.SHELF,
                             title = shelf.title,
                             subtitle = "",
-                            imageUrl = TidalApi.imageUrl(shelf.tracks.firstOrNull()?.album?.cover, 640),
+                            imageUrl =
+                                TidalApi.imageUrl(
+                                    shelf.tracks
+                                        .firstOrNull()
+                                        ?.album
+                                        ?.cover,
+                                    640,
+                                ),
                             tracks = shelf.tracks,
                             loading = false,
                         ),
@@ -492,7 +508,9 @@ class TidalViewModel
                             _state.update { it.copy(playlists = playlists) }
                         }
                         // An opened copy of that playlist gets the track too
-                        _state.value.detail?.takeIf { it.playlistUuid == playlist.uuid }?.let { openPlaylistDetail(it) }
+                        _state.value.detail
+                            ?.takeIf { it.playlistUuid == playlist.uuid }
+                            ?.let { openPlaylistDetail(it) }
                         context.getString(R.string.tidal_added_to_playlist, track.title, playlist.title)
                     } catch (ex: Exception) {
                         Timber.w(ex, "Adding to TIDAL playlist failed")

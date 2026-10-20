@@ -54,11 +54,11 @@ import com.github.damontecres.wholphin.services.ClaudeCompanionService
 import com.github.damontecres.wholphin.services.DatePlayedService
 import com.github.damontecres.wholphin.services.DeviceProfileService
 import com.github.damontecres.wholphin.services.DeviceStatusService
-import com.github.damontecres.wholphin.services.PlaybackEvents
 import com.github.damontecres.wholphin.services.ImageUrlService
 import com.github.damontecres.wholphin.services.MusicService
 import com.github.damontecres.wholphin.services.NavigationManager
 import com.github.damontecres.wholphin.services.PendingRatingService
+import com.github.damontecres.wholphin.services.PlaybackEvents
 import com.github.damontecres.wholphin.services.PlayerFactory
 import com.github.damontecres.wholphin.services.PlaylistCreationResult
 import com.github.damontecres.wholphin.services.PlaylistCreator
@@ -1820,7 +1820,9 @@ class PlaybackViewModel
 
                         PlayMethod.DIRECT_STREAM, PlayMethod.DIRECT_PLAY -> {
                             Timber.w("Playback error during ${it.playMethod}, falling back to transcoding")
-                            PlaybackEvents.add("error during ${it.playMethod} → transcode: ${error.errorCodeName} ${error.cause?.message ?: error.message}")
+                            PlaybackEvents.add(
+                                "error during ${it.playMethod} → transcode: ${error.errorCodeName} ${error.cause?.message ?: error.message}",
+                            )
                             val currentPlayback = state.value.currentPlayback
                             if (currentPlayback == null) {
                                 Timber.w("Playback error, currentPlayback is null")
@@ -2311,6 +2313,10 @@ private fun PlaybackState.toDeviceSnapshot(): DeviceStatusService.PlaybackSnapsh
         method = playback.playMethod.serialName,
         video = listOfNotNull(source.ifBlank { null }, transcoded?.let { "→ $it" }).joinToString(" ").ifBlank { null },
         droppedFrames = analyticsState.droppedFrames,
-        transcodeReasons = playback.transcodeInfo?.transcodeReasons.orEmpty().map { it.serialName },
+        transcodeReasons =
+            playback.transcodeInfo
+                ?.transcodeReasons
+                .orEmpty()
+                .map { it.serialName },
     )
 }

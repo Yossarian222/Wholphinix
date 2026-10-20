@@ -406,9 +406,13 @@ class TidalApi
                     element.values.forEach { walk(it, visit) }
                 }
 
-                is JsonArray -> element.forEach { walk(it, visit) }
+                is JsonArray -> {
+                    element.forEach { walk(it, visit) }
+                }
 
-                else -> Unit
+                else -> {
+                    Unit
+                }
             }
         }
 
@@ -421,8 +425,7 @@ class TidalApi
         suspend fun searchVideos(
             s: TidalSession,
             query: String,
-        ): List<TidalVideo> =
-            json.decodeFromString<Page<TidalVideo>>(get(s, "search/videos", "query" to query, "limit" to "10")).items
+        ): List<TidalVideo> = json.decodeFromString<Page<TidalVideo>>(get(s, "search/videos", "query" to query, "limit" to "10")).items
 
         /** HLS playlist URL of a music video */
         suspend fun videoStreamUrl(
@@ -505,8 +508,7 @@ class TidalApi
             s: TidalSession,
             path: String,
             vararg query: Pair<String, String>,
-        ): String =
-            withContext(WholphinDispatchers.IO) { execute(request(s, path, *query)) }
+        ): String = withContext(WholphinDispatchers.IO) { execute(request(s, path, *query)) }
 
         private fun request(
             s: TidalSession,
@@ -514,11 +516,18 @@ class TidalApi
             vararg query: Pair<String, String>,
         ): Request {
             val url =
-                (API + path.removePrefix("/")).toHttpUrl().newBuilder().apply {
-                    addQueryParameter("countryCode", s.countryCode)
-                    query.forEach { (k, v) -> addQueryParameter(k, v) }
-                }.build()
-            return Request.Builder().url(url).header("Authorization", "Bearer ${s.accessToken}").build()
+                (API + path.removePrefix("/"))
+                    .toHttpUrl()
+                    .newBuilder()
+                    .apply {
+                        addQueryParameter("countryCode", s.countryCode)
+                        query.forEach { (k, v) -> addQueryParameter(k, v) }
+                    }.build()
+            return Request
+                .Builder()
+                .url(url)
+                .header("Authorization", "Bearer ${s.accessToken}")
+                .build()
         }
 
         private suspend fun post(
@@ -527,7 +536,13 @@ class TidalApi
         ): String =
             withContext(WholphinDispatchers.IO) {
                 val body = FormBody.Builder().apply { form.forEach { (k, v) -> add(k, v) } }.build()
-                execute(Request.Builder().url(url).post(body).build())
+                execute(
+                    Request
+                        .Builder()
+                        .url(url)
+                        .post(body)
+                        .build(),
+                )
             }
 
         private fun execute(request: Request): String =

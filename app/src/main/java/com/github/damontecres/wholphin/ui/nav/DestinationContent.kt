@@ -11,7 +11,6 @@ import com.github.damontecres.wholphin.data.model.SeerrItemType
 import com.github.damontecres.wholphin.preferences.PlayerBackend
 import com.github.damontecres.wholphin.preferences.UserPreferences
 import com.github.damontecres.wholphin.ui.audiobookshelf.AudiobookshelfPage
-import com.github.damontecres.wholphin.ui.tidal.TidalPage
 import com.github.damontecres.wholphin.ui.components.ItemGrid
 import com.github.damontecres.wholphin.ui.components.LicenseInfo
 import com.github.damontecres.wholphin.ui.data.MovieSortOptions
@@ -55,6 +54,7 @@ import com.github.damontecres.wholphin.ui.preferences.user.UserProfilePreference
 import com.github.damontecres.wholphin.ui.search.SearchPage
 import com.github.damontecres.wholphin.ui.setup.InstallUpdatePage
 import com.github.damontecres.wholphin.ui.slideshow.SlideshowPage
+import com.github.damontecres.wholphin.ui.tidal.TidalPage
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.jellyfin.sdk.model.api.CollectionType
 import timber.log.Timber

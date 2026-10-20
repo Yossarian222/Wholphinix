@@ -3,8 +3,8 @@ package com.github.damontecres.wholphin.ui.playback
 import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.common.Tracks
-import org.jellyfin.sdk.model.api.MediaSourceInfo
 import com.github.damontecres.wholphin.services.PlaybackEvents
+import org.jellyfin.sdk.model.api.MediaSourceInfo
 import timber.log.Timber
 
 class TracksChangedListener(
