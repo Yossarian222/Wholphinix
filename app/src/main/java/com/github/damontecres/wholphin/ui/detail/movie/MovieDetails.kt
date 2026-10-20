@@ -25,6 +25,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -48,12 +49,14 @@ import com.github.damontecres.wholphin.ui.cards.SeasonCard
 import com.github.damontecres.wholphin.ui.components.ContextMenu
 import com.github.damontecres.wholphin.ui.components.ContextMenuActions
 import com.github.damontecres.wholphin.ui.components.ContextMenuDialog
+import com.github.damontecres.wholphin.ui.components.DialogPopup
 import com.github.damontecres.wholphin.ui.components.ErrorMessage
 import com.github.damontecres.wholphin.ui.components.ExpandablePlayButtons
 import com.github.damontecres.wholphin.ui.components.HeaderUtils
 import com.github.damontecres.wholphin.ui.components.LoadingPage
 import com.github.damontecres.wholphin.ui.components.Optional
 import com.github.damontecres.wholphin.ui.components.PersonContextActions
+import com.github.damontecres.wholphin.ui.components.chooseVersionParams
 import com.github.damontecres.wholphin.ui.data.AddPlaylistViewModel
 import com.github.damontecres.wholphin.ui.data.ChooseVersionParams
 import com.github.damontecres.wholphin.ui.data.ItemDetailsDialog
@@ -63,6 +66,7 @@ import com.github.damontecres.wholphin.ui.detail.rememberDetailHeaderFocus
 import com.github.damontecres.wholphin.ui.discover.DiscoverRow
 import com.github.damontecres.wholphin.ui.discover.DiscoverRowData
 import com.github.damontecres.wholphin.ui.ifElse
+import com.github.damontecres.wholphin.ui.isNotNullOrBlank
 import com.github.damontecres.wholphin.ui.letNotEmpty
 import com.github.damontecres.wholphin.ui.nav.Destination
 import com.github.damontecres.wholphin.ui.rememberInt
@@ -76,6 +80,7 @@ import org.jellyfin.sdk.model.api.BaseItemKind
 import org.jellyfin.sdk.model.api.MediaSourceInfo
 import org.jellyfin.sdk.model.extensions.ticks
 import org.jellyfin.sdk.model.serializer.toUUID
+import org.jellyfin.sdk.model.serializer.toUUIDOrNull
 import java.util.UUID
 import kotlin.time.Duration
 
@@ -99,6 +104,8 @@ fun MovieDetails(
 
     var overviewDialog by remember { mutableStateOf<ItemDetailsDialogInfo?>(null) }
     var showContextMenu by remember { mutableStateOf<ContextMenu?>(null) }
+    var versionPromptPosition by remember { mutableStateOf<Duration?>(null) }
+    val resources = LocalResources.current
     var showPlaylistDialog by remember { mutableStateOf<Optional<UUID>>(Optional.absent()) }
     val playlistState by playlistViewModel.playlistState.collectAsState()
 
@@ -173,12 +180,17 @@ fun MovieDetails(
                     )
                 },
                 playOnClick = {
-                    viewModel.navigateTo(
-                        Destination.Playback(
-                            movie.id,
-                            it.inWholeMilliseconds,
-                        ),
-                    )
+                    // Wholphinix: more than one version -> ask which one before playing
+                    if (playableSources(movie).size > 1) {
+                        versionPromptPosition = it
+                    } else {
+                        viewModel.navigateTo(
+                            Destination.Playback(
+                                movie.id,
+                                it.inWholeMilliseconds,
+                            ),
+                        )
+                    }
                 },
                 overviewOnClick = {
                     overviewDialog =
@@ -244,6 +256,30 @@ fun MovieDetails(
                 onChooseVersion = { contextActions.onChooseVersion.invoke(movie, it) },
                 modifier = modifier,
             )
+            versionPromptPosition?.let { position ->
+                val sources = playableSources(movie)
+                val params =
+                    remember(movie, chosenStreams, position) {
+                        chooseVersionParams(
+                            resources,
+                            sources,
+                            chosenStreams?.source?.id?.toUUIDOrNull(),
+                        ) { idx ->
+                            versionPromptPosition = null
+                            sources[idx].id?.toUUIDOrNull()?.let { sourceId ->
+                                viewModel.playVersion(movie, sourceId, position.inWholeMilliseconds)
+                            }
+                        }
+                    }
+                DialogPopup(
+                    showDialog = true,
+                    title = params.title,
+                    dialogItems = params.items,
+                    onDismissRequest = { versionPromptPosition = null },
+                    dismissOnClick = true,
+                    waitToLoad = false,
+                )
+            }
         }
     }
     showContextMenu?.let { contextMenu ->
@@ -531,3 +567,8 @@ fun MovieDetailsContent(
         }
     }
 }
+
+/**
+ * Wholphinix: versions of a movie the user can actually pick (same filter the version dialog uses)
+ */
+private fun playableSources(movie: BaseItem) = movie.data.mediaSources.orEmpty().filter { it.id.isNotNullOrBlank() }

@@ -33,6 +33,7 @@ import com.github.damontecres.wholphin.ui.letNotEmpty
 import com.github.damontecres.wholphin.ui.nav.Destination
 import com.github.damontecres.wholphin.ui.showToast
 import com.github.damontecres.wholphin.util.DataLoadingState
+import com.github.damontecres.wholphin.util.ExceptionHandler
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
@@ -43,6 +44,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.libraryApi
 import org.jellyfin.sdk.api.client.extensions.userLibraryApi
@@ -230,6 +232,21 @@ class MovieViewModel
                         itemPlaybackRepository.getChosenItemFromPlayback(item, result, plc, prefs)
                     }
                 _state.update { it.copy(chosenStreams = chosen) }
+            }
+        }
+
+        /**
+         * Wholphinix: save the chosen version first, then start playback, so the player
+         * reads the new choice instead of racing the database write.
+         */
+        fun playVersion(
+            item: BaseItem,
+            sourceId: UUID,
+            positionMs: Long,
+        ) {
+            viewModelScope.launch(ExceptionHandler()) {
+                itemPlaybackRepository.savePlayVersion(item.id, sourceId)
+                navigateTo(Destination.Playback(item.id, positionMs))
             }
         }
 
