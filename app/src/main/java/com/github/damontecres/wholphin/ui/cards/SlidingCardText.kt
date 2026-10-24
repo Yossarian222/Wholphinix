@@ -5,9 +5,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.layout
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -33,13 +34,11 @@ fun SlidingCardText(
         verticalArrangement = Arrangement.spacedBy(0.dp),
         modifier =
             modifier
-                .layout { measurable, constraints ->
-                    val topPaddingPx = (spaceBetweenUnfocused - spaceBetween.value).roundToPx()
-                    val bottomPaddingPx = spaceBetween.value.roundToPx()
-                    val placeable = measurable.measure(constraints)
-                    layout(placeable.width, placeable.height + bottomPaddingPx + topPaddingPx) {
-                        placeable.placeRelative(0, topPaddingPx)
-                    }
+                // Fixed size (the space is always reserved below), only the drawing moves: animating the layout
+                // re-measured every card of the row on each frame and made scrolling the cast row stutter on the RPi
+                .padding(bottom = spaceBetweenUnfocused)
+                .graphicsLayer {
+                    translationY = (spaceBetweenUnfocused - spaceBetween.value).toPx()
                 }.fillMaxWidth(),
         content = content,
     )

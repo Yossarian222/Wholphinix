@@ -35,7 +35,7 @@ data class Person(
                 name = dto.name,
                 role = personRole(context, dto.role, dto.type),
                 type = dto.type,
-                imageUrl = api.imageApi.getItemImageUrl(dto.id, ImageType.PRIMARY),
+                imageUrl = personImageUrl(api, dto),
                 favorite = false,
             )
 
@@ -50,11 +50,30 @@ data class Person(
                 name = dto.name,
                 role = personRole(context, dto.role, dto.type),
                 type = dto.type,
-                imageUrl = api.imageApi.getItemImageUrl(dto.id, ImageType.PRIMARY),
+                imageUrl = personImageUrl(api, dto),
                 favorite = favorite,
             )
     }
 }
+
+/**
+ * A photo sized for the round person cards (108 dp): the full size photo (often 1000+ px) made the cast row stutter on
+ * the RPi while scrolling, every card had to download and decode a big JPEG. The tag lets the server and Coil cache it.
+ */
+private fun personImageUrl(
+    api: ApiClient,
+    dto: BaseItemPerson,
+): String =
+    api.imageApi.getItemImageUrl(
+        itemId = dto.id,
+        imageType = ImageType.PRIMARY,
+        maxWidth = PERSON_IMAGE_SIZE,
+        maxHeight = PERSON_IMAGE_SIZE * 3 / 2,
+        quality = 90,
+        tag = dto.primaryImageTag,
+    )
+
+private const val PERSON_IMAGE_SIZE = 320
 
 private fun personRole(
     context: Context,
