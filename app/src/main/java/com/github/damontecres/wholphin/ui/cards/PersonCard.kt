@@ -14,11 +14,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -27,6 +24,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Border
@@ -39,9 +37,7 @@ import com.github.damontecres.wholphin.data.model.Person
 import com.github.damontecres.wholphin.ui.AspectRatios
 import com.github.damontecres.wholphin.ui.FontAwesome
 import com.github.damontecres.wholphin.ui.PreviewTvSpec
-import com.github.damontecres.wholphin.ui.enableMarquee
 import com.github.damontecres.wholphin.ui.theme.WholphinTheme
-import kotlinx.coroutines.delay
 import org.jellyfin.sdk.model.UUID
 import org.jellyfin.sdk.model.api.PersonKind
 
@@ -77,23 +73,7 @@ fun PersonCard(
     modifier: Modifier = Modifier,
     interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
 ) {
-    val hideOverlayDelay = 1_000L
-
     val focused by interactionSource.collectIsFocusedAsState()
-    var focusedAfterDelay by remember { mutableStateOf(false) }
-
-    if (focused) {
-        LaunchedEffect(Unit) {
-            delay(hideOverlayDelay)
-            if (focused) {
-                focusedAfterDelay = true
-            } else {
-                focusedAfterDelay = false
-            }
-        }
-    } else {
-        focusedAfterDelay = false
-    }
 
     Column(
         verticalArrangement = Arrangement.spacedBy(4.dp), // Fixed base spacing
@@ -163,30 +143,34 @@ fun PersonCard(
             )
         }
         SlidingCardText(focused) {
+            // Whole names on 2 lines instead of 1 cut in the middle; every card keeps the same height (minLines), so the
+            // row does not jump while scrolling
             Text(
                 text = name ?: "",
-                maxLines = 1,
+                minLines = 2,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 4.dp)
-                        .enableMarquee(focusedAfterDelay),
+                        .padding(horizontal = 4.dp),
             )
             role?.let {
                 Text(
                     text = role,
-                    maxLines = 1,
+                    minLines = 2,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.Center,
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.Normal,
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 4.dp)
-                            .enableMarquee(focusedAfterDelay),
+                            .padding(horizontal = 4.dp),
                 )
             }
         }
