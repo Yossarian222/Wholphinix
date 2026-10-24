@@ -9,6 +9,7 @@ import android.widget.Toast
 import androidx.compose.foundation.MarqueeAnimationMode
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -23,10 +24,12 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.offset
 import androidx.media3.common.Player
 import coil3.request.ErrorResult
 import com.github.damontecres.wholphin.data.model.BaseItem
@@ -189,16 +192,33 @@ fun RequestOrRestoreFocus(
     }
 }
 
+/**
+ * Scrolls a one line text sideways while [focused].
+ *
+ * The marquee clips to its bounds, which cut the tops of accented capitals (Š, Č, Ľ, Á…) and the bottoms of g/j/y: it gets
+ * [MarqueeVerticalRoom] of extra height above and below, while the text keeps its size and position for the layout.
+ */
 fun Modifier.enableMarquee(focused: Boolean) =
-    if (focused) {
-        basicMarquee(
-            initialDelayMillis = 250,
-            animationMode = MarqueeAnimationMode.Immediately,
-            velocity = 40.dp,
-        )
-    } else {
-        basicMarquee(animationMode = MarqueeAnimationMode.WhileFocused)
-    }
+    this
+        .layout { measurable, constraints ->
+            val room = MarqueeVerticalRoom.roundToPx()
+            val placeable = measurable.measure(constraints.offset(vertical = 2 * room))
+            layout(placeable.width, (placeable.height - 2 * room).coerceAtLeast(0)) {
+                placeable.placeRelative(0, -room)
+            }
+        }.then(
+            if (focused) {
+                Modifier.basicMarquee(
+                    initialDelayMillis = 250,
+                    animationMode = MarqueeAnimationMode.Immediately,
+                    velocity = 40.dp,
+                )
+            } else {
+                Modifier.basicMarquee(animationMode = MarqueeAnimationMode.WhileFocused)
+            },
+        ).padding(vertical = MarqueeVerticalRoom)
+
+private val MarqueeVerticalRoom = 4.dp
 
 @Composable
 fun Modifier.playSoundOnFocus(enabled: Boolean): Modifier {

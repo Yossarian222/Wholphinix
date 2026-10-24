@@ -22,6 +22,9 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.MaterialTheme
@@ -143,17 +146,29 @@ private val personRowContentPadding =
 /**
  * When a card in the row gets focus, scroll the whole row (title, photos, names and roles) into view.
  * Otherwise only the focused photo would be brought into view and the text under it could stay cut off at the bottom.
+ *
+ * With some room below: the cast is often the last row of a page, scrolled to the very bottom of the screen, where TVs
+ * crop a few percent of the picture (overscan) and cut the names and roles in half.
  */
 @Composable
 private fun rememberBringRowIntoViewOnFocus(): Modifier {
     val requester = remember { BringIntoViewRequester() }
     val scope = rememberCoroutineScope()
+    val roomBelow = with(LocalDensity.current) { ROW_ROOM_BELOW.toPx() }
+    val size = remember { IntArray(2) }
     return Modifier
         .bringIntoViewRequester(requester)
-        .onFocusChanged {
+        .onSizeChanged {
+            size[0] = it.width
+            size[1] = it.height
+        }.onFocusChanged {
             if (it.hasFocus) {
                 // Runs along with the scroll to the focused photo, the scroll container satisfies both requests
-                scope.launch { requester.bringIntoView() }
+                scope.launch {
+                    requester.bringIntoView(Rect(0f, 0f, size[0].toFloat(), size[1] + roomBelow))
+                }
             }
         }
 }
+
+private val ROW_ROOM_BELOW = 48.dp
