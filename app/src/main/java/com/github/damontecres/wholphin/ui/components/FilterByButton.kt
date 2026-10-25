@@ -87,6 +87,8 @@ fun FilterByButton(
 ) {
     var dropDown by remember { mutableStateOf(false) }
     var nestedDropDown by remember { mutableStateOf<ItemFilterBy<*>?>(null) }
+    // Year is picked in two steps: first the decade, then a year of it (or the whole decade)
+    var decade by remember { mutableStateOf<Int?>(null) }
     val filterCount = remember(current, filterOptions) { current.countFilters(filterOptions) }
 
     Box(modifier = modifier) {
@@ -134,13 +136,18 @@ fun FilterByButton(
                 )
                 HorizontalDivider()
             }
+            // Decades are offered inside the year filter
             filterOptions
+                .filter { it != DecadeFilter }
                 .forEachIndexed { index, filterOption ->
                     val focusRequester = remember { FocusRequester() }
                     if (index == 0) {
                         LaunchedEffect(Unit) { focusRequester.tryRequestFocus() }
                     }
-                    val currentValue = remember(current) { filterOption.get(current) }
+                    val currentValue =
+                        remember(current) {
+                            filterOption.get(current) ?: if (filterOption == YearFilter) DecadeFilter.get(current) else null
+                        }
                     TvDropdownMenuItem(
                         leadingIcon = {
                             if (currentValue != null) {
@@ -168,9 +175,23 @@ fun FilterByButton(
             containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(5.dp),
             offset = DpOffset(80.dp, 16.dp),
             onDismissRequest = {
-                nestedDropDown = null
+                // Back from a decade's years goes to the decades
+                if (decade != null) decade = null else nestedDropDown = null
             },
         ) {
+            if (nestedDropDown == YearFilter) {
+                YearMenu(
+                    current = current,
+                    decade = decade,
+                    onDecade = { decade = it },
+                    onFilterChange = {
+                        onFilterChange(it)
+                        decade = null
+                        nestedDropDown = null
+                    },
+                    getPossibleValues = getPossibleValues,
+                )
+            } else {
             nestedDropDown?.let { filterOption ->
                 filterOption as ItemFilterBy<Any>
                 val currentValue = remember(current) { filterOption.get(current) }
@@ -381,6 +402,97 @@ fun FilterByButton(
                         )
                     }
                 }
+            }
+            }
+        }
+    }
+}
+
+/** "1990s" style name of a decade; from 2000 on as a range, e.g. "2010 – 2019" */
+@Composable
+private fun decadeName(decade: Int) =
+    if (decade < 2000) stringResource(R.string.decade_name, decade % 100) else "$decade – ${decade + 9}"
+
+/**
+ * Year filter in two steps: the decades in the library, then the years of the picked decade with
+ * "Whole decade" on top. A year sets [YearFilter], the whole decade sets [DecadeFilter].
+ */
+@Composable
+private fun YearMenu(
+    current: GetItemsFilter,
+    decade: Int?,
+    onDecade: (Int?) -> Unit,
+    onFilterChange: (GetItemsFilter) -> Unit,
+    getPossibleValues: suspend (ItemFilterBy<*>) -> List<FilterValueOption>,
+) {
+    var years by remember { mutableStateOf<List<Int>?>(null) }
+    LaunchedEffect(Unit) {
+        years = getPossibleValues(YearFilter).mapNotNull { it.value as? Int }
+    }
+    val selectedYears = current.years.orEmpty()
+    val selectedDecades = current.decades.orEmpty()
+    val cleared = DecadeFilter.set(null, YearFilter.set(null, current))
+    val focusRequester = remember(decade) { FocusRequester() }
+    LaunchedEffect(decade, years) { focusRequester.tryRequestFocus() }
+
+    @Composable
+    fun Item(
+        text: String,
+        selected: Boolean,
+        first: Boolean,
+        onClick: () -> Unit,
+    ) = TvDropdownMenuItem(
+        elevation = 8.dp,
+        leadingIcon = { if (selected) Icon(imageVector = Icons.Default.Check, contentDescription = "Filter active") },
+        text = { Text(text = text) },
+        onClick = onClick,
+        modifier = if (first) Modifier.focusRequester(focusRequester) else Modifier,
+    )
+
+    if (selectedYears.isNotEmpty() || selectedDecades.isNotEmpty()) {
+        TvDropdownMenuItem(
+            elevation = 5.dp,
+            leadingIcon = { Icon(imageVector = Icons.Default.Delete, contentDescription = null, tint = Color.Red.copy(alpha = .8f)) },
+            text = { Text(text = stringResource(R.string.remove), color = MaterialTheme.colorScheme.error) },
+            onClick = { onFilterChange(cleared) },
+        )
+        HorizontalDivider()
+    }
+    val all = years
+    when {
+        all == null -> {
+            CircularProgress(Modifier.size(48.dp))
+        }
+
+        all.isEmpty() -> {
+            Text(text = stringResource(R.string.no_results))
+        }
+
+        decade == null -> {
+            all.map { it / 10 * 10 }.distinct().sorted().forEachIndexed { index, d ->
+                Item(
+                    text = decadeName(d),
+                    selected = d in selectedDecades || selectedYears.any { it / 10 * 10 == d },
+                    first = index == 0,
+                    onClick = { onDecade(d) },
+                )
+            }
+        }
+
+        else -> {
+            Item(
+                text = stringResource(R.string.whole_decade, decadeName(decade)),
+                selected = decade in selectedDecades,
+                first = true,
+                onClick = { onFilterChange(DecadeFilter.set(listOf(decade), cleared)) },
+            )
+            all.filter { it / 10 * 10 == decade }.sorted().forEach { year ->
+                Item(
+                    text = year.toString(),
+                    selected = year in selectedYears,
+                    first = false,
+                    onClick = { onFilterChange(YearFilter.set(listOf(year), cleared)) },
+                )
             }
         }
     }

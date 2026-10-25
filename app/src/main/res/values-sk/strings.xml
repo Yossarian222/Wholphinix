@@ -390,6 +390,8 @@
     <string name="filter">Filter</string>
     <string name="year">Rok</string>
     <string name="decade">Desaťročie</string>
+    <string name="decade_name">%1$02d. roky</string>
+    <string name="whole_decade">Celé desaťročie (%1$s)</string>
     <string name="remove">Odstrániť</string>
     <string name="dolby_vision">Dolby Vision</string>
     <string name="dolby_atmos">Dolby Atmos</string>

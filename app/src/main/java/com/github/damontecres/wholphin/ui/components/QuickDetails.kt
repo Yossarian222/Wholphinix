@@ -3,9 +3,11 @@ package com.github.damontecres.wholphin.ui.components
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.NonRestartableComposable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -23,6 +25,7 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.github.damontecres.wholphin.R
+import com.github.damontecres.wholphin.data.model.ImdbRatings
 import com.github.damontecres.wholphin.data.model.QuickDetailsData
 import com.github.damontecres.wholphin.preferences.DisplayToggle
 import com.github.damontecres.wholphin.ui.dot
@@ -30,6 +33,7 @@ import com.github.damontecres.wholphin.ui.formatTime
 import com.github.damontecres.wholphin.ui.util.LocalClock
 import com.github.damontecres.wholphin.ui.util.LocalInterfaceCustomization
 import org.jellyfin.sdk.model.DateTime
+import java.util.Locale
 import kotlin.time.Duration
 
 @Composable
@@ -50,6 +54,7 @@ fun QuickDetails(
             }
             if (DisplayToggle.COMMUNITY_RATING in enabled) {
                 QuickDetailsText(details.communityRating, Modifier, textStyle, inlineContentMap)
+                details.imdbId?.let { ImdbText(it, textStyle, inlineContentMap) }
             }
             if (DisplayToggle.CRITIC_RATING in enabled) {
                 QuickDetailsText(details.criticRating, Modifier, textStyle, inlineContentMap)
@@ -115,6 +120,16 @@ fun rememberQuickDetailsContentMap(textStyle: TextStyle = MaterialTheme.typograp
                             modifier = Modifier.fillMaxSize(),
                         )
                     },
+                "imdb" to
+                    InlineTextContent(
+                        Placeholder(
+                            textStyle.fontSize * 2.6f,
+                            textStyle.fontSize * 1.3f,
+                            PlaceholderVerticalAlign.TextCenter,
+                        ),
+                    ) {
+                        ImdbBadge(Modifier.fillMaxSize())
+                    },
                 "rotten" to
                     InlineTextContent(
                         Placeholder(
@@ -147,6 +162,26 @@ fun rememberQuickDetailsContentMap(textStyle: TextStyle = MaterialTheme.typograp
                     },
             )
     }
+
+/** "· [IMDb] 7.8" when the ČSFD plugin has the IMDb rating of [imdbId] */
+@Composable
+private fun ImdbText(
+    imdbId: String,
+    textStyle: TextStyle,
+    inlineContentMap: Map<String, InlineTextContent>,
+) {
+    LaunchedEffect(Unit) { ImdbRatings.ensureLoaded() }
+    val rating = ImdbRatings.ratings[imdbId] ?: return
+    val text =
+        remember(rating) {
+            buildAnnotatedString {
+                dot()
+                appendInlineContent(id = "imdb")
+                append(String.format(Locale.US, " %.1f", rating))
+            }
+        }
+    QuickDetailsText(text, Modifier, textStyle, inlineContentMap)
+}
 
 @Composable
 fun TimeRemaining(

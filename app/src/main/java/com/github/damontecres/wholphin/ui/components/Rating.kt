@@ -160,6 +160,29 @@ fun CsfdRating(
     }
 }
 
+/**
+ * IMDb's yellow "IMDb" logo badge
+ */
+@Composable
+fun ImdbBadge(modifier: Modifier = Modifier) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier =
+            modifier
+                .clip(RoundedCornerShape(4.dp))
+                .background(Color(0xFFF5C518)),
+    ) {
+        Text(
+            text = "IMDb",
+            color = Color.Black,
+            fontWeight = FontWeight.Black,
+            maxLines = 1,
+            fontSize = with(LocalDensity.current) { (LocalTextStyle.current.fontSize.toDp() * .8f).toSp() },
+            modifier = Modifier.padding(horizontal = 4.dp),
+        )
+    }
+}
+
 @Composable
 fun TomatoRating(
     rating: Float?,

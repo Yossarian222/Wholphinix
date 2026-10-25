@@ -277,6 +277,7 @@ data class BaseItem(
                                 }
                             }
                         },
+                    imdbId = data.providerIds?.entries?.firstOrNull { it.key.equals("Imdb", ignoreCase = true) }?.value,
                     // Only one rating is shown: ČSFD, else the community rating (IMDb/TMDb), else critics
                     criticRating =
                         data.criticRating?.takeIf { data.communityRating == null }?.let {
@@ -407,6 +408,8 @@ data class QuickDetailsData(
     val officialRating: AnnotatedString? = null,
     val criticRating: AnnotatedString? = null,
     val communityRating: AnnotatedString? = null,
+    /** IMDb id, so the IMDb rating from the ČSFD plugin ([ImdbRatings]) can be shown next to ČSFD */
+    val imdbId: String? = null,
 )
 
 /**

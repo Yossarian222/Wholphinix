@@ -2,6 +2,7 @@ package com.github.damontecres.wholphin.services
 
 import com.github.damontecres.wholphin.data.ServerRepository
 import com.github.damontecres.wholphin.data.model.BaseItem
+import com.github.damontecres.wholphin.data.model.ImdbRatings
 import com.github.damontecres.wholphin.services.hilt.AuthOkHttpClient
 import com.github.damontecres.wholphin.services.hilt.IoCoroutineScope
 import com.github.damontecres.wholphin.ui.HomeItemFields
@@ -28,6 +29,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -94,6 +96,16 @@ class CsfdTvTipsService
     ) {
         // The plugin downloads 20 ranking pages from ČSFD on its first call of the week
         private val slowClient by lazy { okHttpClient.newBuilder().readTimeout(3, TimeUnit.MINUTES).build() }
+
+        init {
+            ImdbRatings.loader = {
+                get("Csfd/Imdb", okHttpClient)?.let { json ->
+                    (json as? JsonObject).orEmpty().mapNotNull { (id, value) ->
+                        ((value as? JsonObject)?.get("rating") as? JsonPrimitive)?.doubleOrNull?.let { id to it }
+                    }.toMap()
+                }
+            }
+        }
 
         /**
          * What is cached for one user on one server, so switching the user or server does not show the old ones
