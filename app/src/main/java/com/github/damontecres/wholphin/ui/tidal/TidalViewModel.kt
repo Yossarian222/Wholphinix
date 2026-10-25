@@ -542,7 +542,9 @@ class TidalViewModel
                     notify(context.getString(if (favorite) R.string.tidal_favorite_added else R.string.tidal_favorite_removed, track.title))
                 } catch (ex: Exception) {
                     Timber.w(ex, "TIDAL favourite failed")
-                    _state.update { s -> s.copy(tracks = if (favorite) s.tracks.filter { it.id != track.id } else listOf(track) + s.tracks) }
+                    _state.update { s ->
+                        s.copy(tracks = if (favorite) s.tracks.filter { it.id != track.id } else listOf(track) + s.tracks)
+                    }
                     notify(ex.message.orEmpty())
                 }
             }

@@ -100,9 +100,11 @@ class CsfdTvTipsService
         init {
             ImdbRatings.loader = {
                 get("Csfd/Imdb", okHttpClient)?.let { json ->
-                    (json as? JsonObject).orEmpty().mapNotNull { (id, value) ->
-                        ((value as? JsonObject)?.get("rating") as? JsonPrimitive)?.doubleOrNull?.let { id to it }
-                    }.toMap()
+                    (json as? JsonObject)
+                        .orEmpty()
+                        .mapNotNull { (id, value) ->
+                            ((value as? JsonObject)?.get("rating") as? JsonPrimitive)?.doubleOrNull?.let { id to it }
+                        }.toMap()
                 }
             }
         }

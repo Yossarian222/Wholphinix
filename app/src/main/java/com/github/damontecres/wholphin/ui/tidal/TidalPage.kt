@@ -23,10 +23,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -1306,7 +1306,11 @@ private fun HomeFeed(
                         }
 
                         allMixes && state.mixes.size > row.items.size -> {
-                            PillButton(stringResource(R.string.tidal_view_all), primary = false, onClick = { viewModel.selectTab(TidalTab.MIXES) })
+                            PillButton(
+                                stringResource(R.string.tidal_view_all),
+                                primary = false,
+                                onClick = { viewModel.selectTab(TidalTab.MIXES) },
+                            )
                         }
                     }
                 }
@@ -1366,7 +1370,13 @@ private fun HomeTracks(
                                     )
                                     if (track.explicit) Badge("E", filled = true)
                                 }
-                                Text(track.artistNames, color = Tidal.secondary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(
+                                    track.artistNames,
+                                    color = Tidal.secondary,
+                                    fontSize = 13.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
                             }
                         }
                     }
@@ -1386,15 +1396,31 @@ private fun HomeCard(
     val shape = if (item is TidalHomeItem.Artist) CircleShape else RoundedCornerShape(4.dp)
     val (title, subtitle, image) =
         when (item) {
-            is TidalHomeItem.Mix -> Triple(item.mix.title, item.mix.subTitle, item.mix.imageUrl)
-            is TidalHomeItem.Album -> Triple(item.album.title, item.album.artistName, TidalApi.imageUrl(item.album.cover))
-            is TidalHomeItem.Playlist -> Triple(
-                item.playlist.title,
-                item.playlist.creator?.name?.takeIf { it.isNotBlank() } ?: "TIDAL",
-                TidalApi.imageUrl(item.playlist.squareImage ?: item.playlist.image),
-            )
-            is TidalHomeItem.Artist -> Triple(item.artist.name, "", TidalApi.imageUrl(item.artist.picture))
-            is TidalHomeItem.Video -> Triple(item.video.title, item.video.artistNames, item.video.imageUrl)
+            is TidalHomeItem.Mix -> {
+                Triple(item.mix.title, item.mix.subTitle, item.mix.imageUrl)
+            }
+
+            is TidalHomeItem.Album -> {
+                Triple(item.album.title, item.album.artistName, TidalApi.imageUrl(item.album.cover))
+            }
+
+            is TidalHomeItem.Playlist -> {
+                Triple(
+                    item.playlist.title,
+                    item.playlist.creator
+                        ?.name
+                        ?.takeIf { it.isNotBlank() } ?: "TIDAL",
+                    TidalApi.imageUrl(item.playlist.squareImage ?: item.playlist.image),
+                )
+            }
+
+            is TidalHomeItem.Artist -> {
+                Triple(item.artist.name, "", TidalApi.imageUrl(item.artist.picture))
+            }
+
+            is TidalHomeItem.Video -> {
+                Triple(item.video.title, item.video.artistNames, item.video.imageUrl)
+            }
         }
     Column(Modifier.width(width)) {
         Surface(
@@ -1409,7 +1435,10 @@ private fun HomeCard(
             },
             shape = ClickableSurfaceDefaults.shape(shape),
             scale = ClickableSurfaceDefaults.scale(focusedScale = 1.06f),
-            border = ClickableSurfaceDefaults.border(focusedBorder = androidx.tv.material3.Border(BorderStroke(2.dp, Tidal.text), shape = shape)),
+            border =
+                ClickableSurfaceDefaults.border(
+                    focusedBorder = androidx.tv.material3.Border(BorderStroke(2.dp, Tidal.text), shape = shape),
+                ),
             colors = ClickableSurfaceDefaults.colors(containerColor = Tidal.elevated, focusedContainerColor = Tidal.elevated),
             modifier = Modifier.fillMaxWidth().aspectRatio(if (item is TidalHomeItem.Video) 16f / 9f else 1f),
         ) {
@@ -1447,7 +1476,10 @@ private fun TrackMenu(
         listOfNotNull(
             Triple(R.string.tidal_play_next, R.string.fa_list_ul) { viewModel.playNext(track) },
             Triple(R.string.tidal_add_to_queue, R.string.fa_list_ul) { viewModel.addToQueue(track) },
-            Triple(if (favorite) R.string.tidal_unfavorite else R.string.tidal_favorite, R.string.fa_heart) { viewModel.toggleFavorite(track) },
+            Triple(
+                if (favorite) R.string.tidal_unfavorite else R.string.tidal_favorite,
+                R.string.fa_heart,
+            ) { viewModel.toggleFavorite(track) },
             Triple(R.string.tidal_add_to_playlist, R.string.fa_list_ul) { viewModel.pickPlaylistFor(track) },
             Triple(R.string.tidal_track_radio, R.string.fa_shuffle) { viewModel.trackRadio(track) },
             artist?.let { Triple(R.string.tidal_artist_radio, R.string.fa_shuffle) { viewModel.artistRadio(it) } },
@@ -1472,7 +1504,14 @@ private fun TrackMenu(
                 )
                 Spacer(Modifier.width(14.dp))
                 Column {
-                    Text(track.title, color = Tidal.text, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        track.title,
+                        color = Tidal.text,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                     Text(track.artistNames, color = Tidal.secondary, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
@@ -1481,7 +1520,14 @@ private fun TrackMenu(
                     onClick = {
                         viewModel.showTrackMenu(null)
                         // Opening an album, artist or radio covers the now playing screen
-                        if (label in listOf(R.string.tidal_track_radio, R.string.tidal_artist_radio, R.string.tidal_go_to_artist, R.string.tidal_go_to_album)) {
+                        if (label in
+                            listOf(
+                                R.string.tidal_track_radio,
+                                R.string.tidal_artist_radio,
+                                R.string.tidal_go_to_artist,
+                                R.string.tidal_go_to_album,
+                            )
+                        ) {
                             viewModel.showNowPlaying(false)
                         }
                         action()

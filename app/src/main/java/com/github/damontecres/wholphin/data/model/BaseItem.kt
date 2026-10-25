@@ -277,7 +277,11 @@ data class BaseItem(
                                 }
                             }
                         },
-                    imdbId = data.providerIds?.entries?.firstOrNull { it.key.equals("Imdb", ignoreCase = true) }?.value,
+                    imdbId =
+                        data.providerIds
+                            ?.entries
+                            ?.firstOrNull { it.key.equals("Imdb", ignoreCase = true) }
+                            ?.value,
                     // Only one rating is shown: ČSFD, else the community rating (IMDb/TMDb), else critics
                     criticRating =
                         data.criticRating?.takeIf { data.communityRating == null }?.let {

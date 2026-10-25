@@ -371,7 +371,7 @@ class TidalApi
         ): TidalHomeItem? =
             runCatching {
                 when {
-                    type == "MIX" || obj["mixType"] != null && obj["id"] is JsonPrimitive -> {
+                    type == "MIX" || (obj["mixType"] != null && obj["id"] is JsonPrimitive) -> {
                         // Video mixes hold clips, not tracks, so they can't play in the music queue
                         if (obj.string("mixType")?.contains("VIDEO") == true) {
                             null
@@ -388,15 +388,15 @@ class TidalApi
                         null
                     }
 
-                    type == "ALBUM" || obj["cover"] != null && obj["numberOfTracks"] != null -> {
+                    type == "ALBUM" || (obj["cover"] != null && obj["numberOfTracks"] != null) -> {
                         TidalHomeItem.Album(json.decodeFromJsonElement(TidalAlbum.serializer(), obj))
                     }
 
-                    type == "VIDEO" || obj["imageId"] != null && obj["duration"] != null -> {
+                    type == "VIDEO" || (obj["imageId"] != null && obj["duration"] != null) -> {
                         TidalHomeItem.Video(json.decodeFromJsonElement(TidalVideo.serializer(), obj))
                     }
 
-                    type == "ARTIST" || obj["picture"] != null && obj["name"] != null && obj["id"] != null -> {
+                    type == "ARTIST" || (obj["picture"] != null && obj["name"] != null && obj["id"] != null) -> {
                         TidalHomeItem.Artist(json.decodeFromJsonElement(TidalArtist.serializer(), obj))
                     }
 
