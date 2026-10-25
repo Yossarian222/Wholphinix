@@ -58,6 +58,7 @@ data class TidalTokenResponse(
 data class TidalArtist(
     val id: Long = 0,
     val name: String = "",
+    val picture: String? = null,
 )
 
 @Serializable
@@ -66,8 +67,12 @@ data class TidalAlbum(
     val title: String = "",
     val cover: String? = null,
     val artist: TidalArtist? = null,
+    val artists: List<TidalArtist> = emptyList(),
     val numberOfTracks: Int = 0,
-)
+    val explicit: Boolean = false,
+) {
+    val artistName: String get() = artist?.name ?: artists.joinToString(", ") { it.name }
+}
 
 @Serializable
 data class TidalTrack(
@@ -137,10 +142,41 @@ data class TidalTrackShelf(
     val tracks: List<TidalTrack>,
 )
 
-/** What TIDAL recommends: personal mixes and track lists */
+/** One card in a row of TIDAL's home page */
+sealed interface TidalHomeItem {
+    data class Mix(
+        val mix: TidalMix,
+    ) : TidalHomeItem
+
+    data class Album(
+        val album: TidalAlbum,
+    ) : TidalHomeItem
+
+    data class Playlist(
+        val playlist: TidalPlaylist,
+    ) : TidalHomeItem
+
+    data class Artist(
+        val artist: TidalArtist,
+    ) : TidalHomeItem
+
+    data class Video(
+        val video: TidalVideo,
+    ) : TidalHomeItem
+}
+
+/** A row of TIDAL's home page ("Custom mixes", "Recently played", "Because you listened to …"): cards or tracks */
+data class TidalHomeRow(
+    val title: String,
+    val subtitle: String = "",
+    val items: List<TidalHomeItem> = emptyList(),
+    val tracks: List<TidalTrack> = emptyList(),
+)
+
+/** What TIDAL recommends: its home page rows, all personal mixes and music videos */
 data class TidalForYou(
+    val rows: List<TidalHomeRow>,
     val mixes: List<TidalMix>,
-    val shelves: List<TidalTrackShelf>,
     val videos: List<TidalVideo>,
 )
 
@@ -275,43 +311,139 @@ class TidalApi
 
         suspend fun playlists(s: TidalSession): List<TidalPlaylist> = pagedAll(s, "users/${s.userId}/playlists")
 
-        /** Personal mixes and recommended track lists from TIDAL's pages, the same ones its apps show */
+        /** TIDAL's home page rows, personal mixes and music videos, the same ones its apps show */
         suspend fun forYou(s: TidalSession): TidalForYou {
-            val mixes = LinkedHashMap<String, TidalMix>()
-            val shelves = mutableListOf<TidalTrackShelf>()
-            val videos = LinkedHashMap<Long, TidalVideo>()
+            val roots = LinkedHashMap<String, JsonElement>()
+            // ponytail: v1 pages API; if TIDAL drops it, the v2 home feed (home/feed/static) is the replacement
             for (page in listOf("pages/my_collection_my_mixes", "pages/home", "pages/for_you")) {
-                val root =
+                roots[page] =
                     try {
                         json.parseToJsonElement(get(s, page, "deviceType" to "BROWSER", "locale" to "en_US"))
                     } catch (ex: TidalHttpException) {
                         if (ex.code in 400..404) continue else throw ex
                     }
+            }
+            // The "My mixes" page first, so the mixes come in TIDAL's order: Daily Discovery, My Mix 1, 2…
+            val mixes = LinkedHashMap<String, TidalMix>()
+            val videos = LinkedHashMap<Long, TidalVideo>()
+            roots.values.forEach { root ->
                 walk(root) { obj ->
-                    if (obj["mixType"] != null && obj["id"] is JsonPrimitive) {
-                        runCatching { json.decodeFromJsonElement(TidalMix.serializer(), obj) }
-                            .getOrNull()
-                            ?.let { mixes.putIfAbsent(it.id, it) }
-                    }
-                    if (obj.string("type") == "VIDEO_LIST") {
-                        ((obj["pagedList"] as? JsonObject)?.get("items") as? JsonArray)?.forEach { item ->
-                            runCatching { json.decodeFromJsonElement(TidalVideo.serializer(), item) }
-                                .getOrNull()
-                                ?.let { videos.putIfAbsent(it.id, it) }
-                        }
-                    }
-                    if (obj.string("type") == "TRACK_LIST") {
-                        val title = obj.string("title").orEmpty()
-                        val paged = obj["pagedList"] as? JsonObject
-                        val tracks = paged?.let { trackList(s, it) }.orEmpty()
-                        if (title.isNotBlank() && tracks.isNotEmpty() && shelves.none { it.title == title }) {
-                            shelves += TidalTrackShelf(title, tracks)
-                        }
+                    homeItem(obj)?.let {
+                        if (it is TidalHomeItem.Mix) mixes.putIfAbsent(it.mix.id, it.mix)
+                        if (it is TidalHomeItem.Video) videos.putIfAbsent(it.video.id, it.video)
                     }
                 }
             }
-            return TidalForYou(mixes.values.toList(), shelves, videos.values.toList())
+            val rows = mutableListOf<TidalHomeRow>()
+            listOfNotNull(roots["pages/home"], roots["pages/for_you"]).forEach { root ->
+                walk(root) { obj ->
+                    val paged = obj["pagedList"] as? JsonObject ?: return@walk
+                    val title = obj.string("title").orEmpty()
+                    if (title.isBlank() || rows.any { it.title == title }) return@walk
+                    val inline = (paged["items"] as? JsonArray).orEmpty().filterIsInstance<JsonObject>()
+                    val tracks =
+                        if (obj.string("type") == "TRACK_LIST") {
+                            trackList(s, paged)
+                        } else {
+                            inline.mapNotNull { (unwrap(it) ?: it).takeIf(::isTrack)?.let(::decodeTrack) }
+                        }
+                    val items = inline.mapNotNull { homeItem(unwrap(it) ?: it, it.string("type")) }
+                    if (tracks.isNotEmpty() || items.isNotEmpty()) {
+                        val subtitle = obj.string("preTitle") ?: obj.string("description") ?: ""
+                        rows += TidalHomeRow(title, subtitle, items, tracks)
+                    }
+                }
+            }
+            return TidalForYou(rows, mixes.values.toList(), videos.values.toList())
         }
+
+        /** Items of mixed lists come wrapped as {"type": "ALBUM", "item": {…}} */
+        private fun unwrap(obj: JsonObject): JsonObject? = obj["item"] as? JsonObject
+
+        private fun isTrack(obj: JsonObject) = obj["album"] is JsonObject && obj["duration"] != null && obj["mixType"] == null
+
+        private fun decodeTrack(obj: JsonObject) = runCatching { json.decodeFromJsonElement(TidalTrack.serializer(), obj) }.getOrNull()
+
+        /** A card from a home page object, told apart by [type] when TIDAL sends it, else by the fields it has */
+        private fun homeItem(
+            obj: JsonObject,
+            type: String? = null,
+        ): TidalHomeItem? =
+            runCatching {
+                when {
+                    type == "MIX" || obj["mixType"] != null && obj["id"] is JsonPrimitive -> {
+                        // Video mixes hold clips, not tracks, so they can't play in the music queue
+                        if (obj.string("mixType")?.contains("VIDEO") == true) {
+                            null
+                        } else {
+                            TidalHomeItem.Mix(json.decodeFromJsonElement(TidalMix.serializer(), obj))
+                        }
+                    }
+
+                    type == "PLAYLIST" || obj["uuid"] is JsonPrimitive -> {
+                        TidalHomeItem.Playlist(json.decodeFromJsonElement(TidalPlaylist.serializer(), obj))
+                    }
+
+                    isTrack(obj) || type == "TRACK" -> {
+                        null
+                    }
+
+                    type == "ALBUM" || obj["cover"] != null && obj["numberOfTracks"] != null -> {
+                        TidalHomeItem.Album(json.decodeFromJsonElement(TidalAlbum.serializer(), obj))
+                    }
+
+                    type == "VIDEO" || obj["imageId"] != null && obj["duration"] != null -> {
+                        TidalHomeItem.Video(json.decodeFromJsonElement(TidalVideo.serializer(), obj))
+                    }
+
+                    type == "ARTIST" || obj["picture"] != null && obj["name"] != null && obj["id"] != null -> {
+                        TidalHomeItem.Artist(json.decodeFromJsonElement(TidalArtist.serializer(), obj))
+                    }
+
+                    else -> {
+                        null
+                    }
+                }
+            }.getOrNull()
+
+        /** Adds or removes a track from the user's favourites (TIDAL's heart) */
+        suspend fun setFavoriteTrack(
+            s: TidalSession,
+            trackId: Long,
+            favorite: Boolean,
+        ) = withContext(WholphinDispatchers.IO) {
+            val path = "users/${s.userId}/favorites/tracks"
+            execute(
+                if (favorite) {
+                    request(s, path).newBuilder().post(FormBody.Builder().add("trackIds", trackId.toString()).build()).build()
+                } else {
+                    request(s, "$path/$trackId").newBuilder().delete().build()
+                },
+            )
+            Unit
+        }
+
+        /** Id of TIDAL's "Track Radio" mix for [trackId], null when it has none */
+        suspend fun trackMixId(
+            s: TidalSession,
+            trackId: Long,
+        ): String? = mixIdOf(get(s, "tracks/$trackId"), "TRACK_MIX")
+
+        /** Id of TIDAL's "Artist Radio" mix for [artistId], null when it has none */
+        suspend fun artistMixId(
+            s: TidalSession,
+            artistId: Long,
+        ): String? = mixIdOf(get(s, "artists/$artistId"), "ARTIST_MIX")
+
+        private fun mixIdOf(
+            body: String,
+            key: String,
+        ): String? = ((json.parseToJsonElement(body) as? JsonObject)?.get("mixes") as? JsonObject)?.string(key)
+
+        suspend fun artistTopTracks(
+            s: TidalSession,
+            artistId: Long,
+        ): List<TidalTrack> = pagedAll(s, "artists/$artistId/toptracks", max = 100)
 
         /** Tracks of a page module: all of them via its data path when there is one, else the ones inlined */
         private suspend fun trackList(

@@ -20,8 +20,10 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.github.damontecres.wholphin.R
 import com.github.damontecres.wholphin.services.tidal.TidalAlbum
 import com.github.damontecres.wholphin.services.tidal.TidalApi
+import com.github.damontecres.wholphin.services.tidal.TidalArtist
 import com.github.damontecres.wholphin.services.tidal.TidalAuthException
 import com.github.damontecres.wholphin.services.tidal.TidalDeviceCode
+import com.github.damontecres.wholphin.services.tidal.TidalHomeRow
 import com.github.damontecres.wholphin.services.tidal.TidalMix
 import com.github.damontecres.wholphin.services.tidal.TidalPlaylist
 import com.github.damontecres.wholphin.services.tidal.TidalService
@@ -43,12 +45,13 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import timber.log.Timber
+import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
-enum class TidalTab { PLAYLISTS, FOR_YOU, VIDEOS, ALBUMS, TRACKS }
+enum class TidalTab { FOR_YOU, MIXES, PLAYLISTS, VIDEOS, ALBUMS, TRACKS }
 
-enum class TidalDetailKind { ALBUM, PLAYLIST, MIX, SHELF }
+enum class TidalDetailKind { ALBUM, PLAYLIST, MIX, SHELF, ARTIST }
 
 /** An opened album, playlist, mix or recommended track list */
 data class TidalDetail(
@@ -63,6 +66,8 @@ data class TidalDetail(
     val playlistUuid: String? = null,
     /** Playlist shown newest added first instead of in its own order */
     val newestFirst: Boolean = true,
+    /** Set for an artist, so its Artist Radio can be started */
+    val artist: TidalArtist? = null,
 ) {
     val isAlbum: Boolean get() = kind == TidalDetailKind.ALBUM
 }
@@ -74,12 +79,13 @@ data class TidalUiState(
     val loginError: String? = null,
     val loading: Boolean = false,
     val error: String? = null,
-    val tab: TidalTab = TidalTab.PLAYLISTS,
+    val tab: TidalTab = TidalTab.FOR_YOU,
     val playlists: List<TidalPlaylist> = emptyList(),
     val albums: List<TidalAlbum> = emptyList(),
     val tracks: List<TidalTrack> = emptyList(),
     val mixes: List<TidalMix> = emptyList(),
-    val shelves: List<TidalTrackShelf> = emptyList(),
+    /** Rows of TIDAL's home page, in its order */
+    val homeRows: List<TidalHomeRow> = emptyList(),
     val forYouLoading: Boolean = false,
     /** Favourite music videos, then the ones TIDAL recommends */
     val videos: List<TidalVideo> = emptyList(),
@@ -91,11 +97,15 @@ data class TidalUiState(
     val detail: TidalDetail? = null,
     /** Track the user is picking a playlist for */
     val addToPlaylist: TidalTrack? = null,
+    /** Track whose options (TIDAL's "…" menu) are open */
+    val trackMenu: TidalTrack? = null,
     /** Short notice, e.g. that a track was added to a playlist */
     val message: String? = null,
     val settings: TidalSettings = TidalSettings(),
     val showSettings: Boolean = false,
-)
+) {
+    fun isFavorite(track: TidalTrack) = tracks.any { it.id == track.id }
+}
 
 data class TidalPlayerState(
     val queue: List<TidalTrack> = emptyList(),
@@ -388,14 +398,7 @@ class TidalViewModel
                         Timber.w(ex, "TIDAL video search failed")
                         null
                     }
-                if (video != null) {
-                    playVideo(video)
-                } else {
-                    val message = context.getString(R.string.tidal_no_clip)
-                    _state.update { it.copy(message = message) }
-                    delay(4000)
-                    _state.update { if (it.message == message) it.copy(message = null) else it }
-                }
+                if (video != null) playVideo(video) else notify(context.getString(R.string.tidal_no_clip))
             }
         }
 
@@ -405,9 +408,9 @@ class TidalViewModel
                 _state.update { it.copy(forYouLoading = true) }
                 try {
                     val forYou = service.call { service.api.forYou(it) }
-                    Timber.i("TIDAL for you: %d mixes, %d track lists", forYou.mixes.size, forYou.shelves.size)
+                    Timber.i("TIDAL for you: %d rows, %d mixes", forYou.rows.size, forYou.mixes.size)
                     _state.update {
-                        it.copy(mixes = forYou.mixes, shelves = forYou.shelves, recommendedVideos = forYou.videos, forYouLoading = false)
+                        it.copy(mixes = forYou.mixes, homeRows = forYou.rows, recommendedVideos = forYou.videos, forYouLoading = false)
                     }
                 } catch (ex: Exception) {
                     Timber.w(ex, "Loading TIDAL mixes failed")
@@ -423,7 +426,7 @@ class TidalViewModel
                 TidalDetail(
                     kind = TidalDetailKind.ALBUM,
                     title = album.title,
-                    subtitle = album.artist?.name.orEmpty(),
+                    subtitle = album.artistName,
                     imageUrl = TidalApi.imageUrl(album.cover, 640),
                 ),
             ) { service.api.albumTracks(it, album.id) }
@@ -516,18 +519,100 @@ class TidalViewModel
                         Timber.w(ex, "Adding to TIDAL playlist failed")
                         context.getString(R.string.tidal_add_failed, ex.message.orEmpty())
                     }
-                _state.update { it.copy(message = message) }
-                delay(4000)
-                _state.update { if (it.message == message) it.copy(message = null) else it }
+                notify(message)
             }
         }
+
+        /** Shows [message] for a few seconds */
+        private suspend fun notify(message: String) {
+            _state.update { it.copy(message = message) }
+            delay(4000)
+            _state.update { if (it.message == message) it.copy(message = null) else it }
+        }
+
+        fun showTrackMenu(track: TidalTrack?) = _state.update { it.copy(trackMenu = track) }
+
+        /** TIDAL's heart: adds the track to the favourite tracks or removes it */
+        fun toggleFavorite(track: TidalTrack) {
+            val favorite = !_state.value.isFavorite(track)
+            _state.update { s -> s.copy(tracks = if (favorite) listOf(track) + s.tracks else s.tracks.filter { it.id != track.id }) }
+            viewModelScope.launch {
+                try {
+                    service.call { service.api.setFavoriteTrack(it, track.id, favorite) }
+                    notify(context.getString(if (favorite) R.string.tidal_favorite_added else R.string.tidal_favorite_removed, track.title))
+                } catch (ex: Exception) {
+                    Timber.w(ex, "TIDAL favourite failed")
+                    _state.update { s -> s.copy(tracks = if (favorite) s.tracks.filter { it.id != track.id } else listOf(track) + s.tracks) }
+                    notify(ex.message.orEmpty())
+                }
+            }
+        }
+
+        /** Puts [track] right after the one playing */
+        fun playNext(track: TidalTrack) = enqueue(track, (exoPlayer.currentMediaItemIndex + 1).coerceAtMost(_player.value.queue.size))
+
+        /** Puts [track] at the end of the play queue */
+        fun addToQueue(track: TidalTrack) = enqueue(track, _player.value.queue.size)
+
+        private fun enqueue(
+            track: TidalTrack,
+            index: Int,
+        ) {
+            if (_player.value.queue.isEmpty()) return play(listOf(track))
+            exoPlayer.addMediaItem(index, track.toMediaItem())
+            _player.update { it.copy(queue = it.queue.toMutableList().apply { add(index, track) }) }
+            viewModelScope.launch { notify(context.getString(R.string.tidal_queued, track.title)) }
+        }
+
+        /** TIDAL's Track Radio: an endless mix of tracks like [track] */
+        fun trackRadio(track: TidalTrack) =
+            openDetail(
+                TidalDetail(
+                    kind = TidalDetailKind.MIX,
+                    title = track.title,
+                    subtitle = context.getString(R.string.tidal_track_radio),
+                    imageUrl = TidalApi.imageUrl(track.album?.cover, 640),
+                ),
+            ) { s ->
+                val mixId = service.api.trackMixId(s, track.id) ?: throw IOException(context.getString(R.string.tidal_no_radio))
+                service.api.mixTracks(s, mixId)
+            }
+
+        /** TIDAL's Artist Radio: tracks by [artist] and artists like them */
+        fun artistRadio(artist: TidalArtist) =
+            openDetail(
+                TidalDetail(
+                    kind = TidalDetailKind.MIX,
+                    title = artist.name,
+                    subtitle = context.getString(R.string.tidal_artist_radio),
+                    imageUrl = TidalApi.imageUrl(artist.picture, 640),
+                ),
+            ) { s ->
+                val mixId = service.api.artistMixId(s, artist.id) ?: throw IOException(context.getString(R.string.tidal_no_radio))
+                service.api.mixTracks(s, mixId)
+            }
+
+        /** The artist's top tracks */
+        fun openArtist(artist: TidalArtist) =
+            openDetail(
+                TidalDetail(
+                    kind = TidalDetailKind.ARTIST,
+                    title = artist.name,
+                    subtitle = "",
+                    imageUrl = TidalApi.imageUrl(artist.picture, 640),
+                    artist = artist,
+                ),
+            ) { service.api.artistTopTracks(it, artist.id) }
+
+        /** All tracks of a home page row ("View all") */
+        fun openRow(row: TidalHomeRow) = openShelf(TidalTrackShelf(row.title, row.tracks))
 
         private fun openDetail(
             detail: TidalDetail,
             load: suspend (TidalSession) -> List<TidalTrack>,
         ) {
             detailJob?.cancel()
-            _state.update { it.copy(detail = detail) }
+            _state.update { it.copy(detail = detail, trackMenu = null) }
             detailJob =
                 viewModelScope.launch {
                     try {

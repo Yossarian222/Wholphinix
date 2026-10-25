@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
@@ -67,10 +69,10 @@ import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import com.github.damontecres.wholphin.R
 import com.github.damontecres.wholphin.services.tidal.TidalApi
-import com.github.damontecres.wholphin.services.tidal.TidalMix
+import com.github.damontecres.wholphin.services.tidal.TidalHomeItem
+import com.github.damontecres.wholphin.services.tidal.TidalHomeRow
 import com.github.damontecres.wholphin.services.tidal.TidalPlaylist
 import com.github.damontecres.wholphin.services.tidal.TidalTrack
-import com.github.damontecres.wholphin.services.tidal.TidalTrackShelf
 import com.github.damontecres.wholphin.services.tidal.TidalVideo
 import com.github.damontecres.wholphin.ui.FontAwesome
 import com.github.damontecres.wholphin.ui.tryRequestFocus
@@ -153,8 +155,10 @@ fun TidalPage(
     LifecycleStartEffect(Unit) { onStopOrDispose { viewModel.pause() } }
     SideEffect { Tidal.theme = TidalTheme.of(state.settings.theme) }
     BackHandler(enabled = state.showSettings) { viewModel.showSettings(false) }
-    BackHandler(enabled = player.showNowPlaying && state.addToPlaylist == null) { viewModel.showNowPlaying(false) }
-    BackHandler(enabled = !player.showNowPlaying && state.detail != null && state.addToPlaylist == null) { viewModel.closeDetail() }
+    val overlay = state.addToPlaylist != null || state.trackMenu != null
+    BackHandler(enabled = player.showNowPlaying && !overlay) { viewModel.showNowPlaying(false) }
+    BackHandler(enabled = !player.showNowPlaying && state.detail != null && !overlay) { viewModel.closeDetail() }
+    BackHandler(enabled = state.trackMenu != null) { viewModel.showTrackMenu(null) }
     BackHandler(enabled = state.addToPlaylist != null) { viewModel.pickPlaylistFor(null) }
     BackHandler(enabled = state.playingVideo != null) { viewModel.closeVideo() }
 
@@ -182,13 +186,14 @@ fun TidalPage(
                             CollectionScreen(state, player, viewModel)
                         }
                     }
-                    if (player.current != null) PlayerBar(player, viewModel)
+                    if (player.current != null) PlayerBar(player, state, viewModel)
                 }
             }
         }
         if (player.showNowPlaying && player.current != null) NowPlaying(player, viewModel, state.settings.lyricsFirst)
         if (state.showSettings) SettingsScreen(state.settings, viewModel)
         state.playingVideo?.let { VideoScreen(it, state.videoError, viewModel) }
+        state.trackMenu?.let { TrackMenu(it, state.isFavorite(it), viewModel) }
         state.addToPlaylist?.let { PlaylistPicker(it, state.playlists, onPick = viewModel::addToPlaylist) }
         state.message?.let { Notice(it, Modifier.align(Alignment.TopEnd)) }
     }
@@ -326,17 +331,6 @@ private fun VideoScreen(
             error?.let { Text(it, color = Color(0xFFFF6B6B), fontSize = 14.sp) }
         }
     }
-}
-
-/** A mix or a recommended track list, shown together under "For you" */
-private sealed interface ForYouItem {
-    data class Mix(
-        val mix: TidalMix,
-    ) : ForYouItem
-
-    data class Shelf(
-        val shelf: TidalTrackShelf,
-    ) : ForYouItem
 }
 
 /** Picks one of the user's playlists for [track] */
@@ -511,6 +505,7 @@ private fun CollectionScreen(
                 val label =
                     when (tab) {
                         TidalTab.PLAYLISTS -> R.string.tidal_playlists
+                        TidalTab.MIXES -> R.string.tidal_mixes
                         TidalTab.FOR_YOU -> R.string.tidal_for_you
                         TidalTab.VIDEOS -> R.string.tidal_videos
                         TidalTab.ALBUMS -> R.string.tidal_albums
@@ -537,50 +532,20 @@ private fun CollectionScreen(
                     )
                 }
 
-                state.tab == TidalTab.FOR_YOU -> {
+                // TIDAL's "Custom mixes": My Daily Discovery, My Mix 1-n…, in the order TIDAL lists them
+                state.tab == TidalTab.MIXES -> {
                     CoverGrid(
-                        items = state.shelves.map { ForYouItem.Shelf(it) } + state.mixes.map { ForYouItem.Mix(it) },
+                        items = state.mixes,
                         loading = state.forYouLoading,
-                        title = {
-                            when (it) {
-                                is ForYouItem.Mix -> it.mix.title
-                                is ForYouItem.Shelf -> it.shelf.title
-                            }
-                        },
-                        subtitle = {
-                            when (it) {
-                                is ForYouItem.Mix -> {
-                                    it.mix.subTitle
-                                }
-
-                                is ForYouItem.Shelf -> {
-                                    pluralStringResource(R.plurals.tidal_track_count, it.shelf.tracks.size, it.shelf.tracks.size)
-                                }
-                            }
-                        },
-                        image = {
-                            when (it) {
-                                is ForYouItem.Mix -> {
-                                    it.mix.imageUrl
-                                }
-
-                                is ForYouItem.Shelf -> {
-                                    TidalApi.imageUrl(
-                                        it.shelf.tracks
-                                            .firstOrNull()
-                                            ?.album
-                                            ?.cover,
-                                    )
-                                }
-                            }
-                        },
-                        onClick = {
-                            when (it) {
-                                is ForYouItem.Mix -> viewModel.openMix(it.mix)
-                                is ForYouItem.Shelf -> viewModel.openShelf(it.shelf)
-                            }
-                        },
+                        title = { it.title },
+                        subtitle = { it.subTitle },
+                        image = { it.imageUrl },
+                        onClick = viewModel::openMix,
                     )
+                }
+
+                state.tab == TidalTab.FOR_YOU -> {
+                    HomeFeed(state, player, viewModel)
                 }
 
                 state.tab == TidalTab.VIDEOS -> {
@@ -612,7 +577,7 @@ private fun CollectionScreen(
                         tracks = state.tracks,
                         player = player,
                         onPlay = { viewModel.play(state.tracks, it) },
-                        onLongClick = viewModel::pickPlaylistFor,
+                        onLongClick = viewModel::showTrackMenu,
                     )
                 }
             }
@@ -824,7 +789,7 @@ private fun DetailScreen(
                 player = player,
                 showCover = !detail.isAlbum,
                 onPlay = { viewModel.play(detail.tracks, it) },
-                onLongClick = viewModel::pickPlaylistFor,
+                onLongClick = viewModel::showTrackMenu,
                 header = {
                     Row(
                         verticalAlignment = Alignment.Bottom,
@@ -845,6 +810,7 @@ private fun DetailScreen(
                                         TidalDetailKind.PLAYLIST -> R.string.tidal_playlist
                                         TidalDetailKind.MIX -> R.string.tidal_mix
                                         TidalDetailKind.SHELF -> R.string.tidal_for_you
+                                        TidalDetailKind.ARTIST -> R.string.tidal_artist
                                     },
                                 ).uppercase(),
                                 color = Tidal.secondary,
@@ -888,6 +854,14 @@ private fun DetailScreen(
                                     faIcon = R.string.fa_shuffle,
                                     onClick = { viewModel.play(detail.tracks, shuffle = true) },
                                 )
+                                detail.artist?.let { artist ->
+                                    PillButton(
+                                        stringResource(R.string.tidal_artist_radio),
+                                        primary = false,
+                                        faIcon = R.string.fa_shuffle,
+                                        onClick = { viewModel.artistRadio(artist) },
+                                    )
+                                }
                                 if (detail.playlistUuid != null) {
                                     PillButton(
                                         stringResource(
@@ -953,6 +927,7 @@ private fun PillButton(
 @Composable
 private fun PlayerBar(
     player: TidalPlayerState,
+    state: TidalUiState,
     viewModel: TidalViewModel,
 ) {
     val track = player.current ?: return
@@ -994,8 +969,17 @@ private fun PlayerBar(
                 Controls(player, viewModel, playSize = 44.dp)
                 ProgressRow(player, Modifier.widthIn(max = 560.dp).padding(top = 4.dp))
             }
-            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
-                player.error?.let { Text(it, color = Color(0xFFFF6B6B), fontSize = 12.sp, maxLines = 2) }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
+                modifier = Modifier.weight(1f),
+            ) {
+                player.error?.let {
+                    Text(it, color = Color(0xFFFF6B6B), fontSize = 12.sp, maxLines = 2, modifier = Modifier.weight(1f, fill = false))
+                }
+                FaControl(R.string.fa_heart, active = state.isFavorite(track), onClick = { viewModel.toggleFavorite(track) })
+                FaControl(R.string.fa_ellipsis, active = false, onClick = { viewModel.showTrackMenu(track) })
+                (player.quality ?: track.audioQuality)?.let { QualityPill(it) }
             }
         }
     }
@@ -1172,10 +1156,10 @@ private fun NowPlaying(
                     PillButton(stringResource(R.string.tidal_queue), primary = !showLyrics, onClick = { showLyrics = false })
                     PillButton(stringResource(R.string.tidal_lyrics), primary = showLyrics, onClick = { showLyrics = true })
                     PillButton(
-                        stringResource(R.string.tidal_add_to_playlist),
+                        stringResource(R.string.tidal_more),
                         primary = false,
-                        faIcon = R.string.fa_list_ul,
-                        onClick = { viewModel.pickPlaylistFor(track) },
+                        faIcon = R.string.fa_ellipsis,
+                        onClick = { viewModel.showTrackMenu(track) },
                     )
                     PillButton(
                         stringResource(R.string.tidal_clip),
@@ -1185,11 +1169,25 @@ private fun NowPlaying(
                     )
                 }
                 Spacer(Modifier.height(20.dp))
-                if (showLyrics) Lyrics(player) else Queue(player, onPlay = viewModel::playIndex, onAdd = viewModel::pickPlaylistFor)
+                if (showLyrics) Lyrics(player) else Queue(player, onPlay = viewModel::playIndex, onAdd = viewModel::showTrackMenu)
             }
         }
     }
     LaunchedEffect(Unit) { playFocus.tryRequestFocus() }
+}
+
+/** The stream quality in a gold pill, like the one at the right of TIDAL's player bar */
+@Composable
+private fun QualityPill(quality: String) {
+    val gold = Color(0xFFFFD432)
+    Box(
+        Modifier
+            .background(gold.copy(alpha = .12f), CircleShape)
+            .border(1.dp, gold.copy(alpha = .6f), CircleShape)
+            .padding(horizontal = 14.dp, vertical = 5.dp),
+    ) {
+        Text(qualityLabel(quality), color = gold, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+    }
 }
 
 /** TIDAL calls LOSSLESS "HiFi" and hi-res "Max" */
@@ -1280,4 +1278,232 @@ private fun Lyrics(player: TidalPlayerState) {
 private fun formatTime(ms: Long): String {
     val total = ms / 1000
     return "%d:%02d".format(total / 60, total % 60)
+}
+
+/** TIDAL's home page: one titled row per section, cards scroll sideways, tracks in three columns */
+@Composable
+private fun HomeFeed(
+    state: TidalUiState,
+    player: TidalPlayerState,
+    viewModel: TidalViewModel,
+) {
+    if (state.homeRows.isEmpty()) {
+        CenterMessage(stringResource(if (state.forYouLoading) R.string.tidal_loading else R.string.tidal_empty))
+        return
+    }
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(36.dp), contentPadding = PaddingValues(bottom = 32.dp, top = 8.dp)) {
+        items(state.homeRows, key = { it.title }) { row ->
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                val allMixes = row.items.isNotEmpty() && row.items.all { it is TidalHomeItem.Mix }
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Column(Modifier.weight(1f)) {
+                        if (row.subtitle.isNotBlank()) Text(row.subtitle, color = Tidal.secondary, fontSize = 13.sp)
+                        Text(row.title, color = Tidal.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    }
+                    when {
+                        row.tracks.size > HOME_TRACKS -> {
+                            PillButton(stringResource(R.string.tidal_view_all), primary = false, onClick = { viewModel.openRow(row) })
+                        }
+
+                        allMixes && state.mixes.size > row.items.size -> {
+                            PillButton(stringResource(R.string.tidal_view_all), primary = false, onClick = { viewModel.selectTab(TidalTab.MIXES) })
+                        }
+                    }
+                }
+                if (row.items.isNotEmpty()) {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                        items(row.items) { HomeCard(it, viewModel) }
+                    }
+                }
+                if (row.tracks.isNotEmpty()) HomeTracks(row, player, viewModel)
+            }
+        }
+    }
+}
+
+private const val HOME_TRACKS = 9
+
+/** The first tracks of a row in three columns, like "Recommended new tracks" in TIDAL */
+@Composable
+private fun HomeTracks(
+    row: TidalHomeRow,
+    player: TidalPlayerState,
+    viewModel: TidalViewModel,
+) {
+    val shown = row.tracks.take(HOME_TRACKS)
+    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        shown.chunked((shown.size + 2) / 3).forEachIndexed { column, tracks ->
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                tracks.forEachIndexed { i, track ->
+                    val index = column * ((shown.size + 2) / 3) + i
+                    val playing = player.current?.id == track.id
+                    Surface(
+                        onClick = { viewModel.play(row.tracks, index) },
+                        onLongClick = { viewModel.showTrackMenu(track) },
+                        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(4.dp)),
+                        scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
+                        colors = ClickableSurfaceDefaults.colors(containerColor = Color.Transparent, focusedContainerColor = Tidal.focused),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(6.dp)) {
+                            AsyncImage(
+                                model = TidalApi.imageUrl(track.album?.cover, 160),
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.size(52.dp).clip(RoundedCornerShape(3.dp)).background(Tidal.elevated),
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text(
+                                        track.title,
+                                        color = if (playing) Tidal.accent else Tidal.text,
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f, fill = false),
+                                    )
+                                    if (track.explicit) Badge("E", filled = true)
+                                }
+                                Text(track.artistNames, color = Tidal.secondary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** A card in a home row: square cover, round for artists, wide for music videos */
+@Composable
+private fun HomeCard(
+    item: TidalHomeItem,
+    viewModel: TidalViewModel,
+) {
+    val width = if (item is TidalHomeItem.Video) 300.dp else 180.dp
+    val shape = if (item is TidalHomeItem.Artist) CircleShape else RoundedCornerShape(4.dp)
+    val (title, subtitle, image) =
+        when (item) {
+            is TidalHomeItem.Mix -> Triple(item.mix.title, item.mix.subTitle, item.mix.imageUrl)
+            is TidalHomeItem.Album -> Triple(item.album.title, item.album.artistName, TidalApi.imageUrl(item.album.cover))
+            is TidalHomeItem.Playlist -> Triple(
+                item.playlist.title,
+                item.playlist.creator?.name?.takeIf { it.isNotBlank() } ?: "TIDAL",
+                TidalApi.imageUrl(item.playlist.squareImage ?: item.playlist.image),
+            )
+            is TidalHomeItem.Artist -> Triple(item.artist.name, "", TidalApi.imageUrl(item.artist.picture))
+            is TidalHomeItem.Video -> Triple(item.video.title, item.video.artistNames, item.video.imageUrl)
+        }
+    Column(Modifier.width(width)) {
+        Surface(
+            onClick = {
+                when (item) {
+                    is TidalHomeItem.Mix -> viewModel.openMix(item.mix)
+                    is TidalHomeItem.Album -> viewModel.openAlbum(item.album)
+                    is TidalHomeItem.Playlist -> viewModel.openPlaylist(item.playlist)
+                    is TidalHomeItem.Artist -> viewModel.openArtist(item.artist)
+                    is TidalHomeItem.Video -> viewModel.playVideo(item.video)
+                }
+            },
+            shape = ClickableSurfaceDefaults.shape(shape),
+            scale = ClickableSurfaceDefaults.scale(focusedScale = 1.06f),
+            border = ClickableSurfaceDefaults.border(focusedBorder = androidx.tv.material3.Border(BorderStroke(2.dp, Tidal.text), shape = shape)),
+            colors = ClickableSurfaceDefaults.colors(containerColor = Tidal.elevated, focusedContainerColor = Tidal.elevated),
+            modifier = Modifier.fillMaxWidth().aspectRatio(if (item is TidalHomeItem.Video) 16f / 9f else 1f),
+        ) {
+            AsyncImage(model = image, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        }
+        Spacer(Modifier.height(10.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                title,
+                color = Tidal.text,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            if (item is TidalHomeItem.Album && item.album.explicit) Badge("E", filled = true)
+        }
+        if (subtitle.isNotBlank()) {
+            Text(subtitle, color = Tidal.secondary, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+/** TIDAL's "…" menu of a track */
+@Composable
+private fun TrackMenu(
+    track: TidalTrack,
+    favorite: Boolean,
+    viewModel: TidalViewModel,
+) {
+    val focus = remember { FocusRequester() }
+    val artist = track.artists.firstOrNull()
+    val options =
+        listOfNotNull(
+            Triple(R.string.tidal_play_next, R.string.fa_list_ul) { viewModel.playNext(track) },
+            Triple(R.string.tidal_add_to_queue, R.string.fa_list_ul) { viewModel.addToQueue(track) },
+            Triple(if (favorite) R.string.tidal_unfavorite else R.string.tidal_favorite, R.string.fa_heart) { viewModel.toggleFavorite(track) },
+            Triple(R.string.tidal_add_to_playlist, R.string.fa_list_ul) { viewModel.pickPlaylistFor(track) },
+            Triple(R.string.tidal_track_radio, R.string.fa_shuffle) { viewModel.trackRadio(track) },
+            artist?.let { Triple(R.string.tidal_artist_radio, R.string.fa_shuffle) { viewModel.artistRadio(it) } },
+            artist?.let { Triple(R.string.tidal_go_to_artist, R.string.fa_ellipsis) { viewModel.openArtist(it) } },
+            track.album?.let { Triple(R.string.tidal_go_to_album, R.string.fa_compact_disc) { viewModel.openAlbum(it) } },
+            Triple(R.string.tidal_clip, R.string.fa_video) { viewModel.playClipOf(track) },
+        )
+    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .75f)), contentAlignment = Alignment.Center) {
+        Column(
+            modifier =
+                Modifier
+                    .width(460.dp)
+                    .background(Tidal.bar, RoundedCornerShape(8.dp))
+                    .padding(20.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 12.dp)) {
+                AsyncImage(
+                    model = TidalApi.imageUrl(track.album?.cover, 160),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.size(56.dp).clip(RoundedCornerShape(3.dp)).background(Tidal.elevated),
+                )
+                Spacer(Modifier.width(14.dp))
+                Column {
+                    Text(track.title, color = Tidal.text, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(track.artistNames, color = Tidal.secondary, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            options.forEachIndexed { index, (label, icon, action) ->
+                Surface(
+                    onClick = {
+                        viewModel.showTrackMenu(null)
+                        // Opening an album, artist or radio covers the now playing screen
+                        if (label in listOf(R.string.tidal_track_radio, R.string.tidal_artist_radio, R.string.tidal_go_to_artist, R.string.tidal_go_to_album)) {
+                            viewModel.showNowPlaying(false)
+                        }
+                        action()
+                    },
+                    shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(4.dp)),
+                    scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
+                    colors = ClickableSurfaceDefaults.colors(containerColor = Color.Transparent, focusedContainerColor = Tidal.focused),
+                    modifier = Modifier.fillMaxWidth().then(if (index == 0) Modifier.focusRequester(focus) else Modifier),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+                        Text(
+                            stringResource(icon),
+                            fontFamily = FontAwesome,
+                            color = if (icon == R.string.fa_heart && favorite) Tidal.accent else Tidal.secondary,
+                            fontSize = 15.sp,
+                            modifier = Modifier.width(32.dp),
+                        )
+                        Text(stringResource(label), color = Tidal.text, fontSize = 16.sp)
+                    }
+                }
+            }
+        }
+    }
+    LaunchedEffect(Unit) { focus.tryRequestFocus() }
 }
