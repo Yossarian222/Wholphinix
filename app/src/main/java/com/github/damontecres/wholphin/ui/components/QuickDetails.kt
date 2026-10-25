@@ -123,7 +123,8 @@ fun rememberQuickDetailsContentMap(textStyle: TextStyle = MaterialTheme.typograp
                 "imdb" to
                     InlineTextContent(
                         Placeholder(
-                            textStyle.fontSize * 2.6f,
+                            // "IMDb" in black weight needs ~3x the font size, at 2.6x the "b" was cut off on the TV
+                            textStyle.fontSize * 3.2f,
                             textStyle.fontSize * 1.3f,
                             PlaceholderVerticalAlign.TextCenter,
                         ),

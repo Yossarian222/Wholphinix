@@ -14,6 +14,8 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.runtime.Composable
@@ -37,9 +39,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Icon
 import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.LocalTextStyle
@@ -172,13 +176,15 @@ fun ImdbBadge(modifier: Modifier = Modifier) {
                 .clip(RoundedCornerShape(4.dp))
                 .background(Color(0xFFF5C518)),
     ) {
-        Text(
+        val maxSize = with(LocalDensity.current) { (LocalTextStyle.current.fontSize.toDp() * .8f).toSp() }
+        // Shrinks to fit the badge, the whole "IMDb" is always shown (fonts differ in width between devices)
+        BasicText(
             text = "IMDb",
-            color = Color.Black,
-            fontWeight = FontWeight.Black,
+            style = TextStyle(color = Color.Black, fontWeight = FontWeight.Black),
             maxLines = 1,
-            fontSize = with(LocalDensity.current) { (LocalTextStyle.current.fontSize.toDp() * .8f).toSp() },
-            modifier = Modifier.padding(horizontal = 4.dp),
+            softWrap = false,
+            autoSize = TextAutoSize.StepBased(minFontSize = 6.sp, maxFontSize = maxSize, stepSize = .5.sp),
+            modifier = Modifier.padding(horizontal = 3.dp),
         )
     }
 }
