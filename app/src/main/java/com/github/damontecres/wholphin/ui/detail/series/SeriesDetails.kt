@@ -381,7 +381,8 @@ fun SeriesDetailsContent(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 modifier = Modifier,
             ) {
-                item {
+                // Keys keep the scroll position when rows arrive later (#71)
+                item(key = HEADER_ROW) {
                     SeriesDetailsHeader(
                         series = series,
                         showLogo = preferences.appPreferences.interfacePreferences.showLogos,
@@ -518,7 +519,7 @@ fun SeriesDetailsContent(
                         }
                     }
                 }
-                item {
+                item(key = SEASONS_ROW) {
                     ItemRow(
                         title = stringResource(R.string.tv_seasons) + " (${seasons.size})",
                         items = seasons,
@@ -556,7 +557,7 @@ fun SeriesDetailsContent(
                     )
                 }
                 if (people.isNotEmpty()) {
-                    item {
+                    item(key = PEOPLE_ROW) {
                         PersonRow(
                             people = people,
                             onClick = {
@@ -585,7 +586,7 @@ fun SeriesDetailsContent(
                     }
                 }
                 if (extras.isNotEmpty()) {
-                    item {
+                    item(key = EXTRAS_ROW) {
                         ExtrasRow(
                             extras = extras,
                             onClickItem = { index, item ->
@@ -601,7 +602,7 @@ fun SeriesDetailsContent(
                     }
                 }
                 if (similar.isNotEmpty()) {
-                    item {
+                    item(key = SIMILAR_ROW) {
                         ItemRow(
                             title = stringResource(R.string.more_like_this),
                             items = similar,
@@ -644,7 +645,7 @@ fun SeriesDetailsContent(
                     }
                 }
                 if (discovered.isNotEmpty()) {
-                    item {
+                    item(key = DISCOVER_ROW) {
                         DiscoverRow(
                             row =
                                 DiscoverRowData(

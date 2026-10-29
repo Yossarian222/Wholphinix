@@ -408,6 +408,65 @@ fun FilterByButton(
     }
 }
 
+/**
+ * Standalone "Year" button in the library header (#70): opens [YearMenu] right away and shows the active
+ * year or decade, e.g. "Rok: 1994" / "Rok: 90. roky". The same filter stays reachable in [FilterByButton].
+ */
+@Composable
+fun YearFilterButton(
+    current: GetItemsFilter,
+    onFilterChange: (GetItemsFilter) -> Unit,
+    getPossibleValues: suspend (ItemFilterBy<*>) -> List<FilterValueOption>,
+    modifier: Modifier = Modifier,
+    onShow: ((Boolean) -> Unit)? = null,
+) {
+    var open by remember { mutableStateOf(false) }
+    var decade by remember { mutableStateOf<Int?>(null) }
+    val active =
+        current.years?.singleOrNull()?.toString()
+            ?: current.decades?.singleOrNull()?.let { decadeName(it) }
+    Box(modifier = modifier) {
+        Button(
+            onClick = {
+                onShow?.invoke(true)
+                open = true
+            },
+            modifier = Modifier.requiredSizeIn(minHeight = MinButtonSize, maxHeight = MinButtonSize),
+            contentPadding = PaddingValues(horizontal = 12.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.year) + (active?.let { ": $it" } ?: ""),
+                style = MaterialTheme.typography.titleSmall,
+            )
+        }
+        DropdownMenu(
+            expanded = open,
+            containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(5.dp),
+            onDismissRequest = {
+                if (decade != null) {
+                    decade = null
+                } else {
+                    onShow?.invoke(false)
+                    open = false
+                }
+            },
+        ) {
+            YearMenu(
+                current = current,
+                decade = decade,
+                onDecade = { decade = it },
+                onFilterChange = {
+                    onFilterChange(it)
+                    decade = null
+                    onShow?.invoke(false)
+                    open = false
+                },
+                getPossibleValues = getPossibleValues,
+            )
+        }
+    }
+}
+
 /** "1990s" style name of a decade; from 2000 on as a range, e.g. "2010 – 2019" */
 @Composable
 private fun decadeName(decade: Int) = if (decade < 2000) stringResource(R.string.decade_name, decade % 100) else "$decade – ${decade + 9}"

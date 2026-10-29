@@ -54,6 +54,8 @@ import org.jellyfin.sdk.api.client.extensions.itemsApi
 import org.jellyfin.sdk.api.client.extensions.personsApi
 import org.jellyfin.sdk.api.client.extensions.userLibraryApi
 import org.jellyfin.sdk.model.api.BaseItemKind
+import org.jellyfin.sdk.model.api.ItemSortBy
+import org.jellyfin.sdk.model.api.SortOrder
 import org.jellyfin.sdk.model.api.request.GetItemsRequest
 import timber.log.Timber
 import java.util.UUID
@@ -272,10 +274,32 @@ class SearchViewModel
                                 api.itemsApi.getItems(request).toBaseItems(api, false)
                             }
                         }
-                    val sorted =
+                    val byTitle =
                         items.sortedWith(
                             compareBy<BaseItem> { SearchRelevance.score(it, query) },
                         )
+                    // #70: "1994" / "90. roky" also finds movies and series of that year, after the title matches
+                    val years = YearQuery.parse(query)
+                    val sorted =
+                        if (years != null && type in YEAR_SEARCH_TYPES) {
+                            val ofYear =
+                                api.itemsApi
+                                    .getItems(
+                                        GetItemsRequest(
+                                            years = years,
+                                            recursive = true,
+                                            includeItemTypes = listOf(type),
+                                            fields = SlimItemFields,
+                                            sortBy = listOf(ItemSortBy.COMMUNITY_RATING),
+                                            sortOrder = listOf(SortOrder.DESCENDING),
+                                            limit = SEARCH_LIMIT,
+                                            enableTotalRecordCount = false,
+                                        ),
+                                    ).toBaseItems(api, false)
+                            (byTitle + ofYear).distinctBy { it.id }
+                        } else {
+                            byTitle
+                        }
                     Timber.v("Search finished for %s, %s results", type, sorted.size)
                     _state.value.results[type] = SearchResult.Success(sorted)
                 } catch (ex: CancellationException) {
@@ -305,10 +329,32 @@ class SearchViewModel
                         result.items.map {
                             BaseItem(it, false)
                         }
-                    val sorted =
+                    val byTitle =
                         items.sortedWith(
                             compareBy<BaseItem> { SearchRelevance.score(it, query) },
                         )
+                    val years = YearQuery.parse(query)
+                    val types = state.value.includedSearchableTypes.filter { it in YEAR_SEARCH_TYPES }
+                    val sorted =
+                        if (years != null && types.isNotEmpty()) {
+                            val ofYear =
+                                api.itemsApi
+                                    .getItems(
+                                        GetItemsRequest(
+                                            years = years,
+                                            recursive = true,
+                                            includeItemTypes = types,
+                                            fields = SlimItemFields,
+                                            sortBy = listOf(ItemSortBy.COMMUNITY_RATING),
+                                            sortOrder = listOf(SortOrder.DESCENDING),
+                                            limit = SEARCH_LIMIT,
+                                        ),
+                                    ).content.items
+                                    .map { BaseItem(it, false) }
+                            (byTitle + ofYear).distinctBy { it.id }
+                        } else {
+                            byTitle
+                        }
                     Timber.v("searchCombined complete %s results", sorted.size)
                     _state.update { it.copy(combinedResults = SearchResult.Success(sorted)) }
                 } catch (ex: Exception) {
@@ -612,3 +658,21 @@ private val allSearchableTypes =
 const val SEARCH_MIN_QUERY_LENGTH = 3
 
 private const val SEARCH_LIMIT = 50
+
+private val YEAR_SEARCH_TYPES = setOf(BaseItemKind.MOVIE, BaseItemKind.SERIES)
+
+/** A search query that names a year ("1994") or a decade ("90. roky", "90s", "1990s") → its years (#70) */
+object YearQuery {
+    private val YEAR = Regex("""(19|20)\d\d""")
+    private val DECADE = Regex("""(?:(19|20)?(\d)0)(?:\.\s*roky|s|-te|\.\s*léta)""", RegexOption.IGNORE_CASE)
+
+    fun parse(query: String): List<Int>? {
+        val q = query.trim()
+        if (YEAR.matches(q)) return listOf(q.toInt())
+        val m = DECADE.matchEntire(q) ?: return null
+        val digit = m.groupValues[2].toInt()
+        val century = m.groupValues[1].ifEmpty { if (digit >= 3) "19" else "20" }
+        val start = "$century${digit}0".toInt()
+        return (start..start + 9).toList()
+    }
+}

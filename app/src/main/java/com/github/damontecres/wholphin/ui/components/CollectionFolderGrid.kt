@@ -34,6 +34,7 @@ import androidx.tv.material3.Text
 import com.github.damontecres.wholphin.R
 import com.github.damontecres.wholphin.data.filter.FilterValueOption
 import com.github.damontecres.wholphin.data.filter.ItemFilterBy
+import com.github.damontecres.wholphin.data.filter.YearFilter
 import com.github.damontecres.wholphin.data.model.BaseItem
 import com.github.damontecres.wholphin.data.model.GetItemsFilter
 import com.github.damontecres.wholphin.preferences.UserPreferences
@@ -362,6 +363,14 @@ fun CollectionFolderHeader(
                                         sortOptions.isEmpty(),
                                         Modifier.focusRequester(focusRequester),
                                     ),
+                            onShow = onShowFilterDropdown,
+                        )
+                    }
+                    if (YearFilter in filterOptions) {
+                        YearFilterButton(
+                            current = currentFilter,
+                            onFilterChange = onFilterChange,
+                            getPossibleValues = getPossibleFilterValues,
                             onShow = onShowFilterDropdown,
                         )
                     }

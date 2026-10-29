@@ -61,6 +61,9 @@ class FakeJellyfin:
         if path == "/DisplayPreferences/wholphinix-telemetry":
             assert params == {"userId": USER, "client": "Wholphinix"}
             return httpx.Response(200, json={"Id": "x", "CustomPrefs": self.telemetry})
+        if path == "/Csfd/Imdb":
+            ratings = {"tt0110912": {"rating": 8.8, "votes": 2300000}}
+            return httpx.Response(200, json={i: ratings[i] for i in params["ids"].split(",") if i in ratings})
         if path == "/Users":
             return httpx.Response(200, json=[{"Name": "Roman", "Id": USER},
                                              {"Name": "Kids", "Id": OTHER_USER}])
@@ -103,6 +106,7 @@ class FakeJellyfin:
                 200,
                 json={
                     "Id": M1, "Name": "Pulp Fiction", "Type": "Movie",
+                    "ProviderIds": {"Imdb": "tt0110912"},
                     "UserData": {"PlaybackPositionTicks": 1200 * 10_000_000},
                     "MediaSources": [{"Id": M1, "MediaStreams": [
                         {"Index": 0, "Type": "Video"},
@@ -521,3 +525,8 @@ def test_device_verdict():
     assert server.device_verdict(60, True, 20).startswith("škrtí")
     assert server.device_verdict(50, False, 95) == "vyťažené"
     assert server.device_verdict(None, False, None) == "pohoda"
+
+
+def test_item_details_imdb(base_url, fake):
+    out = run(_call(base_url, "item_details", {"item_id": M1}))
+    assert out["imdb"] == {"rating": 8.8, "votes": 2300000}

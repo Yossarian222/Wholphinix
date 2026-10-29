@@ -386,7 +386,7 @@ fun MovieDetailsContent(
             contentPadding = PaddingValues(bottom = 64.dp),
             modifier = Modifier.fillMaxSize(),
         ) {
-            item {
+            item(key = HEADER_ROW) {
                 Column(
                     verticalArrangement = Arrangement.spacedBy(0.dp),
                     modifier =
@@ -452,7 +452,8 @@ fun MovieDetailsContent(
                 }
             }
             state.people.letNotEmpty { people ->
-                item {
+                // Keys keep the scroll position when rows arrive later and are inserted above (#71)
+                item(key = PEOPLE_ROW) {
                     PersonRow(
                         people = people,
                         onClick = {
@@ -472,7 +473,7 @@ fun MovieDetailsContent(
                 }
             }
             state.chapters.letNotEmpty { chapters ->
-                item {
+                item(key = CHAPTER_ROW) {
                     ChapterRow(
                         chapters = chapters,
                         onClick = {
@@ -489,7 +490,7 @@ fun MovieDetailsContent(
                 }
             }
             state.extras.letNotEmpty { extras ->
-                item {
+                item(key = EXTRAS_ROW) {
                     ExtrasRow(
                         extras = extras,
                         onClickItem = { index, item ->
@@ -506,7 +507,7 @@ fun MovieDetailsContent(
                 }
             }
             state.similar.letNotEmpty { similar ->
-                item {
+                item(key = SIMILAR_ROW) {
                     val imageHeight =
                         remember(movie.type) {
                             if (movie.type == BaseItemKind.MOVIE) {
@@ -546,7 +547,7 @@ fun MovieDetailsContent(
                 }
             }
             state.discovered.letNotEmpty { discovered ->
-                item {
+                item(key = DISCOVER_ROW) {
                     DiscoverRow(
                         row =
                             DiscoverRowData(

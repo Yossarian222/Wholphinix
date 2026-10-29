@@ -683,13 +683,18 @@ def _local_time(iso: Any) -> str | None:
     return f"{when.day}. {when.month}. {when.year} {when:%H:%M}"
 
 
-def _list_item(item: dict[str, Any]) -> dict[str, Any]:
+def _imdb_id(item: dict[str, Any]) -> str | None:
+    return (item.get("ProviderIds") or {}).get("Imdb")
+
+
+def _list_item(item: dict[str, Any], imdb: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
     user_data = item.get("UserData") or {}
     out: dict[str, Any] = {
         "id": item["Id"],
         "name": item.get("Name"),
         "year": item.get("ProductionYear"),
         "csfd_percent": _percent(item.get("CommunityRating")),
+        "imdb": ((imdb or {}).get(_imdb_id(item) or "") or {}).get("rating"),
         "genres": (item.get("Genres") or [])[:3],
         "runtime_min": _minutes(item),
     }
@@ -716,6 +721,7 @@ async def browse_library(
     limit: int = 15,
 ) -> dict[str, Any]:
     """Browse/filter the library and count matches: by genre, years, actor/director, watched state, rating.
+    Items carry the ČSFD percent and the IMDb rating (imdb, 0–10) when known.
 
     Answers questions like "koľko mám hororov", "filmy s Tomom Hanksom", "čo mám od Nolana",
     "komédie z 90. rokov", "najlepšie nepozreté filmy", "čo pribudlo naposledy" (sort=newest_added).
@@ -768,7 +774,8 @@ async def browse_library(
         sort_order=sort_order,
         limit=max(1, min(limit, MAX_BROWSE)),
     )
-    out: dict[str, Any] = {"total": total, "items": [_list_item(i) for i in items]}
+    imdb = await c.imdb([i for i in (_imdb_id(x) for x in items) if i])
+    out: dict[str, Any] = {"total": total, "items": [_list_item(i, imdb) for i in items]}
     if filters.get("genres"):
         out["genres_used"] = filters["genres"]
     if filters.get("person"):
@@ -800,7 +807,7 @@ def _streams_summary(item: dict[str, Any]) -> dict[str, Any]:
 
 @mcp.tool()
 async def item_details(item_id: str) -> dict[str, Any]:
-    """Everything about one movie/series/episode: plot, cast, director, ČSFD rating, runtime,
+    """Everything about one movie/series/episode: plot, cast, director, ČSFD and IMDb rating, runtime,
     age rating, dubbing and subtitle languages, video quality (4K…), watched state; for a series
     also seasons with episode counts and what is next.
 
@@ -823,6 +830,7 @@ async def item_details(item_id: str) -> dict[str, Any]:
         "year": item.get("ProductionYear"),
         "csfd_percent": _percent(item.get("CommunityRating")),
         "csfd_votes": (item.get("ProviderIds") or {}).get("CsfdVotes"),
+        "imdb": (await c.imdb([_imdb_id(item)])).get(_imdb_id(item) or "") if _imdb_id(item) else None,
         "critic_percent": item.get("CriticRating"),
         "age_rating": item.get("OfficialRating"),
         "runtime_min": _minutes(item),

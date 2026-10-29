@@ -407,6 +407,17 @@ class JellyfinClient:
         data = r.json()
         return data if isinstance(data, list) else []
 
+    async def imdb(self, ids: list[str]) -> dict[str, dict[str, Any]]:
+        """IMDb ratings from the ČSFD plugin: IMDb id -> {"rating", "votes"}; empty when the plugin can't."""
+        ids = [i for i in ids if i]
+        if not ids:
+            return {}
+        try:
+            r = await self._http.get("/Csfd/Imdb", params={"ids": ",".join(ids)})
+        except httpx.HTTPError:
+            return {}
+        return r.json() if r.status_code == 200 else {}
+
     # ---- Library browsing ----
 
     async def browse(
@@ -436,7 +447,7 @@ class JellyfinClient:
             sortBy=sort_by,
             sortOrder=sort_order,
             limit=limit,
-            fields="ProductionYear,Genres,UserData,RunTimeTicks",
+            fields="ProductionYear,Genres,UserData,RunTimeTicks,ProviderIds",
             enableTotalRecordCount="true",
         )
         return data.get("Items", []), int(data.get("TotalRecordCount") or 0)
