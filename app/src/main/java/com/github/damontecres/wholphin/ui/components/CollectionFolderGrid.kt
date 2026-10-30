@@ -46,6 +46,7 @@ import com.github.damontecres.wholphin.ui.detail.GridItemDetails
 import com.github.damontecres.wholphin.ui.ifElse
 import com.github.damontecres.wholphin.ui.main.HomePageHeader
 import com.github.damontecres.wholphin.ui.playback.scale
+import com.github.damontecres.wholphin.ui.util.CardTextRoom
 import com.github.damontecres.wholphin.ui.util.ScrollToTopBringIntoViewSpec
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.jellyfin.sdk.model.api.CollectionType
@@ -119,7 +120,7 @@ fun CollectionFolderGrid(
                     remember(viewOptions, density) {
                         val spacingPx = with(density) { viewOptions.spacing.dp.toPx() }
                         if (viewOptions.showDetails) {
-                            ScrollToTopBringIntoViewSpec(spacingPx)
+                            ScrollToTopBringIntoViewSpec(spacingPx, spaceBelowPx = with(density) { CardTextRoom.toPx() })
                         } else {
                             defaultBringIntoViewSpec
                         }

@@ -49,6 +49,7 @@ import com.github.damontecres.wholphin.ui.main.HomePageHeader
 import com.github.damontecres.wholphin.ui.nav.Destination
 import com.github.damontecres.wholphin.ui.rememberPosition
 import com.github.damontecres.wholphin.ui.tryRequestFocus
+import com.github.damontecres.wholphin.ui.util.CardTextRoom
 import com.github.damontecres.wholphin.ui.util.EmptyStringProvider
 import com.github.damontecres.wholphin.ui.util.ResProviderStringProvider
 import com.github.damontecres.wholphin.ui.util.ResStringProvider
@@ -500,7 +501,11 @@ fun SeerrDiscoverPage(
             }
         }
         CompositionLocalProvider(
-            LocalBringIntoViewSpec provides ScrollToTopBringIntoViewSpec(spaceAbovePx),
+            LocalBringIntoViewSpec provides
+                ScrollToTopBringIntoViewSpec(
+                    spaceAbovePx,
+                    spaceBelowPx = with(density) { CardTextRoom.toPx() },
+                ),
         ) {
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(8.dp),

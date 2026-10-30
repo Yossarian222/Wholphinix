@@ -86,6 +86,7 @@ import com.github.damontecres.wholphin.ui.playback.playable
 import com.github.damontecres.wholphin.ui.playback.scale
 import com.github.damontecres.wholphin.ui.rememberPosition
 import com.github.damontecres.wholphin.ui.tryRequestFocus
+import com.github.damontecres.wholphin.ui.util.CardTextRoom
 import com.github.damontecres.wholphin.ui.util.ScrollToTopBringIntoViewSpec
 import com.github.damontecres.wholphin.util.HomeRowLoadingState
 import com.github.damontecres.wholphin.util.LoadingState
@@ -373,7 +374,8 @@ fun HomePageContent(
                 }
             val defaultBringIntoViewSpec = LocalBringIntoViewSpec.current
             CompositionLocalProvider(
-                LocalBringIntoViewSpec provides ScrollToTopBringIntoViewSpec(spaceAbovePx),
+                LocalBringIntoViewSpec provides
+                    ScrollToTopBringIntoViewSpec(spaceAbovePx, spaceBelowPx = with(density) { CardTextRoom.toPx() }),
             ) {
                 LazyColumn(
                     state = listState,
