@@ -17,6 +17,7 @@ import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import timber.log.Timber
 import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -313,19 +314,28 @@ class TidalApi
 
         /** TIDAL's home page rows, personal mixes and music videos, the same ones its apps show */
         suspend fun forYou(s: TidalSession): TidalForYou {
+            val rows = mutableListOf<TidalHomeRow>()
+            val mixes = LinkedHashMap<String, TidalMix>()
+            val videos = LinkedHashMap<Long, TidalVideo>()
+            // TIDAL's apps load the home page from the v2 feed; for logged in users the v1 pages below come back empty
+            try {
+                homeFeed(s, rows, mixes, videos)
+            } catch (ex: TidalHttpException) {
+                if (ex.code == 401) throw ex
+                Timber.w("TIDAL home feed failed: %s", ex.message)
+            }
             val roots = LinkedHashMap<String, JsonElement>()
-            // ponytail: v1 pages API; if TIDAL drops it, the v2 home feed (home/feed/static) is the replacement
             for (page in listOf("pages/my_collection_my_mixes", "pages/home", "pages/for_you")) {
                 roots[page] =
                     try {
                         json.parseToJsonElement(get(s, page, "deviceType" to "BROWSER", "locale" to "en_US"))
                     } catch (ex: TidalHttpException) {
-                        if (ex.code in 400..404) continue else throw ex
+                        // 401 must reach TidalService so it refreshes the token, the rest only drops this page
+                        if (ex.code == 401) throw ex
+                        Timber.w("TIDAL %s failed: %s", page, ex.message)
+                        continue
                     }
             }
-            // The "My mixes" page first, so the mixes come in TIDAL's order: Daily Discovery, My Mix 1, 2…
-            val mixes = LinkedHashMap<String, TidalMix>()
-            val videos = LinkedHashMap<Long, TidalVideo>()
             roots.values.forEach { root ->
                 walk(root) { obj ->
                     homeItem(obj)?.let {
@@ -334,7 +344,6 @@ class TidalApi
                     }
                 }
             }
-            val rows = mutableListOf<TidalHomeRow>()
             listOfNotNull(roots["pages/home"], roots["pages/for_you"]).forEach { root ->
                 walk(root) { obj ->
                     val paged = obj["pagedList"] as? JsonObject ?: return@walk
@@ -355,6 +364,71 @@ class TidalApi
                 }
             }
             return TidalForYou(rows, mixes.values.toList(), videos.values.toList())
+        }
+
+        /**
+         * Rows of TIDAL's v2 home feed: {"items": [{"type": "HORIZONTAL_LIST", "title": …, "items": [{"type": "MIX", "data": {…}}]}]}
+         */
+        private suspend fun homeFeed(
+            s: TidalSession,
+            rows: MutableList<TidalHomeRow>,
+            mixes: MutableMap<String, TidalMix>,
+            videos: MutableMap<Long, TidalVideo>,
+        ) {
+            val feed =
+                json.parseToJsonElement(
+                    get(s, API_V2 + "home/feed/static", "deviceType" to "BROWSER", "locale" to "en_US", "platform" to "WEB"),
+                ) as? JsonObject
+            (feed?.get("items") as? JsonArray).orEmpty().filterIsInstance<JsonObject>().forEach { module ->
+                val title = module.string("title").orEmpty()
+                if (title.isBlank() || rows.any { it.title == title }) return@forEach
+                val tracks = mutableListOf<TidalTrack>()
+                val items = mutableListOf<TidalHomeItem>()
+                (module["items"] as? JsonArray).orEmpty().filterIsInstance<JsonObject>().forEach { entry ->
+                    val data = entry["data"] as? JsonObject ?: return@forEach
+                    when (val type = entry.string("type")) {
+                        "TRACK" -> {
+                            decodeTrack(data)?.let(tracks::add)
+                        }
+
+                        "MIX" -> {
+                            feedMix(data)?.let {
+                                items += TidalHomeItem.Mix(it)
+                                mixes.putIfAbsent(it.id, it)
+                            }
+                        }
+
+                        else -> {
+                            homeItem(data, type)?.let {
+                                items += it
+                                if (it is TidalHomeItem.Video) videos.putIfAbsent(it.video.id, it.video)
+                            }
+                        }
+                    }
+                }
+                if (tracks.isNotEmpty() || items.isNotEmpty()) {
+                    rows += TidalHomeRow(title, module.string("subtitle").orEmpty(), items, tracks)
+                }
+            }
+        }
+
+        /** A mix of the v2 feed: texts in titleTextInfo/subtitleTextInfo and images as a list (small, medium, large) */
+        private fun feedMix(data: JsonObject): TidalMix? {
+            if (data["mixType"] != null) return (homeItem(data, "MIX") as? TidalHomeItem.Mix)?.mix
+            val type = data.string("type")
+            // Video mixes hold clips, not tracks, so they can't play in the music queue
+            if (type?.contains("VIDEO") == true) return null
+            val id = data.string("id") ?: return null
+            val images = (data["mixImages"] as? JsonArray).orEmpty().filterIsInstance<JsonObject>().mapNotNull { it.string("url") }
+
+            fun text(key: String) = (data[key] as? JsonObject)?.string("text").orEmpty()
+            return TidalMix(
+                id = id,
+                title = text("titleTextInfo"),
+                subTitle = text("subtitleTextInfo"),
+                mixType = type,
+                images = (images.getOrNull(1) ?: images.firstOrNull())?.let { mapOf("MEDIUM" to TidalImage(it)) }.orEmpty(),
+            )
         }
 
         /** Items of mixed lists come wrapped as {"type": "ALBUM", "item": {…}} */
@@ -648,7 +722,7 @@ class TidalApi
             vararg query: Pair<String, String>,
         ): Request {
             val url =
-                (API + path.removePrefix("/"))
+                (if (path.startsWith("https://")) path else API + path.removePrefix("/"))
                     .toHttpUrl()
                     .newBuilder()
                     .apply {
@@ -686,6 +760,7 @@ class TidalApi
 
         companion object {
             private const val API = "https://api.tidal.com/v1/"
+            private const val API_V2 = "https://api.tidal.com/v2/"
             private const val AUTH = "https://auth.tidal.com/v1/oauth2/"
             private const val SCOPE = "r_usr w_usr w_sub"
             private const val BTS = "application/vnd.tidal.bts"
