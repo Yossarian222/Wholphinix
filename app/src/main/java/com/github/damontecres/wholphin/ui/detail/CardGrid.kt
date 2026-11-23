@@ -250,6 +250,9 @@ fun <T : CardGridItem> CardGrid(
         }
     } else {
         var longPressing by remember { mutableStateOf(false) }
+        // Back jumps to the top only if the grid also got the press, not just the release: when Back
+        // closes a detail page on the press, the release lands here and threw the list back to the start
+        var backPressedInGrid by remember { mutableStateOf(false) }
         Row(
 //        horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier =
@@ -273,12 +276,21 @@ fun <T : CardGridItem> CardGrid(
                         } else if (it.type == KeyEventType.KeyUp) {
                             if (longPressing && it.key == Key.Back) {
                                 longPressing = false
+                                backPressedInGrid = false
                                 return@onKeyEvent true
                             }
                             longPressing = false
                         }
+                        val backPressedHere = backPressedInGrid
+                        if (it.key == Key.Back) {
+                            backPressedInGrid = it.type == KeyEventType.KeyDown
+                        }
                         if (it.type != KeyEventType.KeyUp) {
                             return@onKeyEvent false
+                        } else if (it.key == Key.Back && !backPressedHere) {
+                            // Swallow it, otherwise it would also close this page
+                            Timber.d("Back released without a press in the grid, ignoring it")
+                            return@onKeyEvent true
                         } else if (useBackToJump && it.key == Key.Back && focusedIndex > 0) {
                             jumpToTop()
                             return@onKeyEvent true

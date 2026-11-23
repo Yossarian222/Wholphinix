@@ -74,6 +74,7 @@ import com.github.damontecres.wholphin.util.GetItemsRequestHandler
 import com.github.damontecres.wholphin.util.GetPersonsHandler
 import com.github.damontecres.wholphin.util.LoadingState
 import com.github.damontecres.wholphin.util.WholphinDispatchers
+import com.github.damontecres.wholphin.util.fetchShuffledIds
 import com.github.damontecres.wholphin.util.successValue
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
@@ -106,6 +107,7 @@ import org.jellyfin.sdk.model.serializer.toUUIDOrNull
 import timber.log.Timber
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.random.Random
 
 @HiltViewModel(assistedFactory = CollectionFolderViewModel.Factory::class)
 class CollectionFolderViewModel
@@ -359,7 +361,7 @@ class CollectionFolderViewModel
             }
         }
 
-        private fun createPager(
+        private suspend fun createPager(
             sortAndDirection: SortAndDirection,
             recursive: Boolean,
             filter: GetItemsFilter,
@@ -373,6 +375,13 @@ class CollectionFolderViewModel
                             recursive = recursive,
                             filter = filter,
                         )
+                    // Random sort: shuffle once, otherwise every page is a new shuffle and items repeat
+                    val fixedOrder =
+                        if (sortAndDirection.sort == ItemSortBy.RANDOM) {
+                            fetchShuffledIds(api, request, Random(System.nanoTime()))
+                        } else {
+                            null
+                        }
                     val newPager =
                         ApiRequestPager(
                             api,
@@ -380,6 +389,7 @@ class CollectionFolderViewModel
                             GetItemsRequestHandler,
                             viewModelScope,
                             useSeriesForPrimary = useSeriesForPrimary,
+                            fixedOrder = fixedOrder,
                         )
                     newPager
                 }

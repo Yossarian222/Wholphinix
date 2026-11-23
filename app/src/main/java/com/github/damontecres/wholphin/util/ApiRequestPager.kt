@@ -22,6 +22,8 @@ import org.jellyfin.sdk.api.client.extensions.tvShowsApi
 import org.jellyfin.sdk.api.client.extensions.userLibraryApi
 import org.jellyfin.sdk.model.api.BaseItemDtoQueryResult
 import org.jellyfin.sdk.model.api.GetProgramsDto
+import org.jellyfin.sdk.model.api.ItemSortBy
+import org.jellyfin.sdk.model.api.SortOrder
 import org.jellyfin.sdk.model.api.request.GetArtistsRequest
 import org.jellyfin.sdk.model.api.request.GetEpisodesRequest
 import org.jellyfin.sdk.model.api.request.GetGenresRequest
@@ -36,6 +38,7 @@ import org.jellyfin.sdk.model.api.request.GetStudiosRequest
 import org.jellyfin.sdk.model.api.request.GetSuggestionsRequest
 import timber.log.Timber
 import java.util.UUID
+import kotlin.random.Random
 
 /**
  * A [RequestPager] for Jellyfin server queries
@@ -48,6 +51,13 @@ class ApiRequestPager<T>(
     pageSize: Int = DEFAULT_PAGE_SIZE,
     cacheSize: Long = 8,
     private val useSeriesForPrimary: Boolean = false,
+    /**
+     * Fixed order of all item ids (e.g. a shuffled library for the random sort).
+     * When set, pages are fetched by id in this order instead of with startIndex/limit,
+     * so re-fetching a page never shows different items (see [fetchShuffledIds]).
+     * Only used for [GetItemsRequest].
+     */
+    private val fixedOrder: List<UUID>? = null,
 ) : RequestPager<BaseItem>(scope, pageSize, cacheSize) {
     override suspend fun init(initialPosition: Int): ApiRequestPager<T> = super.init(initialPosition) as ApiRequestPager<T>
 
@@ -55,6 +65,10 @@ class ApiRequestPager<T>(
         pageNumber: Int,
         includeTotalCount: Boolean,
     ): QueryResult<BaseItem> {
+        val order = fixedOrder
+        if (order != null && request is GetItemsRequest) {
+            return fetchFixedOrderPage(order, request, pageNumber)
+        }
         val newRequest =
             requestHandler.prepare(
                 request,
@@ -66,6 +80,32 @@ class ApiRequestPager<T>(
         val data = mutableListOf<BaseItem>()
         result.items.forEach { data.add(BaseItem(it, useSeriesForPrimary)) }
         return QueryResult(data, result.totalRecordCount)
+    }
+
+    private suspend fun fetchFixedOrderPage(
+        order: List<UUID>,
+        request: GetItemsRequest,
+        pageNumber: Int,
+    ): QueryResult<BaseItem> {
+        val from = (pageNumber * pageSize).coerceAtMost(order.size)
+        val slice = order.subList(from, (from + pageSize).coerceAtMost(order.size))
+        if (slice.isEmpty()) return QueryResult(emptyList(), order.size)
+        val byId =
+            api.itemsApi
+                .getItems(
+                    request.copy(
+                        ids = slice,
+                        sortBy = null,
+                        sortOrder = null,
+                        startIndex = null,
+                        limit = null,
+                        enableTotalRecordCount = false,
+                    ),
+                ).content.items
+                .associateBy { it.id }
+        // The server ignores the order of ids, so put them back in the shuffled order
+        val data = slice.mapNotNull { id -> byId[id]?.let { BaseItem(it, useSeriesForPrimary) } }
+        return QueryResult(data, order.size)
     }
 
     suspend fun refreshItem(
@@ -108,6 +148,36 @@ class ApiRequestPager<T>(
         fetchPageBlocking(position, true)
     }
 }
+
+/**
+ * Ids of all items matching [request], shuffled once with [random].
+ *
+ * Jellyfin's random sort shuffles again for every page request, so paging through a randomly sorted
+ * library showed some items several times and skipped others. Fetching just the ids once (no images,
+ * fields or user data) and paging over that list keeps the order stable.
+ */
+suspend fun fetchShuffledIds(
+    api: ApiClient,
+    request: GetItemsRequest,
+    random: Random,
+): List<UUID> =
+    api.itemsApi
+        .getItems(
+            request.copy(
+                sortBy = listOf(ItemSortBy.SORT_NAME),
+                sortOrder = listOf(SortOrder.ASCENDING),
+                startIndex = null,
+                limit = null,
+                fields = emptyList(),
+                enableImages = false,
+                enableImageTypes = null,
+                enableUserData = false,
+                enableTotalRecordCount = false,
+            ),
+        ).content.items
+        .map { it.id }
+        .distinct()
+        .shuffled(random)
 
 /**
  * Specifies how a [RequestPager] should prepare and execute API calls
