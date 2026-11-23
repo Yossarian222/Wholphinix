@@ -120,7 +120,7 @@ class CsfdRatingSender
         internal var store: CsfdRatingQueueStore = SharedPrefsCsfdRatingQueueStore(context)
 
         /** Ratings that failed (e.g. the plugin's ČSFD login is in its 10 min pause) and are sent again later */
-        private val _queued = MutableStateFlow<Map<Int, QueuedCsfdRating>?>(null)
+        private val queuedRatings = MutableStateFlow<Map<Int, QueuedCsfdRating>?>(null)
         private var retryJob: Job? = null
 
         private val lock = Any()
@@ -147,16 +147,16 @@ class CsfdRatingSender
 
         private fun queue(): Map<Int, QueuedCsfdRating> =
             synchronized(lock) {
-                _queued.value ?: runCatching { store.load() }
+                queuedRatings.value ?: runCatching { store.load() }
                     .onFailure { Timber.w(it, "Could not load the ČSFD rating queue") }
                     .getOrDefault(emptyMap())
-                    .also { _queued.value = it }
+                    .also { queuedRatings.value = it }
             }
 
         private fun updateQueue(change: (Map<Int, QueuedCsfdRating>) -> Map<Int, QueuedCsfdRating>) {
             synchronized(lock) {
                 val updated = change(queue())
-                _queued.value = updated
+                queuedRatings.value = updated
                 runCatching { store.save(updated) }.onFailure { Timber.w(it, "Could not save the ČSFD rating queue") }
             }
         }
