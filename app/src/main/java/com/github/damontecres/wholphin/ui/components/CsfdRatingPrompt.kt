@@ -59,14 +59,14 @@ class CsfdRatingPromptViewModel
         private val _sending = MutableStateFlow(false)
         val sending: StateFlow<Boolean> = _sending
 
-        /** The stars chosen in the prompt (0 = "odpad"), kept while sending and after a failure so it can be retried */
+        /** The stars chosen in the prompt (0 = "odpad"), kept while sending */
         private val _chosen = MutableStateFlow<Int?>(null)
         val chosen: StateFlow<Int?> = _chosen
 
         /** Result of the last rating, shown once by the UI: null = nothing, "" = success, else an error message */
         val result = MutableStateFlow<String?>(null)
 
-        /** Sends [stars] (0 = "odpad") to ČSFD; the prompt closes on success and stays open on failure */
+        /** Sends [stars] (0 = "odpad") to ČSFD; the prompt closes, a failed rating is queued and sent again later */
         fun rate(
             pending: PendingRating,
             stars: Int,

@@ -95,6 +95,10 @@ class CsfdMyRatingViewModel
                     // A failed rating goes back unless it is queued to be sent later; the toast is shown by the sender
                     if (result.csfdId == csfdId.value && result.error != null && !result.queued) {
                         _stars.update { result.revertTo }
+                        if (result.revertTo == null) {
+                            // A queued rating given up does not know the rating before it, ask ČSFD
+                            launchIO { _stars.update { csfdTvTipsService.getMyRatings()[result.csfdId] } }
+                        }
                     }
                 }
             }

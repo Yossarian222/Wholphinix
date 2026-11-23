@@ -21,6 +21,7 @@ import kotlinx.coroutines.sync.withLock
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -120,7 +121,7 @@ class CsfdRatingSender
         internal var store: CsfdRatingQueueStore = SharedPrefsCsfdRatingQueueStore(context)
 
         /** Ratings that failed (e.g. the plugin's ČSFD login is in its 10 min pause) and are sent again later */
-        private val queuedRatings = MutableStateFlow<Map<Int, QueuedCsfdRating>?>(null)
+        private var queuedRatings: Map<Int, QueuedCsfdRating>? = null
         private var retryJob: Job? = null
 
         private val lock = Any()
@@ -135,10 +136,9 @@ class CsfdRatingSender
         private var lastSentAtNanos: Long? = null
 
         init {
-            // Ratings left from the last run go out shortly after the start
+            // Loads the queue off the main thread; ratings left from the last run go out shortly after the start
             scope.launch(ExceptionHandler()) {
-                delay(STARTUP_DELAY)
-                if (queue().isNotEmpty()) retryQueued()
+                if (queue().isNotEmpty()) scheduleRetry(STARTUP_DELAY)
             }
         }
 
@@ -147,16 +147,16 @@ class CsfdRatingSender
 
         private fun queue(): Map<Int, QueuedCsfdRating> =
             synchronized(lock) {
-                queuedRatings.value ?: runCatching { store.load() }
+                queuedRatings ?: runCatching { store.load() }
                     .onFailure { Timber.w(it, "Could not load the ČSFD rating queue") }
                     .getOrDefault(emptyMap())
-                    .also { queuedRatings.value = it }
+                    .also { queuedRatings = it }
             }
 
         private fun updateQueue(change: (Map<Int, QueuedCsfdRating>) -> Map<Int, QueuedCsfdRating>) {
             synchronized(lock) {
                 val updated = change(queue())
-                queuedRatings.value = updated
+                queuedRatings = updated
                 runCatching { store.save(updated) }.onFailure { Timber.w(it, "Could not save the ČSFD rating queue") }
             }
         }
@@ -183,12 +183,13 @@ class CsfdRatingSender
             }
         }
 
-        private fun scheduleRetry() {
+        /** Only one retry is waiting or running at a time, so nothing is sent twice */
+        private fun scheduleRetry(after: Duration = RETRY_DELAY) {
             synchronized(lock) {
                 if (retryJob?.isActive == true) return
                 retryJob =
                     scope.launch(ExceptionHandler()) {
-                        delay(RETRY_DELAY)
+                        delay(after)
                         // Cleared first, so a failure during this attempt can schedule the next one
                         synchronized(lock) { retryJob = null }
                         retryQueued()
@@ -208,9 +209,17 @@ class CsfdRatingSender
                     _results.emit(CsfdRatingResult(csfdId, queued.stars, null, null))
                     showMessage(null)
                 } else {
+                    // A newer choice made while this was being sent replaces it, the old stars must not come back
+                    val replaced =
+                        synchronized(lock) { queue()[csfdId] != queued || latestStars.containsKey(csfdId) }
+                    if (replaced) {
+                        Timber.i("Queued ČSFD rating %s → %s failed but was replaced meanwhile", csfdId, queued.stars)
+                        continue
+                    }
                     val message = queueFailed(csfdId, queued.stars, error)
                     val gaveUp = csfdId !in queue()
                     if (gaveUp) {
+                        // revertTo is not known any more, the page reloads the rating from ČSFD
                         _results.emit(CsfdRatingResult(csfdId, queued.stars, null, message))
                         showMessage(message)
                     }
@@ -293,6 +302,7 @@ class CsfdRatingSender
                 } ?: return
             if (result.error == null) {
                 Timber.i("ČSFD rating %s → %s sent", csfdId, stars)
+                if (queue().containsKey(csfdId)) updateQueue { it - csfdId }
                 _results.emit(result)
                 showMessage(null)
             } else {
