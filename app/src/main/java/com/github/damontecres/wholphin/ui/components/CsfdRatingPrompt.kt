@@ -33,6 +33,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import com.github.damontecres.wholphin.R
+import com.github.damontecres.wholphin.services.CsfdRatingSender
 import com.github.damontecres.wholphin.services.CsfdTvTipsService
 import com.github.damontecres.wholphin.services.PendingRating
 import com.github.damontecres.wholphin.services.PendingRatingService
@@ -51,6 +52,7 @@ class CsfdRatingPromptViewModel
     constructor(
         private val pendingRatingService: PendingRatingService,
         private val csfdTvTipsService: CsfdTvTipsService,
+        private val ratingSender: CsfdRatingSender,
     ) : ViewModel() {
         val pending: StateFlow<PendingRating?> = pendingRatingService.pending
 
@@ -92,7 +94,11 @@ class CsfdRatingPromptViewModel
                     result.update { "" }
                 } else {
                     Timber.w("ČSFD rating prompt: %s stars for ČSFD %s failed: %s", stars, pending.csfdId, error)
-                    result.update { error }
+                    // Not lost: queued and sent again later (e.g. after the plugin's 10 min login pause), the prompt closes
+                    val message = ratingSender.queueFailed(pending.csfdId, stars, error)
+                    _chosen.update { null }
+                    pendingRatingService.clear()
+                    result.update { message }
                 }
             }
         }

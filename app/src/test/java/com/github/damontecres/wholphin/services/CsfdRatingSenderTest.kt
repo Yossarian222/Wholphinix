@@ -18,12 +18,26 @@ import org.junit.Test
 class CsfdRatingSenderTest {
     private val tvTips = mockk<CsfdTvTipsService>()
 
+    private val store =
+        object : CsfdRatingQueueStore {
+            var saved: Map<Int, QueuedCsfdRating> = emptyMap()
+
+            override fun load() = saved
+
+            override fun save(queue: Map<Int, QueuedCsfdRating>) {
+                saved = queue
+            }
+        }
+
     private fun TestScope.sender(
         messages: MutableList<String>,
         results: MutableList<CsfdRatingResult>,
     ): CsfdRatingSender {
         val sender = CsfdRatingSender(mockk<Context>(relaxed = true), tvTips, backgroundScope)
         sender.showMessage = { messages.add(it ?: "OK") }
+        sender.queuedText = { "later: $it" }
+        sender.gaveUpText = { "gave up: $it" }
+        sender.store = store
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { sender.results.toList(results) }
         return sender
     }
@@ -56,9 +70,9 @@ class CsfdRatingSenderTest {
         }
 
     @Test
-    fun `A failure goes back to the rating before the changes`() =
+    fun `A failure is queued and keeps the new stars`() =
         runTest {
-            coEvery { tvTips.rate(any(), any()) } returns "Príliš rýchlo za sebou"
+            coEvery { tvTips.rate(any(), any()) } returns "Prihlásenie na ČSFD nedávno zlyhalo"
             val messages = mutableListOf<String>()
             val results = mutableListOf<CsfdRatingResult>()
             val sender = sender(messages, results)
@@ -69,9 +83,75 @@ class CsfdRatingSenderTest {
             testScheduler.advanceTimeBy(10_000)
             testScheduler.runCurrent()
 
-            assertEquals(listOf(CsfdRatingResult(7, 0, 5, "Príliš rýchlo za sebou")), results)
-            assertEquals(listOf("Príliš rýchlo za sebou"), messages)
+            val message = "later: Prihlásenie na ČSFD nedávno zlyhalo"
+            assertEquals(listOf(CsfdRatingResult(7, 0, 5, message, queued = true)), results)
+            assertEquals(listOf(message), messages)
             assertTrue(sender.sending.value.isEmpty())
+            // Survives a restart and is still shown on the detail page
+            assertEquals(mapOf(7 to QueuedCsfdRating(0, 1)), store.saved)
+            assertEquals(0, sender.pendingStars(7))
+        }
+
+    @Test
+    fun `A queued rating is sent again after the login pause`() =
+        runTest {
+            var fail = true
+            coEvery { tvTips.rate(any(), any()) } answers { if (fail) "zlyhalo" else null }
+            val messages = mutableListOf<String>()
+            val results = mutableListOf<CsfdRatingResult>()
+            val sender = sender(messages, results)
+
+            sender.rate(7, 4, previous = null)
+            testScheduler.advanceTimeBy(10_000)
+            testScheduler.runCurrent()
+            fail = false
+            testScheduler.advanceTimeBy(CsfdRatingSender.RETRY_DELAY.inWholeMilliseconds + 10_000)
+            testScheduler.runCurrent()
+
+            coVerify(exactly = 2) { tvTips.rate(7, 4) }
+            assertEquals(CsfdRatingResult(7, 4, null, null), results.last())
+            assertEquals("OK", messages.last())
+            assertEquals(emptyMap<Int, QueuedCsfdRating>(), store.saved)
+            assertEquals(null, sender.pendingStars(7))
+        }
+
+    @Test
+    fun `A rating is dropped after the last attempt`() =
+        runTest {
+            coEvery { tvTips.rate(any(), any()) } returns "Nesprávne heslo"
+            val messages = mutableListOf<String>()
+            val results = mutableListOf<CsfdRatingResult>()
+            val sender = sender(messages, results)
+
+            sender.rate(7, 4, previous = 2)
+            testScheduler.advanceTimeBy(10_000)
+            testScheduler.runCurrent()
+            repeat(CsfdRatingSender.MAX_ATTEMPTS) {
+                testScheduler.advanceTimeBy(CsfdRatingSender.RETRY_DELAY.inWholeMilliseconds + 10_000)
+                testScheduler.runCurrent()
+            }
+
+            coVerify(exactly = CsfdRatingSender.MAX_ATTEMPTS) { tvTips.rate(7, 4) }
+            assertEquals("gave up: Nesprávne heslo", messages.last())
+            assertEquals(false, results.last().queued)
+            assertEquals(emptyMap<Int, QueuedCsfdRating>(), store.saved)
+            assertEquals(null, sender.pendingStars(7))
+        }
+
+    @Test
+    fun `Ratings queued in the last run are sent after the start`() =
+        runTest {
+            store.saved = mapOf(9 to QueuedCsfdRating(3, 1))
+            coEvery { tvTips.rate(any(), any()) } returns null
+            val messages = mutableListOf<String>()
+            val results = mutableListOf<CsfdRatingResult>()
+            sender(messages, results)
+
+            testScheduler.advanceTimeBy(CsfdRatingSender.STARTUP_DELAY.inWholeMilliseconds + 1_000)
+            testScheduler.runCurrent()
+
+            coVerify(exactly = 1) { tvTips.rate(9, 3) }
+            assertEquals(emptyMap<Int, QueuedCsfdRating>(), store.saved)
         }
 
     @Test

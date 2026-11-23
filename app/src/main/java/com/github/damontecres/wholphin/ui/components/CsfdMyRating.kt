@@ -92,8 +92,8 @@ class CsfdMyRatingViewModel
         init {
             viewModelScope.launch {
                 ratingSender.results.collect { result ->
-                    // A failed rating goes back; the toast is shown by the sender
-                    if (result.csfdId == csfdId.value && result.error != null) {
+                    // A failed rating goes back unless it is queued to be sent later; the toast is shown by the sender
+                    if (result.csfdId == csfdId.value && result.error != null && !result.queued) {
                         _stars.update { result.revertTo }
                     }
                 }
