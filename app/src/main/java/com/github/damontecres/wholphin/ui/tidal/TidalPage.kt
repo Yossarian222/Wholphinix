@@ -48,6 +48,10 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
@@ -162,7 +166,33 @@ fun TidalPage(
     BackHandler(enabled = state.addToPlaylist != null) { viewModel.pickPlaylistFor(null) }
     BackHandler(enabled = state.playingVideo != null) { viewModel.closeVideo() }
 
-    Box(modifier = modifier.fillMaxSize().background(Tidal.background)) {
+    // Media keys of the remote control the music anywhere on the page (#77); a playing video handles its own keys
+    val handleMediaKeys = player.current != null && state.playingVideo == null
+    Box(
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(Tidal.background)
+                .onPreviewKeyEvent { event ->
+                    val action = if (handleMediaKeys) tidalMediaAction(event.key) else null
+                    when {
+                        action == null -> {
+                            false
+                        }
+
+                        event.type == KeyEventType.KeyDown -> {
+                            // Holding a key does not skip through the whole queue
+                            if (event.nativeKeyEvent.repeatCount == 0) viewModel.onMediaKey(action)
+                            true
+                        }
+
+                        // The release is consumed too, so nothing below reacts to it a second time
+                        else -> {
+                            true
+                        }
+                    }
+                },
+    ) {
         when {
             !viewModel.configured -> {
                 CenterMessage(stringResource(R.string.tidal_not_configured))

@@ -684,6 +684,21 @@ class TidalViewModel
 
         fun pause() = exoPlayer.pause()
 
+        /** A media key of the remote (#77); ignored while nothing is in the queue */
+        fun onMediaKey(action: TidalMediaAction) {
+            if (_player.value.current == null) return
+            Timber.i("TIDAL media key: %s", action)
+            when (action) {
+                TidalMediaAction.PLAY_PAUSE -> togglePlayPause()
+                TidalMediaAction.PLAY -> if (!exoPlayer.isPlaying) togglePlayPause()
+                TidalMediaAction.PAUSE -> pause()
+                TidalMediaAction.NEXT -> next()
+                TidalMediaAction.PREVIOUS -> previous()
+                TidalMediaAction.FORWARD -> seekBy(MEDIA_KEY_SEEK_MS)
+                TidalMediaAction.REWIND -> seekBy(-MEDIA_KEY_SEEK_MS)
+            }
+        }
+
         fun next() = exoPlayer.seekToNextMediaItem()
 
         fun previous() = exoPlayer.seekToPrevious()
