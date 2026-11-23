@@ -1026,6 +1026,8 @@
     <string name="csfd_rating_prompt_title">How did you like %1$s?</string>
     <string name="csfd_rating_prompt_not_now">Not now</string>
     <string name="csfd_rating_prompt_sent">Rating sent to ČSFD</string>
+    <string name="csfd_rating_queued">Could not send the ČSFD rating, I will try again later (%1$s)</string>
+    <string name="csfd_rating_gave_up">ČSFD rating not sent even after %1$d attempts (%2$s). Check the login in the ČSFD plugin settings.</string>
     <string name="csfd_rating_prompt_season">%1$s – season %2$d</string>
     <string name="csfd_rating_prompt_sending">Sending…</string>
     <string name="csfd_rating_prompt_trash_confirm">Really trash?</string>

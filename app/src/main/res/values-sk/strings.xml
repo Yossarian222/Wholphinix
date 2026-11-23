@@ -809,6 +809,8 @@
     <string name="csfd_rating_prompt_title">Ako hodnotíš „%1$s“?</string>
     <string name="csfd_rating_prompt_not_now">Teraz nie</string>
     <string name="csfd_rating_prompt_sent">Hodnotenie odoslané na ČSFD</string>
+    <string name="csfd_rating_queued">Hodnotenie sa nepodarilo odoslať, skúsim to znova neskôr (%1$s)</string>
+    <string name="csfd_rating_gave_up">Hodnotenie sa nepodarilo odoslať ani na %1$d. pokus (%2$s). Skontroluj prihlásenie v nastaveniach pluginu ČSFD.</string>
     <string name="csfd_rating_prompt_season">%1$s – %2$d. séria</string>
     <string name="csfd_rating_prompt_sending">Odosielam…</string>
     <string name="csfd_rating_prompt_trash_confirm">Naozaj odpad?</string>

@@ -40,12 +40,14 @@ import org.jellyfin.sdk.model.api.BaseItemKind
 import org.jellyfin.sdk.model.api.request.GetItemsRequest
 import org.jellyfin.sdk.model.serializer.toUUIDOrNull
 import timber.log.Timber
+import java.time.LocalDate
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.abs
+import kotlin.random.Random
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
@@ -225,9 +227,15 @@ class CsfdTvTipsService
             limit: Int = 20,
             missing: Int = 20,
             throwIfUnavailable: Boolean = false,
+            date: LocalDate = LocalDate.now(),
         ): List<BaseItem> =
-            rowItems("seasonal $event $limit/$missing", userId, useSeries, throwIfUnavailable) {
-                get("Csfd/Seasonal?event=$event&limit=$limit&missing=$missing", slowClient)?.let(::parseTips)
+            rowItems("seasonal $event $limit/$missing $date", userId, useSeries, throwIfUnavailable) {
+                // A bigger pool than shown, so each day picks a different selection, not just a different order
+                get(
+                    "Csfd/Seasonal?event=$event&limit=${limit * SEASONAL_POOL}&missing=${missing * SEASONAL_POOL}",
+                    slowClient,
+                )?.let(::parseTips)
+                    ?.let { dailyShuffle(it, event, date, limit, missing) }
             }
 
         /**
@@ -623,3 +631,23 @@ class CsfdTvTipsService
                 (field(name) as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.orEmpty()
         }
     }
+
+/** How many times more seasonal titles are fetched than shown, for the daily selection */
+private const val SEASONAL_POOL = 3
+
+/**
+ * The seasonal titles in an order that is the same all day and different the next day (#69): titles in the library
+ * stay before the missing ones, each group is shuffled on its own with a seed from [date] and [event] and cut to
+ * [limit] resp. [missing].
+ */
+internal fun dailyShuffle(
+    tips: List<CsfdTvTip>,
+    event: String,
+    date: LocalDate,
+    limit: Int,
+    missing: Int,
+): List<CsfdTvTip> {
+    val random = Random(date.toEpochDay() * 31 + event.hashCode())
+    val (library, notInLibrary) = tips.partition { it.itemId != null }
+    return library.shuffled(random).take(limit) + notInLibrary.shuffled(random).take(missing)
+}
