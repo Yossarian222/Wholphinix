@@ -694,8 +694,6 @@ class TidalViewModel
                 TidalMediaAction.PAUSE -> pause()
                 TidalMediaAction.NEXT -> next()
                 TidalMediaAction.PREVIOUS -> previous()
-                TidalMediaAction.FORWARD -> seekBy(MEDIA_KEY_SEEK_MS)
-                TidalMediaAction.REWIND -> seekBy(-MEDIA_KEY_SEEK_MS)
             }
         }
 
