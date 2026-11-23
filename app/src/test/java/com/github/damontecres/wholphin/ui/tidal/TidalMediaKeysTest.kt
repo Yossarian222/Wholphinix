@@ -14,7 +14,9 @@ class TidalMediaKeysTest {
         assertEquals(TidalMediaAction.NEXT, tidalMediaAction(Key.MediaNext))
         assertEquals(TidalMediaAction.PREVIOUS, tidalMediaAction(Key.MediaPrevious))
         assertEquals(TidalMediaAction.NEXT, tidalMediaAction(Key.ChannelUp))
-        assertEquals(TidalMediaAction.FORWARD, tidalMediaAction(Key.MediaFastForward))
+        // ⏩/⏪ of a TV remote over HDMI-CEC skip tracks
+        assertEquals(TidalMediaAction.NEXT, tidalMediaAction(Key.MediaFastForward))
+        assertEquals(TidalMediaAction.PREVIOUS, tidalMediaAction(Key.MediaRewind))
     }
 
     @Test
